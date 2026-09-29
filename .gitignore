@@ -43,3 +43,30 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Flutter/Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+*.g.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Platform build artifacts
+/android/app/debug
+/android/app/profile
+/android/app/release
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Pods/
+/ios/.symlinks/
+
+# OS
+.DS_Store
+Thumbs.db

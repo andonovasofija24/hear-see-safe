@@ -26,6 +26,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   @override
+  void dispose() {
+    _voiceAssistant.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Rebuild when locale changes so "Пристапност" / High Contrast / Large Text labels update immediately.
     final locale = context.locale;
@@ -259,4 +265,3 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-

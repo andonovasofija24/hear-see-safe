@@ -1,16 +1,20 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
-import 'package:audioplayers/audioplayers.dart';
 
-/// Меморија на мелодија (Simon Says со звуци): слушаш низа од звуци, потоа повторуваш со тап.
-/// Целосно аудио, идеално за слепи деца.
+/// Мемorија на звуци: детето слуша НИЗА звуци по ред (пр. мачка, мачка,
+/// куче, автомобил) - никогаш автоматски, само по притискање на Почни да
+/// слушаш. Потоа треба да ги тапне истите звуци, во истиот редослед.
+/// Должината на низата расте од 2 до 7 звуци низ 20-те вкупни рунди. На
+/// крајот се прикажува колку рунди се погодени, а колку промашени.
 class MelodyMemoryScreen extends StatefulWidget {
   const MelodyMemoryScreen({super.key});
 
@@ -19,80 +23,136 @@ class MelodyMemoryScreen extends StatefulWidget {
 }
 
 class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
+  static const Color _moduleAccent = Color(0xFF9333EA);
+  static const int _totalRounds = 20;
+
   late VoiceAssistantService _voiceAssistant;
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final Random _random = Random();
 
   static const List<String> _soundIds = ['cat', 'dog', 'car', 'rain'];
+
   static const Map<String, String> _soundAssets = {
-    'cat': 'assets/sounds/meow.mp3',
-    'dog': 'assets/sounds/bark.mp3',
-    'car': 'assets/sounds/car.mp3',
-    'rain': 'assets/sounds/rain.mp3',
+    'cat': 'assets/sounds/sound_identification/meow.mp3',
+    'dog': 'assets/sounds/sound_identification/bark.mp3',
+    'car': 'assets/sounds/sound_identification/car.mp3',
+    'rain': 'assets/sounds/sound_identification/rain.mp3',
   };
 
-  List<int> _sequence = [];
-  int _userStep = 0;
-  bool _playingSequence = false;
-  bool _inputEnabled = false;
-  int _level = 1;
-  static const int _maxLevel = 8;
+  static const Map<String, IconData> _soundIcons = {
+    'cat': Icons.pets_rounded,
+    'dog': Icons.cruelty_free_rounded,
+    'car': Icons.directions_car_filled_rounded,
+    'rain': Icons.water_drop_rounded,
+  };
+
+  static const Map<String, String> _soundLabelKeys = {
+    'cat': 'melody.sound1',
+    'dog': 'melody.sound2',
+    'car': 'melody.sound3',
+    'rain': 'melody.sound4',
+  };
+
+  static const Map<String, Color> _soundColors = {
+    'cat': Color(0xFF9333EA),
+    'dog': Color(0xFFD97706),
+    'car': Color(0xFF2563EB),
+    'rain': Color(0xFF0D9488),
+  };
+
+  /// Должина на низата по рунда: 2,3,4,5,6,7, па се повторува пак од 2 - за
+  /// вкупно 20 рунди.
+  late final List<int> _lengthPerRound =
+      List.generate(_totalRounds, (i) => 2 + (i % 6));
+
+  List<String> _sequence = [];
+  int _userIndex = 0;
+  bool _revealed = false;
+  bool _isPlaying = false;
+  String? _flashingId;
+  int _round = 0;
+  int _hits = 0;
+  bool _gameOver = false;
+  bool _explanationOpen = false;
+
+  String get _langCode => context.locale.languageCode;
 
   @override
   void initState() {
     super.initState();
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startGame());
+    _voiceAssistant.initialize();
+    _prepareRound();
   }
 
   @override
   void dispose() {
+    // Го запира говорот/звукот веднаш штом се напушта екранот - без разлика
+    // дали објаснувањето било отворено или не.
+    _voiceAssistant.stop();
     _audioPlayer.dispose();
     super.dispose();
   }
 
-  String get _langCode => context.locale.languageCode;
-
-  void _startGame() {
-    _level = 1;
-    _nextLevel();
+  void _prepareRound() {
+    final length = _lengthPerRound[_round];
+    setState(() {
+      _sequence = List.generate(length, (_) => _soundIds[_random.nextInt(_soundIds.length)]);
+      _userIndex = 0;
+      _revealed = false;
+      _isPlaying = false;
+    });
   }
 
-  Future<void> _nextLevel() async {
-    setState(() {
-      _sequence.add(Random().nextInt(4));
-      _userStep = 0;
-      _playingSequence = true;
-      _inputEnabled = false;
-    });
-    await _voiceAssistant.speakWithLanguage(
-      'melody.level'.tr(args: [_level.toString()]),
-      _langCode,
-      vibrate: false,
-    );
-    await Future.delayed(const Duration(milliseconds: 800));
+  /// Важно: на веб, некои формат-грешки НЕ фрлаат исклучок од .play() -
+  /// плеерот тивко "голта" грешка и никогаш не влегува во состојба
+  /// "playing". Затоа експлицитно чекаме потврда дека звукот НАВИСТИНА
+  /// почнал, инаку TTS-резервата погрешно никогаш не се активира.
+  Future<void> _playClip(String key, String fallbackText) async {
     if (!mounted) return;
-    await _playSequence();
-    if (!mounted) return;
-    setState(() {
-      _playingSequence = false;
-      _inputEnabled = true;
-    });
-    await _voiceAssistant.speakWithLanguage(
-      'melody.your_turn'.tr(),
-      _langCode,
-      vibrate: false,
-    );
-  }
+    final relativePath = 'audio/melody_memory/$_langCode/$key.mp3';
+    try {
+      await _audioPlayer.stop();
+    } catch (_) {}
 
-  Future<void> _playSequence() async {
-    for (int i = 0; i < _sequence.length && mounted; i++) {
-      await _playSoundByIndex(_sequence[i]);
-      await Future.delayed(const Duration(milliseconds: 450));
+    bool reachedPlaying = false;
+    final startedCompleter = Completer<void>();
+    final finishedCompleter = Completer<void>();
+    late final StreamSubscription<PlayerState> stateSub;
+    stateSub = _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (state == PlayerState.playing) {
+        reachedPlaying = true;
+        if (!startedCompleter.isCompleted) startedCompleter.complete();
+      }
+      if (state == PlayerState.completed || state == PlayerState.stopped) {
+        if (!startedCompleter.isCompleted) startedCompleter.complete();
+        if (!finishedCompleter.isCompleted) finishedCompleter.complete();
+      }
+    });
+
+    bool playCallSucceeded = false;
+    try {
+      await _audioPlayer.play(AssetSource(relativePath));
+      playCallSucceeded = true;
+    } catch (_) {
+      playCallSucceeded = false;
+    }
+
+    if (playCallSucceeded) {
+      await startedCompleter.future.timeout(const Duration(seconds: 4), onTimeout: () {});
+      if (reachedPlaying) {
+        await finishedCompleter.future.timeout(const Duration(seconds: 30), onTimeout: () {});
+      }
+    }
+    await stateSub.cancel();
+
+    if (!mounted) return;
+    if (!(playCallSucceeded && reachedPlaying)) {
+      await _voiceAssistant.speakWithLanguage(fallbackText, _langCode, vibrate: false);
     }
   }
 
-  Future<void> _playSoundByIndex(int index) async {
-    final id = _soundIds[index];
+  Future<void> _playSoundEffect(String id) async {
     final path = _soundAssets[id];
     if (path == null) return;
     try {
@@ -102,159 +162,374 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
     } catch (_) {}
   }
 
-  Future<void> _onButtonTap(int index) async {
-    if (!_inputEnabled || _playingSequence) return;
+  Future<void> _playSequence() async {
+    setState(() {
+      _isPlaying = true;
+      _revealed = true;
+      _userIndex = 0;
+    });
 
+    for (final id in _sequence) {
+      if (!mounted) return;
+      setState(() => _flashingId = id);
+      await _playSoundEffect(id);
+      if (await VibrationUtils.hasVibrator()) {
+        await VibrationUtils.vibrate(duration: 50);
+      }
+      await Future.delayed(const Duration(milliseconds: 550));
+      if (!mounted) return;
+      setState(() => _flashingId = null);
+      await Future.delayed(const Duration(milliseconds: 180));
+    }
+
+    if (mounted) setState(() => _isPlaying = false);
+  }
+
+  Future<void> _onTapIcon(String id) async {
+    if (_isPlaying || !_revealed || _gameOver) return;
+
+    setState(() => _flashingId = id);
+    await _playSoundEffect(id);
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 60);
     }
-    await _playSoundByIndex(index);
+    await Future.delayed(const Duration(milliseconds: 150));
+    if (mounted) setState(() => _flashingId = null);
 
-    if (index != _sequence[_userStep]) {
-      setState(() => _inputEnabled = false);
-      await _voiceAssistant.speakWithLanguage(
-        'melody.wrong'.tr(),
-        _langCode,
-        vibrate: false,
-      );
-      if (await VibrationUtils.hasVibrator()) {
-        await VibrationUtils.vibrate(duration: 200);
-      }
-      await Future.delayed(const Duration(milliseconds: 1500));
+    final isCorrectStep = id == _sequence[_userIndex];
+
+    if (!isCorrectStep) {
+      await _playClip('incorrect', 'melody.incorrect'.tr());
+      await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
-      setState(() {
-        _userStep = 0;
-        _inputEnabled = true;
-      });
-      await _playSequence();
-      if (!mounted) return;
-      await _voiceAssistant.speakWithLanguage(
-        'melody.your_turn'.tr(),
-        _langCode,
-        vibrate: false,
-      );
+      _nextRound();
       return;
     }
 
-    setState(() => _userStep++);
+    setState(() => _userIndex++);
 
-    if (_userStep >= _sequence.length) {
-      setState(() => _inputEnabled = false);
-      if (await VibrationUtils.hasVibrator()) {
-        await VibrationUtils.vibrate(duration: 250);
-      }
-      await _voiceAssistant.speakWithLanguage(
-        'melody.correct'.tr(),
-        _langCode,
-        vibrate: false,
-      );
-
-      if (_level >= _maxLevel) {
-        await Future.delayed(const Duration(milliseconds: 600));
-        await _voiceAssistant.speakWithLanguage(
-          'melody.win'.tr(),
-          _langCode,
-          vibrate: false,
-        );
-        setState(() {
-          _level = 1;
-          _sequence = [];
-        });
-        await Future.delayed(const Duration(milliseconds: 2500));
-        if (!mounted) return;
-        _startGame();
-        return;
-      }
-
-      setState(() => _level++);
-      await Future.delayed(const Duration(milliseconds: 1200));
+    if (_userIndex >= _sequence.length) {
+      setState(() => _hits++);
+      await _playClip('correct', 'melody.correct'.tr());
+      await Future.delayed(const Duration(milliseconds: 900));
       if (!mounted) return;
-      _nextLevel();
+      _nextRound();
+    }
+  }
+
+  void _nextRound() {
+    final newRound = _round + 1;
+    if (newRound >= _totalRounds) {
+      setState(() {
+        _round = newRound;
+        _gameOver = true;
+      });
+    } else {
+      setState(() => _round = newRound);
+      _prepareRound();
+    }
+  }
+
+  void _restart() {
+    setState(() {
+      _round = 0;
+      _hits = 0;
+      _gameOver = false;
+    });
+    _prepareRound();
+  }
+
+  void _toggleExplanation() {
+    final opening = !_explanationOpen;
+    setState(() => _explanationOpen = opening);
+    if (opening) {
+      _playClip('explanation', 'melody.explanation_text'.tr());
+    } else {
+      // Враќање кон играта: веднаш запри го говорот на објаснувањето.
+      _voiceAssistant.stop();
+      _audioPlayer.stop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final contrastColor = AccessibilityUtils.getContrastColor(context);
+    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
 
     return GameScreenChrome(
-      accent: const Color(0xFF9333EA),
+      accent: _moduleAccent,
       title: 'features.melody_memory'.tr(),
       child: SafeArea(
         child: Column(
           children: [
+            _buildExplanationButton(contrast),
+            if (_explanationOpen) _buildExplanationPanel(contrast),
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
-                'melody.level'.tr(args: [_level.toString()]),
-                style: GameTypography.heading(context, contrastColor, 20),
+                _gameOver
+                    ? 'melody.game_over_title'.tr()
+                    : 'melody.rounds_progress'.tr(args: [
+                        (_round + 1).toString(),
+                        _totalRounds.toString(),
+                      ]),
+                style: GameTypography.heading(context, contrast, 20),
               ),
             ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 20,
-                  crossAxisSpacing: 20,
-                  childAspectRatio: 1.1,
-                  children: List.generate(4, (index) {
-                    const colors = [
-                      Color(0xFF6366F1),
-                      Color(0xFFF59E0B),
-                      Color(0xFF10B981),
-                      Color(0xFF8B5CF6),
-                    ];
-                    final labels = [
-                      'melody.sound1'.tr(),
-                      'melody.sound2'.tr(),
-                      'melody.sound3'.tr(),
-                      'melody.sound4'.tr(),
-                    ];
-                    final c = colors[index];
-                    return Semantics(
-                      label: '${labels[index]}. ${'melody.tap_to_repeat'.tr()}',
-                      button: true,
-                      child: Material(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(22),
-                          onTap: () => _onButtonTap(index),
-                          child: Ink(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(22),
-                              gradient: hc
-                                  ? null
-                                  : LinearGradient(
-                                      begin: Alignment.topLeft,
-                                      end: Alignment.bottomRight,
-                                      colors: [
-                                        c,
-                                        Color.lerp(c, Colors.white, 0.22)!,
-                                      ],
-                                    ),
-                              color: hc ? c.withValues(alpha: 0.9) : null,
-                              boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
-                            ),
-                            child: Center(
-                              child: Text(
-                                labels[index],
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: AccessibilityUtils.getPrimaryButtonForeground(context),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  }),
+              child: _gameOver ? _buildEndScreen(contrast) : _buildRound(contrast, hc),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExplanationButton(Color contrast) {
+    final label = _explanationOpen
+        ? 'melody.explanation_toggle_close'.tr()
+        : 'melody.explanation_toggle_open'.tr();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Semantics(
+        label: label,
+        button: true,
+        child: SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _toggleExplanation,
+            icon: Icon(
+              _explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
+              size: 26,
+            ),
+            label: Text(
+              label,
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _explanationOpen
+                  ? AccessibilityUtils.getDisabledColor(context)
+                  : _moduleAccent,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExplanationPanel(Color contrast) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _moduleAccent.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _moduleAccent.withOpacity(0.35), width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.volume_up_rounded, color: _moduleAccent),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'melody.explanation_title'.tr(),
+                  style: GameTypography.heading(context, contrast, 17),
                 ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'melody.explanation_text'.tr(),
+            style: GameTypography.body(context, contrast, 15),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRound(Color contrast, bool hc) {
+    return Column(
+      children: [
+        const SizedBox(height: 8),
+        Text(
+          'melody.score'.tr(args: [_hits.toString()]),
+          style: GameTypography.body(context, contrast, 16),
+        ),
+        const SizedBox(height: 12),
+        if (!_revealed)
+          _buildStartButton(contrast, hc)
+        else ...[
+          Text(
+            'melody.choose_prompt'.tr(),
+            textAlign: TextAlign.center,
+            style: GameTypography.body(context, contrast, 16),
+          ),
+          const SizedBox(height: 6),
+          TextButton.icon(
+            onPressed: _isPlaying ? null : _playSequence,
+            icon: const Icon(Icons.replay_rounded),
+            label: Text('melody.listen_again'.tr()),
+          ),
+        ],
+        const SizedBox(height: 8),
+        Expanded(child: _buildIconGrid(hc)),
+      ],
+    );
+  }
+
+  Widget _buildStartButton(Color contrast, bool hc) {
+    return Semantics(
+      label: 'melody.start_listening'.tr(),
+      button: true,
+      child: GestureDetector(
+        onTap: _playSequence,
+        child: Column(
+          children: [
+            Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: hc
+                    ? null
+                    : const LinearGradient(
+                        colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                color: hc ? _moduleAccent : null,
+                border: Border.all(color: contrast, width: hc ? 3 : 0),
+                boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
+              ),
+              child: const Icon(Icons.play_arrow_rounded, size: 52, color: Colors.white),
+            ),
+            const SizedBox(height: 8),
+            Text('melody.start_listening'.tr(), style: GameTypography.heading(context, contrast, 16)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIconGrid(bool hc) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: GridView.count(
+        crossAxisCount: 2,
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.15,
+        children: _soundIds.map((id) => _iconCard(id, hc)).toList(),
+      ),
+    );
+  }
+
+  Widget _iconCard(String id, bool hc) {
+    final baseColor = _soundColors[id]!;
+    final label = _soundLabelKeys[id]!.tr();
+    final contrast = AccessibilityUtils.getContrastColor(context);
+    final isFlashing = _flashingId == id;
+    final interactive = _revealed && !_isPlaying && !_gameOver;
+
+    return Semantics(
+      label: label,
+      button: interactive,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: interactive ? () => _onTapIcon(id) : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              gradient: hc
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: isFlashing
+                          ? [Colors.white, Color.lerp(baseColor, Colors.white, 0.5)!]
+                          : [baseColor, Color.lerp(baseColor, Colors.white, 0.25)!],
+                    ),
+              color: hc ? baseColor.withOpacity(isFlashing ? 0.5 : 0.9) : null,
+              border: Border.all(
+                color: isFlashing ? Colors.white : (hc ? contrast : Colors.transparent),
+                width: isFlashing ? 4 : 2,
+              ),
+              boxShadow: hc
+                  ? const <BoxShadow>[]
+                  : [
+                      BoxShadow(
+                        color: baseColor.withOpacity(isFlashing ? 0.6 : 0.25),
+                        blurRadius: isFlashing ? 24 : 8,
+                        spreadRadius: isFlashing ? 3 : 0,
+                      ),
+                    ],
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Иста големина како кај Идентификација на звук - иконата
+                // зафаќа барем 70% од пократката страна на картичката.
+                final iconSize = min(constraints.maxWidth, constraints.maxHeight) * 0.7;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(_soundIcons[id], size: iconSize, color: Colors.white),
+                    const SizedBox(height: 10),
+                    Text(
+                      label,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEndScreen(Color contrast) {
+    final misses = _totalRounds - _hits;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
+            const SizedBox(height: 16),
+            Text(
+              'melody.final_summary'.tr(args: [
+                _hits.toString(),
+                misses.toString(),
+                _totalRounds.toString(),
+              ]),
+              textAlign: TextAlign.center,
+              style: GameTypography.body(context, contrast, 18),
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: _restart,
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text('melody.play_again'.tr()),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _moduleAccent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               ),
             ),
           ],

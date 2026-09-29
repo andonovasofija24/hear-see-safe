@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/providers/accessibility_provider.dart';
 import 'package:hear_and_see_safe/providers/app_state_provider.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
@@ -104,11 +106,27 @@ class AccessibilityUtils {
     return accessibilityProvider.buttonSize;
   }
 
+  /// Заеднички плеер за сите кратки "фидбек" клипови (гласовен асистент,
+  /// избор на јазик итн.) низ целата апликација.
+  static final AudioPlayer _feedbackPlayer = AudioPlayer();
+
+  /// Го запира било кој звук/клип што моментално свири преку споделениот
+  /// фидбек-плеер (пр. кога веќе е избран јазик и се преминува понатаму).
+  static Future<void> stopFeedback() async {
+    try {
+      await _feedbackPlayer.stop();
+    } catch (_) {}
+  }
+
   static Future<void> provideFeedback({
     required BuildContext context,
     bool vibrate = true,
     String? audioFeedback,
     VoiceAssistantService? voiceAssistant,
+    /// Патека (релативна на assets/, пр. 'audio/language/mk/selected.mp3')
+    /// до однапред снимен говорен клип. Се пробува ПРВО; само ако не постои
+    /// (или падне) се паѓа назад на `audioFeedback` преку системскиот TTS.
+    String? clipAssetPath,
   }) async {
     final appState = Provider.of<AppStateProvider>(context, listen: false);
 
@@ -118,7 +136,48 @@ class AccessibilityUtils {
       }
     }
 
-    if (audioFeedback != null && voiceAssistant != null && appState.isVoiceAssistantEnabled) {
+    if (!appState.isVoiceAssistantEnabled) return;
+
+    if (clipAssetPath != null) {
+      // ВАЖНО: некои платформи (веб) тивко "голтаат" формат-грешка без да
+      // фрлат исклучок од .play() - плеерот никогаш не влегува во состојба
+      // "playing". Затоа не се потпираме само на тоа дали .play() фрлил
+      // грешка - експлицитно чекаме потврда дека звукот НАВИСТИНА почнал,
+      // инаку функцијата излегува со return; пред TTS-резервата да стигне
+      // на ред, и корисникот не слуша ништо.
+      bool reachedPlaying = false;
+      final startedCompleter = Completer<void>();
+      late final StreamSubscription<PlayerState> stateSub;
+      stateSub = _feedbackPlayer.onPlayerStateChanged.listen((state) {
+        if (state == PlayerState.playing) {
+          reachedPlaying = true;
+          if (!startedCompleter.isCompleted) startedCompleter.complete();
+        }
+        if ((state == PlayerState.completed || state == PlayerState.stopped) &&
+            !startedCompleter.isCompleted) {
+          startedCompleter.complete();
+        }
+      });
+
+      bool playCallSucceeded = false;
+      try {
+        await _feedbackPlayer.stop();
+        await _feedbackPlayer.play(AssetSource(clipAssetPath));
+        playCallSucceeded = true;
+      } catch (_) {
+        playCallSucceeded = false;
+      }
+
+      if (playCallSucceeded) {
+        await startedCompleter.future.timeout(const Duration(seconds: 4), onTimeout: () {});
+      }
+      await stateSub.cancel();
+
+      if (playCallSucceeded && reachedPlaying) return; // навистина проработи - готово.
+      // инаку продолжи кон TTS-резервата подолу.
+    }
+
+    if (audioFeedback != null && voiceAssistant != null) {
       final langCode = context.locale.languageCode;
       await voiceAssistant.speakWithLanguage(audioFeedback, langCode, vibrate: false);
     }
@@ -175,4 +234,3 @@ class AccessibilityUtils {
     );
   }
 }
-

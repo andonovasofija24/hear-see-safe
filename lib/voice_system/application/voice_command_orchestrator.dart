@@ -36,9 +36,18 @@ class VoiceCommandOrchestrator {
   }
 
   /// Full microphone session: prompt → listen → parse → optional confirm.
-  Future<VoiceIntent?> runCommand(VoiceUiStrings strings, String uiLanguageCode) async {
+  ///
+  /// `playClip` (по избор) - функција што пробува да пушти однапред снимен
+  /// клип за дадениот стабилен клуч ('speak_command', 'not_recognized',
+  /// 'confirm_wifi_disable', 'session_cancelled') и враќа true ако успеала.
+  /// Ако е null или врати false, се користи системскиот TTS (fallback).
+  Future<VoiceIntent?> runCommand(
+    VoiceUiStrings strings,
+    String uiLanguageCode, {
+    Future<bool> Function(String key)? playClip,
+  }) async {
     final lang = _feedbackLang(uiLanguageCode);
-    await _speakOut(strings.commandHint, lang);
+    await _speakOut(strings.commandHint, lang, key: 'speak_command', playClip: playClip);
 
     await Future<void>.delayed(const Duration(milliseconds: 400));
 
@@ -47,7 +56,7 @@ class VoiceCommandOrchestrator {
     );
 
     if (heard == null || heard.isEmpty) {
-      await _speakOut(strings.notRecognized, lang);
+      await _speakOut(strings.notRecognized, lang, key: 'not_recognized', playClip: playClip);
       return null;
     }
 
@@ -62,13 +71,13 @@ class VoiceCommandOrchestrator {
 
     if (intent.requiresConfirmation) {
       final confirmLang = intent.detectedLanguage ?? lang;
-      await _speakOut(strings.confirmWifiDisable, confirmLang);
+      await _speakOut(strings.confirmWifiDisable, confirmLang, key: 'confirm_wifi_disable', playClip: playClip);
       await Future<void>.delayed(const Duration(milliseconds: 500));
       final answer = await _speechToText.listenOnce(
         timeout: const Duration(seconds: 5),
       );
       if (!_isAffirmative(answer?.transcript)) {
-        await _speakOut(strings.sessionCancelled, confirmLang);
+        await _speakOut(strings.sessionCancelled, confirmLang, key: 'session_cancelled', playClip: playClip);
         return null;
       }
     }
@@ -76,7 +85,26 @@ class VoiceCommandOrchestrator {
     return intent;
   }
 
-  Future<void> _speakOut(String text, SupportedVoiceLanguage lang) async {
+  /// Едноставно еднократно слушање - за случаи каде треба само да се улови
+  /// еден клучен збор (пр. избор на јазик со глас), без целиот синтезиран
+  /// тек на намери (intent resolution) што се користи за игровите команди.
+  Future<String?> listenOnce({Duration? timeout}) async {
+    final heard = await _speechToText.listenOnce(
+      timeout: timeout ?? _config.commandListenTimeout,
+    );
+    return heard?.transcript;
+  }
+
+  Future<void> _speakOut(
+    String text,
+    SupportedVoiceLanguage lang, {
+    String? key,
+    Future<bool> Function(String key)? playClip,
+  }) async {
+    if (key != null && playClip != null) {
+      final played = await playClip(key);
+      if (played) return;
+    }
     await _textToSpeech.speak(
       text,
       language: lang,

@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -24,6 +26,7 @@ import 'package:hear_and_see_safe/screens/melody_memory_screen.dart';
 import 'package:hear_and_see_safe/screens/rhythm_tap_screen.dart';
 import 'package:hear_and_see_safe/screens/story_choices_screen.dart';
 import 'package:hear_and_see_safe/screens/settings_screen.dart';
+import 'package:hear_and_see_safe/screens/language_selection_screen.dart';
 
 class _HomeFeature {
   const _HomeFeature({
@@ -32,6 +35,7 @@ class _HomeFeature {
     required this.descKey,
     required this.accent,
     required this.screen,
+    this.audioKey,
   });
 
   final IconData icon;
@@ -39,6 +43,9 @@ class _HomeFeature {
   final String descKey;
   final Color accent;
   final Widget screen;
+  /// Клуч за однапред снимено име на играта (assets/audio/home/<јазик>/<audioKey>.mp3).
+  /// Null = играта сè уште не е преуредена - користи го стариот TTS начин.
+  final String? audioKey;
 }
 
 class _HomeSection {
@@ -66,7 +73,11 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
   late VoiceAssistantService _voiceAssistant;
+  /// За однапред снимени имиња на игри (assets/audio/home/<јазик>/<audioKey>.mp3).
+  final AudioPlayer _featureNamePlayer = AudioPlayer();
   bool _isListening = false;
+  /// Сите икони се заклучени додека не заврши пораката за добредојде.
+  bool _welcomeLocked = true;
   late AnimationController _fabPulse;
   late Animation<double> _fabScale;
 
@@ -77,6 +88,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.braille_desc',
       accent: Color(0xFF4F46E5),
       screen: const BrailleLearningScreen(),
+      audioKey: 'braille_alphabet',
     ),
     _HomeFeature(
       icon: Icons.auto_stories_rounded,
@@ -84,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.picture_book_desc',
       accent: Color(0xFF6366F1),
       screen: const PictureBookScreen(),
+      audioKey: 'picture_book',
     ),
     _HomeFeature(
       icon: Icons.calculate_rounded,
@@ -91,6 +104,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.number_games_desc',
       accent: Color(0xFF059669),
       screen: const NumberGamesScreen(),
+      audioKey: 'number_games',
     ),
     _HomeFeature(
       icon: Icons.photo_camera_rounded,
@@ -98,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.camera_recognition_desc',
       accent: Color(0xFFEA580C),
       screen: const CameraRecognitionScreen(),
+      audioKey: 'camera_recognition',
     ),
     _HomeFeature(
       icon: Icons.explore_rounded,
@@ -105,6 +120,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.spatial_orientation_desc',
       accent: Color(0xFF7C3AED),
       screen: const SpatialOrientationScreen(),
+      audioKey: 'spatial_orientation',
     ),
   ];
 
@@ -115,6 +131,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.sound_identification_desc',
       accent: Color(0xFF0D9488),
       screen: const SoundIdentificationScreen(),
+      audioKey: 'sound_identification',
     ),
     _HomeFeature(
       icon: Icons.psychology_rounded,
@@ -122,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.sound_memory_desc',
       accent: Color(0xFFDB2777),
       screen: const SoundMemoryScreen(),
+      audioKey: 'sound_memory',
     ),
     _HomeFeature(
       icon: Icons.sports_esports_rounded,
@@ -129,6 +147,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.voice_pong_desc',
       accent: Color(0xFFD97706),
       screen: const VoicePongScreen(),
+      audioKey: 'voice_pong',
     ),
     _HomeFeature(
       icon: Icons.piano_rounded,
@@ -136,6 +155,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.melody_memory_desc',
       accent: Color(0xFF9333EA),
       screen: const MelodyMemoryScreen(),
+      audioKey: 'melody_memory',
     ),
     _HomeFeature(
       icon: Icons.graphic_eq_rounded,
@@ -143,6 +163,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.rhythm_tap_desc',
       accent: Color(0xFFE11D48),
       screen: const RhythmTapScreen(),
+      audioKey: 'rhythm_tap',
     ),
     _HomeFeature(
       icon: Icons.menu_book_rounded,
@@ -150,6 +171,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.story_choices_desc',
       accent: Color(0xFF0F766E),
       screen: const StoryChoicesScreen(),
+      audioKey: 'story_choices',
     ),
   ];
 
@@ -160,6 +182,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       descKey: 'features.cyber_safety_desc',
       accent: Color(0xFFDC2626),
       screen: const CyberSafetyScreen(),
+      audioKey: 'cyber_security',
     ),
   ];
 
@@ -206,6 +229,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
   @override
   void dispose() {
+    _voiceAssistant.stop();
+    _featureNamePlayer.dispose();
     _fabPulse.dispose();
     super.dispose();
   }
@@ -233,7 +258,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       systemWifiUnavailable: 'voice.system_wifi_unavailable'.tr(),
     );
 
-    final intent = await orchestrator.runCommand(strings, langCode);
+    final intent = await orchestrator.runCommand(
+      strings,
+      langCode,
+      playClip: (key) => _tryPlayVoiceClip(key, langCode),
+    );
     if (!mounted) return;
     setState(() => _isListening = false);
     if (intent == null) return;
@@ -246,6 +275,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  /// Пробува однапред снимен клип за гласовниот тек (assets/audio/voice/<јазик>/<клуч>.mp3).
+  /// Враќа true ако успешно пуштил, false ако не постои (тогаш се користи TTS).
+  Future<bool> _tryPlayVoiceClip(String key, String langCode) async {
+    try {
+      await _featureNamePlayer.stop();
+      await _featureNamePlayer.play(AssetSource('audio/voice/$langCode/$key.mp3'));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _updateVoiceAssistantSettings() {
     final appState = Provider.of<AppStateProvider>(context, listen: false);
     _voiceAssistant.setVoiceAssistantEnabled(appState.isVoiceAssistantEnabled);
@@ -256,7 +297,56 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
     final langCode = context.locale.languageCode;
-    await _voiceAssistant.speakWithLanguage('home.welcome'.tr(), langCode, vibrate: false);
+
+    // Иста робустна проверка како и на другите екрани: некои платформи
+    // тивко ја голтаат формат-грешката без да фрлат исклучок, па не се
+    // потпираме само на тоа дали .play() не фрлил грешка.
+    bool reachedPlaying = false;
+    final startedCompleter = Completer<void>();
+    final finishedCompleter = Completer<void>();
+    late final StreamSubscription<PlayerState> stateSub;
+    stateSub = _featureNamePlayer.onPlayerStateChanged.listen((state) {
+      if (state == PlayerState.playing) {
+        reachedPlaying = true;
+        if (!startedCompleter.isCompleted) startedCompleter.complete();
+      }
+      if (state == PlayerState.completed || state == PlayerState.stopped) {
+        if (!startedCompleter.isCompleted) startedCompleter.complete();
+        if (!finishedCompleter.isCompleted) finishedCompleter.complete();
+      }
+    });
+
+    bool playCallSucceeded = false;
+    try {
+      await _featureNamePlayer.stop();
+      await _featureNamePlayer.play(AssetSource('audio/home/$langCode/welcome.mp3'));
+      playCallSucceeded = true;
+    } catch (_) {
+      playCallSucceeded = false;
+    }
+
+    if (playCallSucceeded) {
+      await startedCompleter.future.timeout(const Duration(seconds: 4), onTimeout: () {});
+      if (reachedPlaying) {
+        await finishedCompleter.future.timeout(const Duration(seconds: 30), onTimeout: () {});
+      }
+    }
+    await stateSub.cancel();
+
+    if (!mounted) return;
+    if (!(playCallSucceeded && reachedPlaying)) {
+      await _voiceAssistant.speakWithLanguage('home.welcome'.tr(), langCode, vibrate: false);
+    }
+
+    if (!mounted) return;
+    setState(() => _welcomeLocked = false);
+  }
+
+  void _goToLanguageSelection() {
+    _voiceAssistant.stop();
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const LanguageSelectionScreen()),
+    );
   }
 
   void _navigateToScreen(Widget screen, String announcement) {
@@ -268,6 +358,32 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => screen),
+    );
+  }
+
+  /// За игри со подготвена снимка на името (f.audioKey != null), се пушта
+  /// таа снимка наместо системскиот TTS. За другите игри (audioKey == null)
+  /// однесувањето останува исто како порано.
+  Future<void> _navigateToFeature(_HomeFeature f) async {
+    if (f.audioKey == null) {
+      _navigateToScreen(f.screen, f.titleKey.tr());
+      return;
+    }
+
+    AccessibilityUtils.provideFeedback(context: context);
+    final langCode = context.locale.languageCode;
+    final relativePath = 'audio/home/$langCode/${f.audioKey}.mp3';
+    try {
+      await _featureNamePlayer.stop();
+      await _featureNamePlayer.play(AssetSource(relativePath));
+    } catch (_) {
+      await _voiceAssistant.speakWithLanguage(f.titleKey.tr(), langCode, vibrate: false);
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => f.screen),
     );
   }
 
@@ -550,17 +666,29 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         ),
         actions: [
           IconButton(
+            icon: Icon(Icons.language_rounded, size: 28 * buttonSize),
+            color: hc ? contrastColor : Colors.white,
+            style: IconButton.styleFrom(
+              backgroundColor: hc ? null : Colors.white.withValues(alpha: 0.18),
+            ),
+            onPressed: _welcomeLocked ? null : _goToLanguageSelection,
+            tooltip: 'language.change'.tr(),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
             icon: Icon(Icons.settings_rounded, size: 28 * buttonSize),
             color: hc ? contrastColor : Colors.white,
             style: IconButton.styleFrom(
               backgroundColor: hc ? null : Colors.white.withValues(alpha: 0.18),
             ),
-            onPressed: () {
-              _navigateToScreen(
-                const SettingsScreen(),
-                'settings.opening'.tr(),
-              );
-            },
+            onPressed: _welcomeLocked
+                ? null
+                : () {
+                    _navigateToScreen(
+                      const SettingsScreen(),
+                      'settings.opening'.tr(),
+                    );
+                  },
             tooltip: 'settings.title'.tr(),
           ),
           const SizedBox(width: 8),
@@ -583,7 +711,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
             shadowColor: const Color(0xFF115E59).withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(22),
             child: InkWell(
-              onTap: _isListening ? null : _startVoiceCommand,
+              onTap: (_isListening || _welcomeLocked) ? null : _startVoiceCommand,
               borderRadius: BorderRadius.circular(22),
               child: Ink(
                 decoration: BoxDecoration(
@@ -660,19 +788,25 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                     for (final f in section.features) ...[
                       Padding(
                         padding: EdgeInsets.only(bottom: 12 * buttonSize),
-                        child: _buildFeatureCard(
-                          context,
-                          icon: f.icon,
-                          title: f.titleKey.tr(),
-                          description: f.descKey.tr(),
-                          accent: f.accent,
-                          buttonSize: buttonSize,
-                          contrastColor: contrastColor,
-                          secondaryColor: secondaryColor,
-                          highContrast: hc,
-                          semanticLabel:
-                              '${f.titleKey.tr()}. ${f.descKey.tr()}. ${'features.tap_to_open'.tr()}',
-                          onTap: () => _navigateToScreen(f.screen, f.titleKey.tr()),
+                        child: AbsorbPointer(
+                          absorbing: _welcomeLocked,
+                          child: Opacity(
+                            opacity: _welcomeLocked ? 0.4 : 1.0,
+                            child: _buildFeatureCard(
+                              context,
+                              icon: f.icon,
+                              title: f.titleKey.tr(),
+                              description: f.descKey.tr(),
+                              accent: f.accent,
+                              buttonSize: buttonSize,
+                              contrastColor: contrastColor,
+                              secondaryColor: secondaryColor,
+                              highContrast: hc,
+                              semanticLabel:
+                                  '${f.titleKey.tr()}. ${f.descKey.tr()}. ${'features.tap_to_open'.tr()}',
+                              onTap: () => _navigateToFeature(f),
+                            ),
+                          ),
                         ),
                       ),
                     ],
