@@ -8,6 +8,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
 enum _GameMode { recognize, biggerSmaller, operations, countObjects, tally, grid, sequence, sort }
 enum _Difficulty { easy, medium, hard }
@@ -1398,6 +1399,112 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           'number_games.choose_mode'.tr(),
           textAlign: TextAlign.center,
           style: GameTypography.heading(context, contrast, 18),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: CategoryVoiceCommandButton(
+            background: _moduleAccent,
+            onBack: () => Navigator.of(context).pop(),
+            options: [
+              VoiceCategoryOption(
+                keywords: const [
+                  'кој е бројот',
+                  'what is the number',
+                  'cili është numri',
+                  'broj',
+                  'number',
+                  'numri',
+                ],
+                onSelected: () => _startRound(_GameMode.recognize),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'поголем или помал',
+                  'поголем',
+                  'помал',
+                  'bigger or smaller',
+                  'bigger',
+                  'smaller',
+                  'më i madh apo më i vogël',
+                  'më i madh',
+                  'më i vogël',
+                ],
+                onSelected: () => _startRound(_GameMode.biggerSmaller),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'собирање и одземање',
+                  'собирање',
+                  'одземање',
+                  'плус',
+                  'минус',
+                  'addition and subtraction',
+                  'addition',
+                  'subtraction',
+                  'plus',
+                  'minus',
+                  'mbledhje dhe zbritje',
+                  'mbledhje',
+                  'zbritje',
+                ],
+                onSelected: () => _startRound(_GameMode.operations),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'броење предмети',
+                  'предмети',
+                  'count objects',
+                  'objects',
+                  'numëro objektet',
+                  'objektet',
+                ],
+                onSelected: () => _startRound(_GameMode.countObjects),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'тактилен бројач',
+                  'бројач',
+                  'tactile counter',
+                  'counter',
+                  'numëruesi me prekje',
+                  'numëruesi',
+                ],
+                onSelected: () => _startRound(_GameMode.tally),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'локатор на броеви',
+                  'локатор',
+                  'number locator',
+                  'locator',
+                  'gjetësi i numrave',
+                  'gjetësi',
+                ],
+                onSelected: () => _startRound(_GameMode.grid),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'магична низа',
+                  'низа',
+                  'magic sequence',
+                  'sequence',
+                  'vargu magjik',
+                  'vargu',
+                ],
+                onSelected: () => _startRound(_GameMode.sequence),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'редослед',
+                  'ordering',
+                  'order',
+                  'sort',
+                  'renditja',
+                ],
+                onSelected: () => _startRound(_GameMode.sort),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 14),
         _modeCard(context, _GameMode.recognize, Icons.pin_rounded, 'number_games.counting'.tr()),

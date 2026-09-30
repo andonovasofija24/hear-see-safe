@@ -760,54 +760,74 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
   Widget _buildPlayButtonsCell(Color contrast, bool hc, Color labelColor) {
     final canPlayFirst = _playCount == 0;
     final canPlayAgain = _playCount > 0 && _playCount < _maxPlays;
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Opacity(
-              opacity: canPlayFirst ? 1.0 : 0.35,
-              child: AbsorbPointer(
-                absorbing: !canPlayFirst,
-                child: _buildCircleButton(
-                  contrast: contrast,
-                  hc: hc,
-                  labelColor: labelColor,
-                  icon: Icons.volume_up_rounded,
-                  label: 'rhythm.play_button'.tr(),
-                  flash: _flashPulse,
-                  onTap: _playInstrumentSound,
-                  diameter: 150,
-                ),
+    // LayoutBuilder + FittedBox: оваа ќелија добива фиксна (флекс) висина
+    // од родителот, која варира со висината на екранот. Претходно
+    // круговите имаа ФИКСЕН дијаметар (150/130) кој на пониски екрани/
+    // прозорци не стигаше (RenderFlex overflow). Сега содржината се
+    // смета според вистински достапниот простор и, ако сепак остане
+    // тесно, FittedBox ја смалува пропорционално - без overflow, без
+    // разлика на висината.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : 220.0;
+        // ~34px за размаците + бројачот текст, остатокот за кругот+натпис.
+        final circleAreaHeight = (availableHeight - 34).clamp(70.0, 220.0);
+        final bigDiameter = (circleAreaHeight * 0.72).clamp(70.0, 150.0);
+        final smallDiameter = bigDiameter * (130 / 150);
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Opacity(
+                    opacity: canPlayFirst ? 1.0 : 0.35,
+                    child: AbsorbPointer(
+                      absorbing: !canPlayFirst,
+                      child: _buildCircleButton(
+                        contrast: contrast,
+                        hc: hc,
+                        labelColor: labelColor,
+                        icon: Icons.volume_up_rounded,
+                        label: 'rhythm.play_button'.tr(),
+                        flash: _flashPulse,
+                        onTap: _playInstrumentSound,
+                        diameter: bigDiameter,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Opacity(
+                    opacity: canPlayAgain ? 1.0 : 0.35,
+                    child: AbsorbPointer(
+                      absorbing: !canPlayAgain,
+                      child: _buildCircleButton(
+                        contrast: contrast,
+                        hc: hc,
+                        labelColor: labelColor,
+                        icon: Icons.replay_rounded,
+                        label: 'rhythm.play_again_button'.tr(),
+                        flash: false,
+                        onTap: _playAgainSound,
+                        diameter: smallDiameter,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(width: 24),
-            Opacity(
-              opacity: canPlayAgain ? 1.0 : 0.35,
-              child: AbsorbPointer(
-                absorbing: !canPlayAgain,
-                child: _buildCircleButton(
-                  contrast: contrast,
-                  hc: hc,
-                  labelColor: labelColor,
-                  icon: Icons.replay_rounded,
-                  label: 'rhythm.play_again_button'.tr(),
-                  flash: false,
-                  onTap: _playAgainSound,
-                  diameter: 130,
-                ),
+              const SizedBox(height: 10),
+              Text(
+                '$_playCount/$_maxPlays',
+                style: GameTypography.body(context, labelColor, 15),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Text(
-          '$_playCount/$_maxPlays',
-          style: GameTypography.body(context, labelColor, 15),
-        ),
-      ],
+            ],
+          ),
+        );
+      },
     );
   }
 

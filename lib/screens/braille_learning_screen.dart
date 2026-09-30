@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
 /// Едно писмо/број во Брајовата азбука.
 /// `key` е ФИКСЕН, рачно определен ASCII-безбеден идентификатор за име на
@@ -180,7 +182,7 @@ class BrailleLearningScreen extends StatefulWidget {
   State<BrailleLearningScreen> createState() => _BrailleLearningScreenState();
 }
 
-enum _View { categorySelect, explore, practiceModeSelect, practiceCompose, practiceRecognize, practiceWrite, wordRound, expressThought, reference }
+enum _View { categorySelect, explore, practiceModeSelect, practiceCompose, practiceRecognize, practiceWrite, wordRound, expressThought, reference, savedSentences }
 
 class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   static const Color _accent = Color(0xFF4F46E5);
@@ -258,6 +260,77 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// потврдена (чека втор А / Г / Х, или „:" за поништување).
   BrailleSymbol? _expressPreviewedSymbol;
   bool _expressExplanationOpen = false;
+
+  /// Зачувани реченици (трајно, преку SharedPreferences) - секој елемент е
+  /// една целосно завршена реченица/ред од „Искажи ја својата мисла".
+  static const String _savedSentencesPrefsKey = 'braille_express_saved_sentences';
+  List<String> _savedSentences = [];
+  bool _savedSentencesLoaded = false;
+
+  Future<void> _loadSavedSentences() async {
+    if (_savedSentencesLoaded) return;
+    _savedSentencesLoaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = prefs.getStringList(_savedSentencesPrefsKey) ?? [];
+      if (!mounted) return;
+      setState(() => _savedSentences = saved);
+    } catch (_) {}
+  }
+
+  Future<void> _persistSavedSentences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_savedSentencesPrefsKey, _savedSentences);
+    } catch (_) {}
+  }
+
+  /// Го зема текстот на реченицата што треба да се зачува: последниот
+  /// завршен ред (со Х), а ако сеуште нема ниту еден завршен ред - тековниот
+  /// ред во тек на пишување (зборови веќе потврдени + буквите на зборот што
+  /// сеуште се пишува).
+  String? _currentSentenceForSaving() {
+    if (_expressLines.isNotEmpty) return _expressLines.last;
+    final parts = <String>[
+      ..._expressCurrentLineWords,
+      if (_expressCurrentWordLetters.isNotEmpty) _expressCurrentWordLetters.join(),
+    ];
+    if (parts.isEmpty) return null;
+    return parts.join(' ');
+  }
+
+  Future<void> _saveCurrentSentence() async {
+    final sentence = _currentSentenceForSaving();
+    if (sentence == null || sentence.trim().isEmpty) return;
+    setState(() => _savedSentences = [..._savedSentences, sentence]);
+    await _persistSavedSentences();
+    await _playClip('sentence_saved');
+  }
+
+  Future<void> _deleteSavedSentence(int index) async {
+    if (index < 0 || index >= _savedSentences.length) return;
+    setState(() {
+      final updated = List<String>.from(_savedSentences)..removeAt(index);
+      _savedSentences = updated;
+    });
+    await _persistSavedSentences();
+  }
+
+  /// Гласовна команда „избриши реченица" (без назначен број) - ја брише
+  /// најскоро додадената зачувана реченица.
+  Future<void> _deleteLastSavedSentenceByVoice() async {
+    if (_savedSentences.isEmpty) return;
+    await _deleteSavedSentence(_savedSentences.length - 1);
+  }
+
+  void _openSavedSentences() {
+    _loadSavedSentences();
+    setState(() => _view = _View.savedSentences);
+  }
+
+  void _closeSavedSentences() {
+    setState(() => _view = _View.expressThought);
+  }
 
   String get _langCode => context.locale.languageCode;
 
@@ -1072,6 +1145,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   return _buildExpressThought(context);
                 case _View.reference:
                   return _buildReferenceGrid(context);
+                case _View.savedSentences:
+                  return _buildSavedSentences(context);
               }
             },
           ),
@@ -1081,6 +1156,56 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   }
 
   // --- Избор на категорија ---
+
+  /// Гласовни опции за екранот за избор на категорија: групите со букви
+  /// (се менуваат според јазикот - Специјални знаци не постои секаде),
+  /// Бројки, Играта со зборови и Искажи ја својата мисла.
+  List<VoiceCategoryOption> _categoryVoiceOptions() {
+    final options = <VoiceCategoryOption>[];
+    for (var i = 0; i < _groups.length; i++) {
+      final key = _groups[i].titleKey;
+      List<String> keywords;
+      switch (key) {
+        case 'braille.group1':
+          keywords = ['група 1', 'group 1', 'grupi 1', 'прва група', 'first group'];
+          break;
+        case 'braille.group2':
+          keywords = ['група 2', 'group 2', 'grupi 2', 'втора група', 'second group'];
+          break;
+        case 'braille.group3':
+          keywords = ['група 3', 'group 3', 'grupi 3', 'трета група', 'third group'];
+          break;
+        case 'braille.group_special':
+          keywords = ['специјални знаци', 'специјални', 'special characters', 'special', 'shenja të veçanta', 'shenja te vecanta'];
+          break;
+        case 'braille.group_numbers':
+          keywords = ['броеви', 'бројки', 'numbers', 'number', 'numra', 'numrat'];
+          break;
+        default:
+          keywords = [key.tr().toLowerCase()];
+      }
+      final index = i;
+      options.add(VoiceCategoryOption(keywords: keywords, onSelected: () => _openGroup(index)));
+    }
+    options.add(VoiceCategoryOption(
+      keywords: ['игра со зборови', 'зборови', 'word game', 'words', 'loja me fjalë', 'loja me fjale', 'fjalë'],
+      onSelected: _startWordSession,
+    ));
+    options.add(VoiceCategoryOption(
+      keywords: [
+        'искажи ја својата мисла',
+        'искажи мисла',
+        'мисла',
+        'express your thought',
+        'express thought',
+        'shpreh mendimin tënd',
+        'shpreh mendimin',
+        'mendimin',
+      ],
+      onSelected: _startExpressThought,
+    ));
+    return options;
+  }
 
   Widget _buildCategorySelect(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
@@ -1104,6 +1229,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   textAlign: TextAlign.center,
                   style: GameTypography.heading(context, contrast, 20),
                 ),
+                const SizedBox(height: 16),
+                Center(child: CategoryVoiceCommandButton(options: _categoryVoiceOptions(), onBack: () => Navigator.of(context).pop())),
                 const SizedBox(height: 16),
                 Semantics(
                   label: 'braille.reference_button'.tr(),
@@ -1424,7 +1551,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final contrast = AccessibilityUtils.getContrastColor(context);
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _backToCategories),
+        _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           child: Text('${_symbolIndex + 1} / ${_group.symbols.length}', style: GameTypography.heading(context, contrast, 18)),
@@ -1574,7 +1701,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final contrast = AccessibilityUtils.getContrastColor(context);
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _backToCategories),
+        _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(_group.titleKey.tr(), style: GameTypography.heading(context, contrast, 20)),
@@ -1855,7 +1982,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_currentWord == null) return const SizedBox.shrink();
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _backToCategories),
+        _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
@@ -1900,7 +2027,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final hc = AccessibilityUtils.isHighContrast(context);
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _backToCategories),
+        _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         _buildExpressExplanationButton(contrast),
         if (_expressExplanationOpen) _buildExpressExplanationPanel(contrast),
         Padding(
@@ -1934,21 +2061,83 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 170),
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: hc ? Colors.black : Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: hc ? Colors.white : contrast.withOpacity(0.25), width: hc ? 2 : 1.5),
-                ),
-                child: SingleChildScrollView(
-                  reverse: true,
-                  child: _buildExpressComposedText(contrast),
-                ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: hc ? Colors.black : Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: hc ? Colors.white : contrast.withOpacity(0.25), width: hc ? 2 : 1.5),
+                      ),
+                      child: SingleChildScrollView(
+                        reverse: true,
+                        child: _buildExpressComposedText(contrast),
+                      ),
+                    ),
+                  ),
+                  // Копчиња ДЕСНО од полето: зачувај ја реченицата и преглед
+                  // на веќе зачуваните реченици (со опција за бришење таму).
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Semantics(
+                          label: 'braille.express_save'.tr(),
+                          button: true,
+                          child: Material(
+                            color: _accent,
+                            shape: const CircleBorder(),
+                            elevation: 2,
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _saveCurrentSentence,
+                              child: const Padding(padding: EdgeInsets.all(12), child: Icon(Icons.save_rounded, color: Colors.white, size: 24)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Semantics(
+                          label: 'braille.express_preview'.tr(),
+                          button: true,
+                          child: Material(
+                            color: Colors.white,
+                            shape: CircleBorder(side: BorderSide(color: _accent, width: 1.5)),
+                            elevation: 2,
+                            child: InkWell(
+                              customBorder: const CircleBorder(),
+                              onTap: _openSavedSentences,
+                              child: Padding(padding: const EdgeInsets.all(12), child: Icon(Icons.list_alt_rounded, color: _accent, size: 24)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
+          ),
+        ),
+        Center(
+          child: CategoryVoiceCommandButton(
+            options: [
+              VoiceCategoryOption(
+                keywords: ['зачувај реченица', 'зачувај', 'save sentence', 'save', 'ruaj fjalinë', 'ruaj'],
+                onSelected: _saveCurrentSentence,
+              ),
+              VoiceCategoryOption(
+                keywords: ['прегледај реченици', 'преглед', 'preview sentences', 'preview', 'shiko fjalitë', 'shiko'],
+                onSelected: _openSavedSentences,
+              ),
+            ],
+            onBack: _backToCategories,
+            compact: true,
+            background: _accent,
           ),
         ),
         _buildExpressKeyboardHint(contrast),
@@ -2054,6 +2243,77 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   // --- Референтна мрежа (потсетник) ---
 
+  /// Страница со сите зачувани реченици (од „Искажи ја својата мисла"), секоја
+  /// со свое копче за бришење; гласовната команда тука ги препознава
+  /// „избриши реченица" (ја брише последната зачувана) и „назад".
+  Widget _buildSavedSentences(BuildContext context) {
+    final contrast = AccessibilityUtils.getContrastColor(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Column(
+      children: [
+        _buildBackRow(contrast, onBack: _closeSavedSentences, withVoiceBack: false),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          child: Text('braille.express_preview'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 20)),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: CategoryVoiceCommandButton(
+            options: [
+              VoiceCategoryOption(
+                keywords: ['избриши реченица', 'избриши', 'delete sentence', 'delete', 'fshi fjalinë', 'fshi'],
+                onSelected: _deleteLastSavedSentenceByVoice,
+              ),
+            ],
+            onBack: _closeSavedSentences,
+            compact: true,
+            background: _accent,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _savedSentences.isEmpty
+              ? Center(
+                  child: Text(
+                    'braille.express_no_saved'.tr(),
+                    textAlign: TextAlign.center,
+                    style: GameTypography.body(context, contrast, 16),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: _savedSentences.length,
+                  itemBuilder: (context, index) {
+                    final sentence = _savedSentences[index];
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: hc ? Colors.black : Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: hc ? Colors.white : contrast.withOpacity(0.2), width: hc ? 2 : 1),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(child: Text(sentence, style: GameTypography.body(context, contrast, 17))),
+                          Semantics(
+                            label: 'braille.express_delete'.tr(),
+                            button: true,
+                            child: IconButton(
+                              icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
+                              onPressed: () => _deleteSavedSentence(index),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildReferenceGrid(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
     return Column(
@@ -2109,12 +2369,16 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     );
   }
 
-  Widget _buildBackRow(Color contrast, {required VoidCallback onBack}) {
+  Widget _buildBackRow(Color contrast, {required VoidCallback onBack, bool withVoiceBack = false}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
           Semantics(label: 'braille.back'.tr(), button: true, child: IconButton(icon: Icon(Icons.arrow_back_rounded, color: contrast), onPressed: onBack)),
+          if (withVoiceBack) ...[
+            const SizedBox(width: 8),
+            CategoryVoiceCommandButton(options: const [], onBack: onBack, compact: true, background: _accent),
+          ],
         ],
       ),
     );

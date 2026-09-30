@@ -25,11 +25,33 @@ Future<void> dispatchVoiceIntent({
   required VoiceAssistantService voiceAssistant,
   required String systemWifiUnavailableMessage,
 }) async {
+  /// Клучеви за однапред снимените имиња на играта (assets/audio/home/<јазик>/<audioKey>.mp3),
+  /// исти клучеви како во листата на почетниот екран (`_HomeFeature.audioKey`) -
+  /// се користат за да не се изговара името на играта со вграден TTS кога е
+  /// избрана преку гласовна команда.
+  const audioKeyByAction = <String, String>{
+    'navigate_braille': 'braille_alphabet',
+    'navigate_picture_book': 'picture_book',
+    'navigate_number_games': 'number_games',
+    'navigate_camera_recognition': 'camera_recognition',
+    'navigate_spatial_orientation': 'spatial_orientation',
+    'navigate_sound_identification': 'sound_identification',
+    'navigate_cyber_safety': 'cyber_security',
+    'navigate_sound_memory': 'sound_memory',
+    'navigate_voice_pong': 'voice_pong',
+    'navigate_melody_memory': 'melody_memory',
+    'navigate_rhythm_tap': 'rhythm_tap',
+    'navigate_story_choices': 'story_choices',
+  };
+
   void go(Widget screen, String announcement) {
+    final langCode = context.locale.languageCode;
+    final audioKey = audioKeyByAction[intent.action];
     AccessibilityUtils.provideFeedback(
       context: context,
       audioFeedback: announcement,
       voiceAssistant: voiceAssistant,
+      clipAssetPath: audioKey != null ? 'audio/home/$langCode/$audioKey.mp3' : null,
     );
     Navigator.push(
       context,

@@ -2056,6 +2056,7 @@ import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
 /// Модул за просторна ориентација со 4 режими (табови горе):
 /// - Симон - насоки: вибрациска низа од 4 насоки, детето ја повторува со допир.
@@ -3068,16 +3069,50 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     final hc = AccessibilityUtils.isHighContrast(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < tabs.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              Expanded(child: _tabTile(tabs[i].$1, tabs[i].$2, hc)),
-            ],
-          ],
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: CategoryVoiceCommandButton(
+                compact: true,
+                background: _moduleAccent,
+                onBack: () => Navigator.of(context).pop(),
+                options: [
+                  VoiceCategoryOption(
+                    keywords: const ['simon', 'симон', 'насоки', 'directions', 'drejtimet'],
+                    onSelected: () => _switchTab(_SpatialTab.simon),
+                  ),
+                  VoiceCategoryOption(
+                    keywords: const ['maze', 'лавиринт', 'labirint'],
+                    onSelected: () => _switchTab(_SpatialTab.maze),
+                  ),
+                  VoiceCategoryOption(
+                    keywords: const ['radar', 'радар'],
+                    onSelected: () => _switchTab(_SpatialTab.radar),
+                  ),
+                  VoiceCategoryOption(
+                    keywords: const ['compass', 'компас', 'kompas'],
+                    onSelected: () => _switchTab(_SpatialTab.compass),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < tabs.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 8),
+                  Expanded(child: _tabTile(tabs[i].$1, tabs[i].$2, hc)),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

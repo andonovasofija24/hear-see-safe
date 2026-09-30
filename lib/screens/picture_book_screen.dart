@@ -8,6 +8,7 @@ import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 
 /// Мултимедијална сликовница за слабовиди/наглуви (модул „Учи и Слушај“).
@@ -266,6 +267,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       _categoryIndex = index;
       _view = _View.itemGrid;
     });
+  }
+
+  /// Избор на категорија со глас (од `CategoryVoiceCommandButton`) - сите
+  /// категории се секогаш достапни, нема повеќе заклучување.
+  void _selectCategoryByVoice(int index) {
+    _enterCategory(index);
   }
 
   void _backToCategories() {
@@ -582,7 +589,43 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
           textAlign: TextAlign.center,
           style: GameTypography.heading(context, contrast, 20),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
+        Center(
+          child: CategoryVoiceCommandButton(
+            options: [
+              VoiceCategoryOption(
+                keywords: const ['животни', 'animals', 'kafshët', 'kafshet'],
+                onSelected: () => _selectCategoryByVoice(0),
+              ),
+              VoiceCategoryOption(
+                keywords: const ['природа', 'nature', 'natyra'],
+                onSelected: () => _selectCategoryByVoice(1),
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'секојдневни предмети',
+                  'предмети',
+                  'everyday objects',
+                  'objects',
+                  'objekte të përditshme',
+                  'objekte te perditshme',
+                  'objekte',
+                ],
+                onSelected: () => _selectCategoryByVoice(2),
+              ),
+              VoiceCategoryOption(
+                keywords: const ['вселена', 'space', 'hapësira', 'hapesira'],
+                onSelected: () => _selectCategoryByVoice(3),
+              ),
+              VoiceCategoryOption(
+                keywords: const ['музика', 'music', 'muzika'],
+                onSelected: () => _selectCategoryByVoice(4),
+              ),
+            ],
+            onBack: () => Navigator.of(context).pop(),
+          ),
+        ),
+        const SizedBox(height: 12),
         for (final cat in _categories) ...[
           _categoryCard(context, cat, contrast, hc),
           const SizedBox(height: 18),
@@ -621,20 +664,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   Widget _categoryCard(BuildContext context, PictureBookCategory cat, Color contrast, bool hc) {
     final index = _categories.indexOf(cat);
     final visitedCount = (_visitedByCategory[cat.id] ?? const {}).length;
-    final locked = _completedCategories.contains(cat.id);
+    // Категориите повеќе НЕ се заклучуваат - секогаш достапни за допир.
+    // `_completedCategories`/`_visitedByCategory` сепак се користат за
+    // прикажување на прогресот (виден/завршен), само визуелно.
+    const locked = false;
     return Semantics(
-      label: locked
-          ? '${cat.titleKey.tr()}. ${_t('category_locked')}.'
-          : '${cat.titleKey.tr()}. ${cat.items.length} ${_t('items_count')}. $visitedCount ${_t('seen')}.',
-      button: !locked,
+      label: '${cat.titleKey.tr()}. ${cat.items.length} ${_t('items_count')}. $visitedCount ${_t('seen')}.',
+      button: true,
       child: Opacity(
-        opacity: locked ? 0.5 : 1.0,
+        opacity: 1.0,
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(24),
           child: InkWell(
             borderRadius: BorderRadius.circular(24),
-            onTap: locked ? _onLockedCategoryTap : () => _enterCategory(index),
+            onTap: () => _enterCategory(index),
             child: Container(
               padding: const EdgeInsets.all(28),
               constraints: const BoxConstraints(minHeight: 120),
@@ -828,6 +872,18 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     return Column(
       children: [
         _buildBackRow(contrastColor, onBack: _closeItemDetail),
+        Center(
+          child: CategoryVoiceCommandButton(
+            compact: true,
+            options: [
+              VoiceCategoryOption(
+                keywords: const ['квиз', 'quiz', 'kuiz'],
+                onSelected: _startQuiz,
+              ),
+            ],
+            onBack: _backToCategories,
+          ),
+        ),
         _buildStorySegments(context),
         if (_item.hasSound) _buildPlaySoundButton(contrastColor),
         Expanded(

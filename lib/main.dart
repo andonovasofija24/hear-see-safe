@@ -16,6 +16,49 @@ import 'package:hear_and_see_safe/voice_system/voice_system_factory.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 
+/// Глобален клуч на навигаторот - му треба на `_GlobalHomeShortcut` за да може
+/// да "исфрли" се до почетниот екран со игри без разлика колку екрани длабоко
+/// е тргнал корисникот (категорија → мени со категории → мени со игри).
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+/// Копчето со кое корисникот може веднаш да се врати до главното мени со игри
+/// од БИЛО КОЈА длабочина во апликацијата - Escape (копче кое не се користи
+/// никаде поинаку во игрите, за да не се судира со постоечките копчиња на
+/// тастатура, пр. F/D/S/J/K/L/A/G/H/:/P во Брајовата азбука).
+class _GlobalHomeShortcut extends StatefulWidget {
+  const _GlobalHomeShortcut({required this.child});
+  final Widget child;
+
+  @override
+  State<_GlobalHomeShortcut> createState() => _GlobalHomeShortcutState();
+}
+
+class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+    if (event.logicalKey != LogicalKeyboardKey.escape) return false;
+    final nav = rootNavigatorKey.currentState;
+    if (nav == null) return false;
+    nav.popUntil((route) => route.isFirst);
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -115,6 +158,7 @@ class HearAndSeeSafeApp extends StatelessWidget {
           final lexendTheme = GoogleFonts.lexendTextTheme(baseTextTheme);
 
           return MaterialApp(
+            navigatorKey: rootNavigatorKey,
             title: 'Hear & See Safe',
             debugShowCheckedModeBanner: false,
             localizationsDelegates: context.localizationDelegates,
@@ -178,7 +222,7 @@ class HearAndSeeSafeApp extends StatelessWidget {
                     AccessibilityUtils.getTextScale(context),
                   ),
                 ),
-                child: child!,
+                child: _GlobalHomeShortcut(child: child!),
               );
             },
           );
@@ -187,4 +231,3 @@ class HearAndSeeSafeApp extends StatelessWidget {
     );
   }
 }
-

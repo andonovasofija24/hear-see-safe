@@ -84,7 +84,11 @@
     "express_explanation_toggle_open": "Explanation",
     "express_explanation_toggle_close": "Close explanation",
     "express_explanation_title": "How does writing work?",
-    "express_explanation_text": "Besides the keys you already use, you'll now also use A, G, H, colon (:), and P (all on the same row, except P). P opens the alphabet reference, and pressing P again takes you back to the writing field. After choosing the dots you think spell the letter you have in mind, press A to hear whether it's really correct. If it is, confirm with another press of A; if not, clear it with colon (:) and pick the dots again. When you reach the last letter of a word, press A first, then press G to confirm it's also the end of the word. When you reach the last letter of the last word of your sentence, press A first, then H to start a new line in the field. In short, you just need to move your pinky finger to the right key: your left pinky to A - to check and confirm a letter, and your right pinky to colon (:) to delete a letter and to P (slightly up and to the right) for the reference. Your index fingers confirm the end of a word or sentence - left index for a word, right index for a sentence."
+    "express_explanation_text": "Besides the keys you already use, you'll now also use A, G, H, colon (:), and P (all on the same row, except P). P opens the alphabet reference, and pressing P again takes you back to the writing field. After choosing the dots you think spell the letter you have in mind, press A to hear whether it's really correct. If it is, confirm with another press of A; if not, clear it with colon (:) and pick the dots again. When you reach the last letter of a word, press A first, then press G to confirm it's also the end of the word. When you reach the last letter of the last word of your sentence, press A first, then H to start a new line in the field. In short, you just need to move your pinky finger to the right key: your left pinky to A - to check and confirm a letter, and your right pinky to colon (:) to delete a letter and to P (slightly up and to the right) for the reference. Your index fingers confirm the end of a word or sentence - left index for a word, right index for a sentence.",
+    "express_save": "Save the sentence",
+    "express_preview": "View saved sentences",
+    "express_delete": "Delete",
+    "express_no_saved": "You haven't saved any sentence yet."
 },
   "features": {
     "braille": "Braille Alphabet",
@@ -103,7 +107,7 @@
     "cyber_safety_desc": "Learn about internet safety",
     "sound_memory": "Sound Memory",
     "sound_memory_desc": "Match pairs of sounds",
-    "voice_pong": "Voice Pong",
+    "voice_pong": "Ping Pong",
     "voice_pong_desc": "Audio-based Pong game",
     "melody_memory": "Melody Memory",
     "melody_memory_desc": "Listen to a sequence of sounds and repeat it – like Simon Says",

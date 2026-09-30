@@ -84,7 +84,11 @@
     "express_explanation_toggle_open": "Shpjegim",
     "express_explanation_toggle_close": "Mbyll shpjegimin",
     "express_explanation_title": "Si funksionon shkrimi?",
-    "express_explanation_text": "Përveç kopsave që tashmë i përdor, tani do të të ndihmojnë edhe kopsat A, G, H, : (dy pika), dhe P (të gjitha në të njëjtin rresht, përveç P). P të shërben për të hapur përkujtuesin e alfabetit, dhe me shtypje të dytë të P kthehesh prapë te fusha e shkrimit. Pasi t'i zgjedhësh pikat që mendon se e formojnë shkronjën që ke në mendje, shtyp A për të dëgjuar nëse është vërtet ajo. Nëse është e saktë, konfirmoje me A edhe një herë; nëse jo, fshije me : dhe fillo përsëri me zgjedhjen e pikave. Kur të arrish te shkronja e fundit e fjalës, shtyp së pari A, e pastaj, për të konfirmuar se është edhe fundi i fjalës, shtyp G. Kur të arrish te shkronja e fundit e fjalës së fundit të fjalisë tënde, përsëri së pari A, e pastaj H për të filluar një rresht të ri në fushë. Shkurt, duhet vetëm ta lëvizësh gishtin e vogël te kopsa përkatëse: gishti i vogël i dorës së majtë te A - për verifikim dhe konfirmim të shkronjës, kurse i dorës së djathtë te : për fshirjen e shkronjës dhe te P (pak lart djathtas) për përkujtues. Gishtat tregues, nga ana tjetër, shërbejnë për konfirmimin e fundit të fjalës ose fjalisë - i majti për fjalën, i djathti për fjalinë."
+    "express_explanation_text": "Përveç kopsave që tashmë i përdor, tani do të të ndihmojnë edhe kopsat A, G, H, : (dy pika), dhe P (të gjitha në të njëjtin rresht, përveç P). P të shërben për të hapur përkujtuesin e alfabetit, dhe me shtypje të dytë të P kthehesh prapë te fusha e shkrimit. Pasi t'i zgjedhësh pikat që mendon se e formojnë shkronjën që ke në mendje, shtyp A për të dëgjuar nëse është vërtet ajo. Nëse është e saktë, konfirmoje me A edhe një herë; nëse jo, fshije me : dhe fillo përsëri me zgjedhjen e pikave. Kur të arrish te shkronja e fundit e fjalës, shtyp së pari A, e pastaj, për të konfirmuar se është edhe fundi i fjalës, shtyp G. Kur të arrish te shkronja e fundit e fjalës së fundit të fjalisë tënde, përsëri së pari A, e pastaj H për të filluar një rresht të ri në fushë. Shkurt, duhet vetëm ta lëvizësh gishtin e vogël te kopsa përkatëse: gishti i vogël i dorës së majtë te A - për verifikim dhe konfirmim të shkronjës, kurse i dorës së djathtë te : për fshirjen e shkronjës dhe te P (pak lart djathtas) për përkujtues. Gishtat tregues, nga ana tjetër, shërbejnë për konfirmimin e fundit të fjalës ose fjalisë - i majti për fjalën, i djathti për fjalinë.",
+    "express_save": "Ruaj fjalinë",
+    "express_preview": "Shiko fjalitë e ruajtura",
+    "express_delete": "Fshi",
+    "express_no_saved": "Ende nuk ke ruajtur asnjë fjali."
 },
   "features": {
     "braille": "Alfabeti Braille",
@@ -103,7 +107,7 @@
     "cyber_safety_desc": "Mësoni për sigurinë në internet",
     "sound_memory": "Memoria e Zërit",
     "sound_memory_desc": "Përputhni çiftet e zërave",
-    "voice_pong": "Pong me Zë",
+    "voice_pong": "Ping Pong",
     "voice_pong_desc": "Lojë Pong me bazë audio",
     "melody_memory": "Memoria e Melodisë",
     "melody_memory_desc": "Dëgjo një sekuencë tingujsh dhe përsërite – si Simon Thotë",

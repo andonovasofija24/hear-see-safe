@@ -6,6 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
 enum _View { modeSelect, phishing, phishingResult, quiz, quizResult, password, agent, agentResult }
 
@@ -512,7 +513,47 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
+        Center(
+          child: CategoryVoiceCommandButton(
+            options: [
+              VoiceCategoryOption(
+                keywords: const [
+                  'волк', 'овча', 'кожа', 'фишинг',
+                  'wolf', 'sheep', 'phishing',
+                  'ujku', 'delje', 'lëkurë', 'lekure',
+                ],
+                onSelected: _startPhishing,
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'квиз',
+                  'quiz',
+                  'kuiz',
+                ],
+                onSelected: _startQuiz,
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'замок', 'лозинк',
+                  'castle', 'password',
+                  'kështjell', 'kshtjell', 'fjalëkalim', 'fjalekalim',
+                ],
+                onSelected: _startCastle,
+              ),
+              VoiceCategoryOption(
+                keywords: const [
+                  'таен агент', 'агент',
+                  'secret agent', 'agent',
+                  'agjenti sekret', 'agjenti',
+                ],
+                onSelected: _startAgent,
+              ),
+            ],
+            onBack: () => Navigator.of(context).pop(),
+          ),
+        ),
+        const SizedBox(height: 16),
         _modeCard(
           context,
           icon: Icons.mail_lock_rounded,
