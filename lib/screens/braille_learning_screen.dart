@@ -12,6 +12,7 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
+import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
 
 /// Едно писмо/број во Брајовата азбука.
 /// `key` е ФИКСЕН, рачно определен ASCII-безбеден идентификатор за име на
@@ -321,6 +322,21 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   Future<void> _deleteLastSavedSentenceByVoice() async {
     if (_savedSentences.isEmpty) return;
     await _deleteSavedSentence(_savedSentences.length - 1);
+  }
+
+  // --- Гласовна команда во потсетникот (свети + изговара избрана буква/број) ---
+  String? _referenceHighlightKey;
+  int _referenceHighlightToken = 0;
+  bool _referenceListening = false;
+
+  Future<void> _onReferenceMicTap() async {
+    if (_referenceListening) return;
+    setState(() => _referenceListening = true);
+    try {
+      await _startReferenceVoiceListen();
+    } finally {
+      if (mounted) setState(() => _referenceListening = false);
+    }
   }
 
   void _openSavedSentences() {
@@ -2319,6 +2335,36 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return Column(
       children: [
         _buildBackRow(contrast, onBack: _closeReference),
+        Center(
+          child: Semantics(
+            button: true,
+            label: _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
+            child: Material(
+              color: (_referenceListening ? _accent.withValues(alpha: 0.6) : _accent),
+              borderRadius: BorderRadius.circular(18),
+              elevation: 4,
+              child: InkWell(
+                onTap: _referenceListening ? null : _onReferenceMicTap,
+                borderRadius: BorderRadius.circular(18),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(_referenceListening ? Icons.mic_rounded : Icons.record_voice_over_rounded, color: Colors.white, size: 24),
+                      const SizedBox(width: 8),
+                      Text(
+                        _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -2351,11 +2397,100 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 character: s.char,
                 dots: s.dots,
                 contrastColor: contrast,
+                highlighted: _referenceHighlightKey == s.key,
+                highlightColor: _accent,
                 // Сега изговара и буквата И точките (со истите мп3 за точки).
-                onTap: () => _playCharExplanationSequence(s),
+                onTap: () => _highlightAndPlayReferenceSymbol(s),
               ))
           .toList(),
     );
+  }
+
+  /// Ги свети/осветлува ќелијата на притиснатата/изговорената буква/број
+  /// додека трае изговорот, потоа се гаси.
+  Future<void> _highlightAndPlayReferenceSymbol(BrailleSymbol s) async {
+    final myToken = ++_referenceHighlightToken;
+    setState(() => _referenceHighlightKey = s.key);
+    await _playCharExplanationSequence(s);
+    if (!mounted || myToken != _referenceHighlightToken) return;
+    setState(() => _referenceHighlightKey = null);
+  }
+
+  /// Именувани форми на бројки (0-9) на трите јазици, за случај STT-то да
+  /// го препознае изговорениот број како збор ("пет") наместо како цифра
+  /// ("5") - двете форми треба да се совпаднат со истиот симбол.
+  static const Map<String, String> _spokenDigitWords = {
+    // mk
+    'нула': '0', 'еден': '1', 'една': '1', 'два': '2', 'две': '2', 'три': '3', 'четири': '4',
+    'пет': '5', 'шест': '6', 'седум': '7', 'осум': '8', 'девет': '9',
+    // en
+    'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+    // sq
+    'zero0': '0', 'një': '1', 'nje': '1', 'dy': '2', 'tre': '3', 'katër': '4', 'kater': '4', 'pesë': '5', 'pese': '5',
+    'gjashtë': '6', 'gjashte': '6', 'shtatë': '7', 'shtate': '7', 'tetë': '8', 'tete': '8', 'nëntë': '9', 'nente': '9',
+  };
+
+  /// Гласовна команда во потсетникот: ако корисникот ja изговори буквата
+  /// (или бројот), се пали таа ќелија и се изговара со истите мп3 (буква +
+  /// точки), исто како кога се притисне.
+  Future<void> _startReferenceVoiceListen() async {
+    final orchestrator = Provider.of<VoiceCommandOrchestrator>(context, listen: false);
+    final voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
+    final langCode = _langCode;
+
+    final transcript = await orchestrator.listenOnce();
+    if (!mounted) return;
+    if (transcript == null || transcript.trim().isEmpty) {
+      await _playVoiceFeedbackClip('not_recognized', langCode, voiceAssistant);
+      return;
+    }
+
+    var t = transcript.toLowerCase().trim();
+    for (final prefix in ['буква ', 'letter ', 'shkronja ', 'број ', 'broj ', 'numri ', 'number ']) {
+      if (t.startsWith(prefix)) t = t.substring(prefix.length).trim();
+    }
+    t = t.replaceAll(RegExp(r'[.,!?]'), '').trim();
+
+    final all = [...BrailleData.lettersFor(_lang), ...BrailleData.numbers];
+    BrailleSymbol? match;
+    for (final s in all) {
+      final target = s.char.toLowerCase();
+      if (t == target || t.split(' ').contains(target)) {
+        match = s;
+        break;
+      }
+    }
+    if (match == null) {
+      final asDigit = _spokenDigitWords[t];
+      if (asDigit != null) {
+        for (final s in BrailleData.numbers) {
+          if (s.char == asDigit) {
+            match = s;
+            break;
+          }
+        }
+      }
+    }
+
+    if (match != null) {
+      await _highlightAndPlayReferenceSymbol(match);
+    } else {
+      await _playVoiceFeedbackClip('not_recognized', langCode, voiceAssistant);
+    }
+  }
+
+  Future<void> _playVoiceFeedbackClip(String key, String langCode, VoiceAssistantService voiceAssistant) async {
+    bool reachedPlaying = false;
+    try {
+      await _voicePlayer.stop();
+      await _voicePlayer.play(AssetSource('audio/voice/$langCode/$key.mp3'));
+      reachedPlaying = true;
+    } catch (_) {
+      reachedPlaying = false;
+    }
+    if (!reachedPlaying) {
+      await voiceAssistant.speakWithLanguage('voice.$key'.tr(), langCode, vibrate: false);
+    }
   }
 
   Widget _buildKeyboardHint(Color contrast) {
@@ -2438,13 +2573,23 @@ class _ReferenceCell extends StatelessWidget {
   final List<int> dots;
   final Color contrastColor;
   final VoidCallback onTap;
+  final bool highlighted;
+  final Color? highlightColor;
 
-  const _ReferenceCell({required this.character, required this.dots, required this.contrastColor, required this.onTap});
+  const _ReferenceCell({
+    required this.character,
+    required this.dots,
+    required this.contrastColor,
+    required this.onTap,
+    this.highlighted = false,
+    this.highlightColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final buttonSize = AccessibilityUtils.getButtonSize(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final accent = highlightColor ?? const Color(0xFF4F46E5);
 
     return Semantics(
       label: 'braille.cell'.tr(args: [character]),
@@ -2454,14 +2599,17 @@ class _ReferenceCell extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(18),
-          child: Container(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             width: 100 * buttonSize,
             padding: EdgeInsets.all(16 * buttonSize),
             decoration: BoxDecoration(
-              color: hc ? Colors.transparent : Colors.white.withValues(alpha: 0.95),
-              border: Border.all(color: contrastColor, width: hc ? 2 : 2.5),
+              color: highlighted ? accent.withValues(alpha: hc ? 0.25 : 0.18) : (hc ? Colors.transparent : Colors.white.withValues(alpha: 0.95)),
+              border: Border.all(color: highlighted ? accent : contrastColor, width: highlighted ? 4 : (hc ? 2 : 2.5)),
               borderRadius: BorderRadius.circular(20),
-              boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
+              boxShadow: hc
+                  ? const <BoxShadow>[]
+                  : (highlighted ? [BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 16, spreadRadius: 2)] : AppStyle.cardShadow(false)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
