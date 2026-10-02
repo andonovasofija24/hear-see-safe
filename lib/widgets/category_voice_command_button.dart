@@ -1,5 +1,6 @@
 import 'package:audioplayers/audioplayers.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -28,10 +29,15 @@ class VoiceCategoryOption {
   const VoiceCategoryOption({
     required this.keywords,
     required this.onSelected,
+    this.matches,
   });
 
   final List<String> keywords;
   final VoidCallback onSelected;
+
+  /// По избор: сопствена проверка на транскриптот (мали букви) - ако е
+  /// зададена, опцијата се избира кога ова врати true (покрај `keywords`).
+  final bool Function(String transcript)? matches;
 }
 
 /// Копче за гласовна команда што се користи ЛОКАЛНО во рамки на еден екран
@@ -56,7 +62,12 @@ class CategoryVoiceCommandButton extends StatefulWidget {
     this.foreground,
     this.compact = false,
     this.onBack,
+    this.trigger,
   });
+
+  /// По избор: секоја промена на вредноста го активира слушањето исто како
+  /// допир на копчето (пр. копчето Г на тастатура во Брајовата азбука).
+  final ValueListenable<int>? trigger;
 
   final List<VoiceCategoryOption> options;
   final Color? background;
@@ -78,7 +89,27 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
   final AudioPlayer _feedbackPlayer = AudioPlayer();
 
   @override
+  void initState() {
+    super.initState();
+    widget.trigger?.addListener(_onTrigger);
+  }
+
+  @override
+  void didUpdateWidget(covariant CategoryVoiceCommandButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.trigger != widget.trigger) {
+      oldWidget.trigger?.removeListener(_onTrigger);
+      widget.trigger?.addListener(_onTrigger);
+    }
+  }
+
+  void _onTrigger() {
+    if (mounted) _startListening();
+  }
+
+  @override
   void dispose() {
+    widget.trigger?.removeListener(_onTrigger);
     _feedbackPlayer.dispose();
     super.dispose();
   }
@@ -128,7 +159,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
 
       VoiceCategoryOption? match;
       for (final option in widget.options) {
-        if (option.keywords.any((k) => t.contains(k))) {
+        if ((option.matches?.call(t) ?? false) || option.keywords.any((k) => t.contains(k))) {
           match = option;
           break;
         }
