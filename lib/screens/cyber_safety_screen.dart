@@ -102,6 +102,12 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   ];
 
   int _quizIndex = 0;
+  /// Колку е „отклучено“ од тековното прашање (како кај „Приказна - твој
+  /// избор“): 0 = ништо, 1 = прашањето, 2 = + опција 1, 3 = + опција 2,
+  /// 4 = + опција 3. Опцијата станува допирлива откако ќе се прочита.
+  int _quizUnlocked = 0;
+  /// Која опција моментално се чита (за нагласување), или null.
+  int? _quizReadingOption;
   int _quizScore = 0;
   int? _quizPicked;
   bool _quizShowingExplanation = false;
@@ -110,6 +116,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   int _castleLength = 0;
   final Set<String> _castleCategories = {};
   int _castleLevel = -1; // -1 = ништо сè уште, 0=слаб, 1=среден, 2=силен
+  /// Пораката што последна е изговорена (и се прикажува на екранот) -
+  /// 'cyber.castle_medium_msg' / 'cyber.castle_strong_msg', или null.
+  String? _castleMessageKey;
 
   // --- Таен агент (социјален инженеринг) ---
   static const List<String> _agentQuestionKeys = [
@@ -129,10 +138,10 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     super.dispose();
   }
 
-  /// Ги отстранува 'cyber.' на почетокот на клучот за превод, за да се добие
-  /// името на mp3-датотеката (пр. 'cyber.msg_danger1' -> 'msg_danger1'). Ова
-  /// е намерна конвенција - секоја снимка се вика исто како клучот за превод
-  /// на содржината што ја чита, само без префиксот.
+  /// ПРАВИЛО: секоја снимка се вика ТОЧНО како клучот на текстот што стои
+  /// на екранот, без 'cyber.' (пр. текстот 'cyber.msg_danger1' ->
+  /// audio/cyber_safety/<јазик>/msg_danger1.mp3). Така текстот на екранот и
+  /// снимката секогаш се иста реченица. Целосен список: docs/cyber_snimki.md.
   String _audioKey(String translationKey) =>
       translationKey.startsWith('cyber.') ? translationKey.substring(6) : translationKey;
 
@@ -203,7 +212,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   Future<void> _announcePhishingMessage() async {
     final myToken = ++_narrationToken;
     final msg = _phishingRoundList[_phishingIndex];
-    await _speak('phishing_prompt');
+    await _speak(_audioKey('cyber.phishing_prompt'));
     if (myToken != _narrationToken || !mounted) return;
     await _speak(_audioKey(msg.textKey));
   }
@@ -238,7 +247,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     final next = _phishingIndex + 1;
     if (next >= _phishingRoundList.length) {
       setState(() => _view = _View.phishingResult);
-      await _speak('phishing_done');
+      await _speak(_audioKey('cyber.phishing_done'));
     } else {
       setState(() {
         _phishingIndex = next;
@@ -260,9 +269,10 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _castleLength = 0;
       _castleCategories.clear();
       _castleLevel = -1;
+      _castleMessageKey = null;
       _view = _View.password;
     });
-    _speak('castle_intro');
+    _speak(_audioKey('cyber.castle_intro'));
   }
 
   int _computeCastleLevel() {
@@ -288,9 +298,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           await VibrationUtils.vibrate(pattern: const [0, 150, 100, 150, 100, 250]);
         }
         await _playPongEffect('hit.mp3');
-        await _speak('castle_strong');
+        setState(() => _castleMessageKey = 'cyber.castle_strong_msg');
+        await _speak(_audioKey('cyber.castle_strong_msg'));
       } else if (newLevel == 1) {
-        await _speak('castle_medium');
+        setState(() => _castleMessageKey = 'cyber.castle_medium_msg');
+        await _speak(_audioKey('cyber.castle_medium_msg'));
       }
     }
   }
@@ -300,8 +312,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _castleLength = 0;
       _castleCategories.clear();
       _castleLevel = -1;
+      _castleMessageKey = null;
     });
-    _speak('castle_intro');
+    _speak(_audioKey('cyber.castle_intro'));
   }
 
   // =====================================================================
@@ -324,7 +337,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
 
   Future<void> _announceAgentQuestion() async {
     final myToken = ++_narrationToken;
-    await _speak('agent_prompt');
+    await _speak(_audioKey('cyber.agent_prompt'));
     if (myToken != _narrationToken || !mounted) return;
     await _speak(_audioKey(_agentRoundList[_agentIndex]));
   }
@@ -359,7 +372,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     final next = _agentIndex + 1;
     if (next >= _agentRoundList.length) {
       setState(() => _view = _View.agentResult);
-      await _speak('agent_done');
+      await _speak(_audioKey('cyber.agent_done'));
     } else {
       setState(() {
         _agentIndex = next;
@@ -378,6 +391,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     _narrationToken++;
     setState(() {
       _quizIndex = 0;
+      _quizUnlocked = 0;
+      _quizReadingOption = null;
       _quizScore = 0;
       _quizPicked = null;
       _quizShowingExplanation = false;
@@ -386,20 +401,43 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     _announceQuizQuestion();
   }
 
+  /// Прво се отклучува и чита прашањето, па опциите една по една - секоја
+  /// станува допирлива откако ќе се прочита (исто како кај „Приказна - твој
+  /// избор“).
   Future<void> _announceQuizQuestion() async {
     final myToken = ++_narrationToken;
+    setState(() {
+      _quizUnlocked = 1;
+      _quizReadingOption = null;
+    });
     await _speak('question${_quizIndex + 1}');
     if (myToken != _narrationToken || !mounted) return;
     const letters = ['a', 'b', 'c'];
-    for (final letter in letters) {
+    for (var i = 0; i < letters.length; i++) {
       if (myToken != _narrationToken || !mounted) return;
-      await _speak('option${_quizIndex + 1}$letter');
+      setState(() => _quizReadingOption = i);
+      await _speak('option${_quizIndex + 1}${letters[i]}');
+      if (myToken != _narrationToken || !mounted) return;
+      setState(() {
+        _quizUnlocked = i + 2;
+        _quizReadingOption = null;
+      });
       await Future.delayed(const Duration(milliseconds: 250));
     }
   }
 
-  Future<void> _selectQuizAnswer(int index) async {
+  /// Ако детето сака да го слушне прашањето уште еднаш.
+  void _repeatQuizQuestion() {
     if (_quizPicked != null) return;
+    _voicePlayer.stop();
+    _announceQuizQuestion();
+  }
+
+  Future<void> _selectQuizAnswer(int index) async {
+    if (_quizPicked != null || index + 2 > _quizUnlocked) return;
+    // Прекини го читањето штом е избран одговор.
+    _narrationToken++;
+    _voicePlayer.stop();
     final q = _questions[_quizIndex];
     final correct = index == q.correctAnswer;
     setState(() => _quizPicked = index);
@@ -421,16 +459,23 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
     setState(() => _quizShowingExplanation = true);
+    // Објаснувањето што се прикажува се и изговара (explanationN.mp3).
+    _narrationToken++;
+    await _speak('explanation${_quizIndex + 1}');
   }
 
   void _quizContinue() {
+    _narrationToken++;
+    _voicePlayer.stop();
     final next = _quizIndex + 1;
     if (next >= _questions.length) {
       setState(() => _view = _View.quizResult);
-      _speak('quiz_done');
+      _speak(_audioKey('cyber.quiz_done'));
     } else {
       setState(() {
         _quizIndex = next;
+        _quizUnlocked = 0;
+        _quizReadingOption = null;
         _quizPicked = null;
         _quizShowingExplanation = false;
       });
@@ -517,35 +562,42 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         Center(
           child: CategoryVoiceCommandButton(
             options: [
+              // По реден број на картичката: „прва/1“ ... „четврта/4“.
+              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 0), onSelected: _startPhishing),
+              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 1), onSelected: _startQuiz),
+              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 2), onSelected: _startCastle),
+              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 3), onSelected: _startAgent),
+              // Секоја категорија се препознава по кој било збор од нејзиното
+              // име (и со/без член), на трите јазици.
               VoiceCategoryOption(
                 keywords: const [
-                  'волк', 'овча', 'кожа', 'фишинг',
-                  'wolf', 'sheep', 'phishing',
-                  'ujku', 'delje', 'lëkurë', 'lekure',
+                  'волк во овча кожа', 'волк', 'волкот', 'овча', 'кожа', 'фишинг', 'пораки', 'порака',
+                  "wolf in sheep", 'wolf', 'sheep', 'phishing', 'messages',
+                  'ujku me lëkurë', 'ujku', 'ujk', 'delje', 'lëkurë', 'lekure', 'mesazh',
                 ],
                 onSelected: _startPhishing,
               ),
               VoiceCategoryOption(
                 keywords: const [
-                  'квиз',
-                  'quiz',
-                  'kuiz',
+                  'квиз', 'квизот', 'квис', 'кфиз', 'квиц', 'квез', 'кваз', 'тест', 'прашања',
+                  'quiz', 'quizz', 'quis', 'kwiz', 'kvis', 'quest', 'test',
+                  'kuiz', 'kuizi', 'kviz', 'kuis', 'pyetje',
                 ],
                 onSelected: _startQuiz,
               ),
               VoiceCategoryOption(
                 keywords: const [
-                  'замок', 'лозинк',
-                  'castle', 'password',
-                  'kështjell', 'kshtjell', 'fjalëkalim', 'fjalekalim',
+                  'изгради го замокот', 'изгради', 'замок', 'замокот', 'лозинк',
+                  'build the castle', 'castle', 'build', 'password',
+                  'ndërto kështjellën', 'ndërto', 'nderto', 'kështjell', 'keshtjell', 'kshtjell', 'fjalëkalim', 'fjalekalim',
                 ],
                 onSelected: _startCastle,
               ),
               VoiceCategoryOption(
                 keywords: const [
-                  'таен агент', 'агент',
-                  'secret agent', 'agent',
-                  'agjenti sekret', 'agjenti',
+                  'таен агент', 'тајниот агент', 'тајен агент', 'таен', 'агент', 'агентот',
+                  'secret agent', 'secret', 'agent',
+                  'agjenti sekret', 'agjent', 'sekret',
                 ],
                 onSelected: _startAgent,
               ),
@@ -587,6 +639,20 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         ),
       ],
     );
+  }
+
+  /// Редни броеви (mk/en/sq) за картичките во менито - се бара цел збор, за
+  /// „два“ да не се фати во друг збор.
+  static const List<List<String>> _ordinalWords = [
+    ['прва', 'прво', 'први', 'првата', '1', 'еден', 'една', 'first', 'one', 'parë', 'pare', 'një', 'nje'],
+    ['втора', 'второ', 'втори', 'втората', '2', 'два', 'две', 'second', 'two', 'dytë', 'dyte', 'dy'],
+    ['трета', 'трето', 'трети', 'третата', '3', 'три', 'third', 'three', 'tretë', 'trete', 'tre'],
+    ['четврта', 'четврто', 'четврти', 'четвртата', '4', 'четири', 'fourth', 'four', 'katërt', 'katert', 'katër', 'kater'],
+  ];
+
+  static bool _saysOrdinal(String t, int index) {
+    final words = t.replaceAll(RegExp(r'[.,!?]'), ' ').split(RegExp(r'\s+'));
+    return _ordinalWords[index].any(words.contains);
   }
 
   /// Категорија на почетниот екран - поголема, со "cyber"/хакерска естетика
@@ -911,6 +977,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           children: [
             const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
             const SizedBox(height: 16),
+            Text('cyber.phishing_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
+            const SizedBox(height: 12),
             Text(
               'cyber.score'.tr(args: [_phishingScore.toString(), _phishingRoundList.length.toString()]),
               textAlign: TextAlign.center,
@@ -969,20 +1037,35 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: _moduleAccent.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: _moduleAccent.withOpacity(0.3), width: 1.5),
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 250),
+                  opacity: _quizUnlocked >= 1 ? 1.0 : 0.3,
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      color: _moduleAccent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: _moduleAccent.withOpacity(0.3), width: 1.5),
+                    ),
+                    child: Text(q.question, textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 19)),
                   ),
-                  child: Text(q.question, textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 19)),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
+                if (_quizPicked == null)
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _repeatQuizQuestion,
+                      icon: const Icon(Icons.replay_rounded),
+                      label: Text('cyber.repeat_question'.tr(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                const SizedBox(height: 12),
                 ...q.options.asMap().entries.map((entry) {
                   final index = entry.key;
                   final option = entry.value;
                   final picked = _quizPicked == index;
+                  final unlocked = index + 2 <= _quizUnlocked;
+                  final reading = _quizReadingOption == index;
                   Color bg = AccessibilityUtils.getPrimaryButtonBackground(context);
                   Color fg = AccessibilityUtils.getPrimaryButtonForeground(context);
                   if (picked) {
@@ -996,10 +1079,13 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 14),
                     child: AbsorbPointer(
-                      absorbing: _quizPicked != null,
-                      child: Semantics(
+                      absorbing: _quizPicked != null || !unlocked,
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 250),
+                        opacity: (unlocked || reading || _quizPicked != null) ? 1.0 : 0.3,
+                        child: Semantics(
                         label: '${index + 1}. $option',
-                        button: true,
+                        button: unlocked,
                         child: SizedBox(
                           width: double.infinity,
                           height: 76,
@@ -1008,7 +1094,12 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: bg,
                               foregroundColor: fg,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                                side: reading
+                                    ? BorderSide(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B), width: 4)
+                                    : BorderSide.none,
+                              ),
                               elevation: hc ? 0 : 4,
                             ),
                             child: FittedBox(
@@ -1019,6 +1110,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                               ),
                             ),
                           ),
+                        ),
                         ),
                       ),
                     ),
@@ -1070,7 +1162,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           children: [
             const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
             const SizedBox(height: 16),
-            Text('cyber.results_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
+            Text('cyber.quiz_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
             const SizedBox(height: 12),
             Text(
               'cyber.score'.tr(args: [_quizScore.toString(), _questions.length.toString()]),
@@ -1122,7 +1214,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         _buildBackRow(contrast, onBack: _backToModeSelect),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.castle_intro_tts'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16)),
+          child: Text('cyber.castle_intro'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16)),
         ),
         const SizedBox(height: 12),
         Container(
@@ -1138,6 +1230,14 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
               Text(emojis[level], style: const TextStyle(fontSize: 88)),
               const SizedBox(height: 10),
               Text(levelLabels[level], style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: hc ? Colors.white : levelColors[level])),
+              if (_castleMessageKey != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _castleMessageKey!.tr(),
+                  textAlign: TextAlign.center,
+                  style: GameTypography.body(context, contrast, 16),
+                ),
+              ],
             ],
           ),
         ),
@@ -1248,7 +1348,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.agent_prompt_tts'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 23)),
+          child: Text('cyber.agent_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 23)),
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -1295,6 +1395,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           children: [
             const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
             const SizedBox(height: 16),
+            Text('cyber.agent_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
+            const SizedBox(height: 12),
             Text(
               'cyber.score'.tr(args: [_agentScore.toString(), _agentRoundList.length.toString()]),
               textAlign: TextAlign.center,

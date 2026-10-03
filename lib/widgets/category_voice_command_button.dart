@@ -150,6 +150,10 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
       }
 
       final t = transcript.toLowerCase().trim();
+      // Препознавањето понекогаш го дели зборот („кви з“) - затоа се
+      // споредува и без празни места.
+      final compact = t.replaceAll(RegExp(r'\s+'), '');
+      bool hasKeyword(String k) => t.contains(k) || compact.contains(k.replaceAll(' ', ''));
 
       if (widget.onBack != null && kVoiceBackKeywords.any((k) => t.contains(k))) {
         setState(() => _isListening = false);
@@ -159,7 +163,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
 
       VoiceCategoryOption? match;
       for (final option in widget.options) {
-        if ((option.matches?.call(t) ?? false) || option.keywords.any((k) => t.contains(k))) {
+        if ((option.matches?.call(t) ?? false) || option.keywords.any(hasKeyword)) {
           match = option;
           break;
         }
@@ -170,6 +174,14 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
       if (match != null) {
         match.onSelected();
       } else {
+        // Покажи што точно е чуено - помага да се види зошто командата не е
+        // препознаена (пр. препознавањето враќа друг збор).
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text('voice.heard'.tr(args: [transcript]), style: const TextStyle(fontSize: 16)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
         await _playFeedbackClip('not_recognized', langCode, voiceAssistant);
       }
     } catch (_) {
