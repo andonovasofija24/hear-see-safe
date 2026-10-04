@@ -10,6 +10,7 @@ import 'package:hear_and_see_safe/services/speech_command_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/utils/navigation.dart';
+import 'package:hear_and_see_safe/utils/arrow_scroll.dart';
 import 'package:hear_and_see_safe/screens/language_selection_screen.dart';
 import 'package:hear_and_see_safe/voice_system/application/language_manager.dart';
 import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
@@ -46,6 +47,8 @@ class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
   }
 
   bool _onKey(KeyEvent event) {
+    // Стрелки ↑ ↓ / Page Up / Page Down / Home / End - лизгање на екранот.
+    if (ArrowScroll.handleKey(event)) return true;
     if (event is! KeyDownEvent) return false;
     // Г (физичкото G, на секој распоред) - гласовна команда. Не се "голта"
     // (враќа false), за екраните што самите го користат Г да го добијат и
@@ -172,7 +175,11 @@ class HearAndSeeSafeApp extends StatelessWidget {
             localizationsDelegates: context.localizationDelegates,
             supportedLocales: context.supportedLocales,
             locale: context.locale,
+            // Видлив лизгач на секоја листа + лизгање со стрелките.
+            scrollBehavior: const AppScrollBehavior(),
+            shortcuts: appShortcuts(),
             theme: ThemeData(
+              scrollbarTheme: appScrollbarTheme(highContrast: isHighContrast),
               useMaterial3: true,
               colorScheme: ColorScheme.fromSeed(
                 seedColor: const Color(0xFF0D9488),

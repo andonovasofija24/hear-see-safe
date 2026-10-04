@@ -6,6 +6,7 @@ import 'package:speech_to_text/speech_recognition_error.dart';
 import 'package:speech_to_text/speech_recognition_result.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../../../utils/voice_level.dart';
 import '../../application/language_manager.dart';
 import '../../domain/entities/transcription_result.dart';
 import '../../domain/repositories/speech_to_text_repository.dart';
@@ -100,6 +101,8 @@ class DeviceSpeechRepositoryImpl implements SpeechToTextRepository {
   Future<void> _safeStart(String localeId, Duration timeout, void Function(SpeechRecognitionResult) onResult) async {
     Future<void> start() => _speech.listen(
           onResult: onResult,
+          // Јачината на гласот - за брановите на екранот (VoiceLevel).
+          onSoundLevelChange: VoiceLevel.soundLevel,
           listenFor: timeout,
           pauseFor: const Duration(seconds: 3),
           localeId: localeId,
@@ -134,10 +137,14 @@ class DeviceSpeechRepositoryImpl implements SpeechToTextRepository {
     _active = completer;
     _activePartial = null;
     String? lastFinal;
+    VoiceLevel.setListening(true);
 
     await _safeStart(localeId, timeout, (SpeechRecognitionResult r) {
       final words = r.recognizedWords.trim();
       if (words.isEmpty) return;
+      // Нов препознаен збор - кратко светкање на брановите (во прелистувач
+      // јачината на звукот не е достапна, па ова е единствениот сигнал).
+      if (words != _activePartial) VoiceLevel.pulse(0.85);
       _activePartial = words;
       if (r.finalResult) {
         lastFinal = words;
@@ -155,6 +162,7 @@ class DeviceSpeechRepositoryImpl implements SpeechToTextRepository {
 
     final result = await completer.future;
     if (identical(_active, completer)) _active = null;
+    VoiceLevel.setListening(false);
     return result;
   }
 
