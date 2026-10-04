@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../services/voice_assistant_service.dart';
 import '../utils/voice_hotkey.dart';
 import '../voice_system/application/voice_command_orchestrator.dart';
+import '../voice_system/presentation/global_voice_navigation.dart';
 
 /// Клучни зборови (mk/en/sq) кои значат "врати се назад" - се препознаваат
 /// автоматски на секое копче за гласовна команда, независно од `options`,
@@ -64,7 +65,22 @@ class CategoryVoiceCommandButton extends StatefulWidget {
     this.compact = false,
     this.onBack,
     this.trigger,
+    this.iconOnly = false,
+    this.respondToHotkey,
+    this.hotkeyPriority = 1,
   });
+
+  /// Само кружна икона-микрофон (за горниот десен агол на екранот).
+  final bool iconOnly;
+
+  /// Дали копчето Г го активира ова копче. Ако не е зададено: да, ако има
+  /// свои опции и нема сопствен `trigger`.
+  final bool? respondToHotkey;
+
+  /// Ако на екранот има повеќе копчиња што реагираат на Г, се активира
+  /// она со најголем приоритет (копчињата во самата содржина имаат 1, а
+  /// општото копче горе десно 0).
+  final int hotkeyPriority;
 
   /// По избор: секоја промена на вредноста го активира слушањето исто како
   /// допир на копчето (пр. копчето Г на тастатура во Брајовата азбука).
@@ -89,21 +105,37 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
   bool _isListening = false;
   final AudioPlayer _feedbackPlayer = AudioPlayer();
 
+  /// Сите моментално прикажани копчиња - на Г се активира САМО едно (на
+  /// екранот што е најгоре, со најголем приоритет, последно прикажаното).
+  static final List<_CategoryVoiceCommandButtonState> _registry = [];
+  static bool _hotkeyHooked = false;
+
+  static void _onGlobalHotkey() {
+    _CategoryVoiceCommandButtonState? best;
+    for (final s in _registry) {
+      if (!s._eligibleForHotkey) continue;
+      if (best == null || s.widget.hotkeyPriority >= best.widget.hotkeyPriority) best = s;
+    }
+    best?._startListening();
+  }
+
+  bool get _eligibleForHotkey {
+    if (!mounted) return false;
+    final responds = widget.respondToHotkey ?? (widget.trigger == null && widget.options.isNotEmpty);
+    if (!responds) return false;
+    final route = ModalRoute.of(context);
+    return route == null || route.isCurrent;
+  }
+
   @override
   void initState() {
     super.initState();
     widget.trigger?.addListener(_onTrigger);
-    VoiceHotkey.pressed.addListener(_onGlobalHotkey);
-  }
-
-  /// Глобалното Г: реагира само копчето што има свои опции (не само
-  /// „назад“), нема сопствен `trigger` (тие екрани самите го обработуваат
-  /// Г) и е на екранот што е моментално најгоре.
-  void _onGlobalHotkey() {
-    if (!mounted || widget.trigger != null || widget.options.isEmpty) return;
-    final route = ModalRoute.of(context);
-    if (route != null && !route.isCurrent) return;
-    _startListening();
+    _registry.add(this);
+    if (!_hotkeyHooked) {
+      _hotkeyHooked = true;
+      VoiceHotkey.pressed.addListener(_onGlobalHotkey);
+    }
   }
 
   @override
@@ -122,7 +154,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
   @override
   void dispose() {
     widget.trigger?.removeListener(_onTrigger);
-    VoiceHotkey.pressed.removeListener(_onGlobalHotkey);
+    _registry.remove(this);
     _feedbackPlayer.dispose();
     super.dispose();
   }
@@ -174,6 +206,15 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
         return;
       }
 
+      // Име на друга игра / „поставки“ / „главно мени“ - директно таму, од
+      // било која игра или категорија.
+      final globalAction = GlobalVoiceNavigation.matchAction(t);
+      if (globalAction != null) {
+        setState(() => _isListening = false);
+        GlobalVoiceNavigation.go(context, globalAction);
+        return;
+      }
+
       VoiceCategoryOption? match;
       for (final option in widget.options) {
         if ((option.matches?.call(t) ?? false) || option.keywords.any(hasKeyword)) {
@@ -210,6 +251,32 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
     final pad = widget.compact
         ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
         : const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+
+    if (widget.iconOnly) {
+      return Semantics(
+        button: true,
+        label: _isListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Material(
+            color: _isListening ? Colors.white.withValues(alpha: 0.45) : Colors.white.withValues(alpha: 0.22),
+            shape: const CircleBorder(),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _isListening ? null : _startListening,
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Icon(
+                  _isListening ? Icons.mic_rounded : Icons.record_voice_over_rounded,
+                  color: fg,
+                  size: 26,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Semantics(
       button: true,

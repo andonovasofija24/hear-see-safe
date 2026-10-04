@@ -293,6 +293,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   /// Избор на категорија со глас (од `CategoryVoiceCommandButton`) - сите
   /// категории се секогаш достапни, нема повеќе заклучување.
   void _selectCategoryByVoice(int index) {
+    // Може да се повика и од сликовницата / квизот - прво стопирај звук.
+    _voiceAssistant.stop();
+    _voicePlayer.stop();
     _enterCategory(index);
   }
 
@@ -573,6 +576,10 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     return GameScreenChrome(
       accent: const Color(0xFF2563EB),
       title: _t('title').isNotEmpty ? _t('title') : 'features.picture_book'.tr(),
+      // Менито со категории и сликовницата веќе имаат свое копче.
+      voiceCommand: _view != _View.categorySelect && _view != _View.itemDetail,
+      voiceOptions: _categoryVoiceOptions(),
+      onVoiceBack: _backToCategories,
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -613,36 +620,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         const SizedBox(height: 16),
         Center(
           child: CategoryVoiceCommandButton(
-            options: [
-              VoiceCategoryOption(
-                keywords: const ['животни', 'animals', 'kafshët', 'kafshet'],
-                onSelected: () => _selectCategoryByVoice(0),
-              ),
-              VoiceCategoryOption(
-                keywords: const ['природа', 'nature', 'natyra'],
-                onSelected: () => _selectCategoryByVoice(1),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'секојдневни предмети',
-                  'предмети',
-                  'everyday objects',
-                  'objects',
-                  'objekte të përditshme',
-                  'objekte te perditshme',
-                  'objekte',
-                ],
-                onSelected: () => _selectCategoryByVoice(2),
-              ),
-              VoiceCategoryOption(
-                keywords: const ['вселена', 'space', 'hapësira', 'hapesira'],
-                onSelected: () => _selectCategoryByVoice(3),
-              ),
-              VoiceCategoryOption(
-                keywords: const ['музика', 'music', 'muzika'],
-                onSelected: () => _selectCategoryByVoice(4),
-              ),
-            ],
+            options: _categoryVoiceOptions(),
             onBack: () => Navigator.of(context).pop(),
           ),
         ),
@@ -654,6 +632,39 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       ],
     );
   }
+
+  /// Категориите со глас - во менито со категории, но и од внатре (горе
+  /// десно / кај сликовницата), за директно префрлање меѓу категориите.
+  List<VoiceCategoryOption> _categoryVoiceOptions() => [
+      VoiceCategoryOption(
+        keywords: const ['животни', 'animals', 'kafshët', 'kafshet'],
+        onSelected: () => _selectCategoryByVoice(0),
+      ),
+      VoiceCategoryOption(
+        keywords: const ['природа', 'nature', 'natyra'],
+        onSelected: () => _selectCategoryByVoice(1),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'секојдневни предмети',
+          'предмети',
+          'everyday objects',
+          'objects',
+          'objekte të përditshme',
+          'objekte te perditshme',
+          'objekte',
+        ],
+        onSelected: () => _selectCategoryByVoice(2),
+      ),
+      VoiceCategoryOption(
+        keywords: const ['вселена', 'space', 'hapësira', 'hapesira'],
+        onSelected: () => _selectCategoryByVoice(3),
+      ),
+      VoiceCategoryOption(
+        keywords: const ['музика', 'music', 'muzika'],
+        onSelected: () => _selectCategoryByVoice(4),
+      ),
+    ];
 
   Widget _buildExplanationButton(Color contrast) {
     final label = _explanationOpen
@@ -901,6 +912,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                 keywords: const ['квиз', 'quiz', 'kuiz'],
                 onSelected: _startQuiz,
               ),
+              ..._categoryVoiceOptions(),
             ],
             onBack: _backToCategories,
           ),

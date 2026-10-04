@@ -493,6 +493,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       accent: _moduleAccent,
       title: 'features.cyber_safety'.tr(),
       titleFontSize: 26,
+      // Во менито со режими веќе има копче; во режимите - горе десно:
+      // „назад“ (во менито), имињата на другите режими и игри.
+      voiceCommand: _view != _View.modeSelect,
+      voiceOptions: _modeVoiceOptions(ordinals: false),
+      onVoiceBack: _backToModeSelect,
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -561,47 +566,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         const SizedBox(height: 16),
         Center(
           child: CategoryVoiceCommandButton(
-            options: [
-              // По реден број на картичката: „прва/1“ ... „четврта/4“.
-              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 0), onSelected: _startPhishing),
-              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 1), onSelected: _startQuiz),
-              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 2), onSelected: _startCastle),
-              VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 3), onSelected: _startAgent),
-              // Секоја категорија се препознава по кој било збор од нејзиното
-              // име (и со/без член), на трите јазици.
-              VoiceCategoryOption(
-                keywords: const [
-                  'волк во овча кожа', 'волк', 'волкот', 'овча', 'кожа', 'фишинг', 'пораки', 'порака',
-                  "wolf in sheep", 'wolf', 'sheep', 'phishing', 'messages',
-                  'ujku me lëkurë', 'ujku', 'ujk', 'delje', 'lëkurë', 'lekure', 'mesazh',
-                ],
-                onSelected: _startPhishing,
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'квиз', 'квизот', 'квис', 'кфиз', 'квиц', 'квез', 'кваз', 'тест', 'прашања',
-                  'quiz', 'quizz', 'quis', 'kwiz', 'kvis', 'quest', 'test',
-                  'kuiz', 'kuizi', 'kviz', 'kuis', 'pyetje',
-                ],
-                onSelected: _startQuiz,
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'изгради го замокот', 'изгради', 'замок', 'замокот', 'лозинк',
-                  'build the castle', 'castle', 'build', 'password',
-                  'ndërto kështjellën', 'ndërto', 'nderto', 'kështjell', 'keshtjell', 'kshtjell', 'fjalëkalim', 'fjalekalim',
-                ],
-                onSelected: _startCastle,
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'таен агент', 'тајниот агент', 'тајен агент', 'таен', 'агент', 'агентот',
-                  'secret agent', 'secret', 'agent',
-                  'agjenti sekret', 'agjent', 'sekret',
-                ],
-                onSelected: _startAgent,
-              ),
-            ],
+            options: _modeVoiceOptions(),
             onBack: () => Navigator.of(context).pop(),
           ),
         ),
@@ -649,6 +614,53 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     ['трета', 'трето', 'трети', 'третата', '3', 'три', 'third', 'three', 'tretë', 'trete', 'tre'],
     ['четврта', 'четврто', 'четврти', 'четвртата', '4', 'четири', 'fourth', 'four', 'katërt', 'katert', 'katër', 'kater'],
   ];
+
+  /// Гласовни опции за режимите. Во менито се препознава и редниот број
+  /// („прва“, „2“...); од внатре во некој режим (копчето горе десно) - само
+  /// имињата, за директно префрлање од режим во режим.
+  List<VoiceCategoryOption> _modeVoiceOptions({bool ordinals = true}) => [
+      if (ordinals) ...[
+        // По реден број на картичката: „прва/1“ ... „четврта/4“.
+        VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 0), onSelected: _startPhishing),
+        VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 1), onSelected: _startQuiz),
+        VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 2), onSelected: _startCastle),
+        VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 3), onSelected: _startAgent),
+      ],
+      // Секоја категорија се препознава по кој било збор од нејзиното
+      // име (и со/без член), на трите јазици.
+      VoiceCategoryOption(
+        keywords: const [
+          'волк во овча кожа', 'волк', 'волкот', 'овча', 'кожа', 'фишинг', 'пораки', 'порака',
+          "wolf in sheep", 'wolf', 'sheep', 'phishing', 'messages',
+          'ujku me lëkurë', 'ujku', 'ujk', 'delje', 'lëkurë', 'lekure', 'mesazh',
+        ],
+        onSelected: _startPhishing,
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'квиз', 'квизот', 'квис', 'кфиз', 'квиц', 'квез', 'кваз', 'тест', 'прашања',
+          'quiz', 'quizz', 'quis', 'kwiz', 'kvis', 'quest', 'test',
+          'kuiz', 'kuizi', 'kviz', 'kuis', 'pyetje',
+        ],
+        onSelected: _startQuiz,
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'изгради го замокот', 'изгради', 'замок', 'замокот', 'лозинк',
+          'build the castle', 'castle', 'build', 'password',
+          'ndërto kështjellën', 'ndërto', 'nderto', 'kështjell', 'keshtjell', 'kshtjell', 'fjalëkalim', 'fjalekalim',
+        ],
+        onSelected: _startCastle,
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'таен агент', 'тајниот агент', 'тајен агент', 'таен', 'агент', 'агентот',
+          'secret agent', 'secret', 'agent',
+          'agjenti sekret', 'agjent', 'sekret',
+        ],
+        onSelected: _startAgent,
+      ),
+    ];
 
   static bool _saysOrdinal(String t, int index) {
     final words = t.replaceAll(RegExp(r'[.,!?]'), ' ').split(RegExp(r'\s+'));

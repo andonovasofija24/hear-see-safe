@@ -17,7 +17,7 @@
     "guide_esc": "ESC – kthim direkt në menynë kryesore, nga çdo ekran.",
     "guide_g": "G – ndez komandën me zë (njësoj si kopsa e komandës me zë).",
     "guide_home": "Komandat me zë në meny: emri i lojës ({}), „cilësimet“, „ndrysho gjuhën“ ose emri i gjuhës („maqedonisht“, „anglisht“, „shqip“).",
-    "guide_games": "Në lojëra, komanda me zë njeh kategoritë dhe lojërat në ekranin aktual; „prapa“ kthen një nivel prapa, kurse ESC – direkt në meny.",
+    "guide_games": "Në çdo lojë dhe kategori ka kopsë për komandë me zë (dhe G): thuaj emrin e një loje ose kategorie tjetër (p.sh. nga Alfabeti Braille – Përbëj: „grupi 2“, „loja me fjalë“ ose „mëso dhe dëgjo“) dhe kalon direkt atje, pa u kthyer në meny. „Prapa“ kthen një nivel prapa, „menyja kryesore“ ose ESC – direkt në meny.",
     "guide_books": "Librat me figura ({} dhe {}) shfletohen edhe me kopsat < dhe > të tastierës.",
     "section_learn": "Mëso dhe eksploro",
     "section_learn_hint": "Seksioni i mësimit. Pesë aktivitete më poshtë.",

@@ -9,6 +9,7 @@ import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/services/speech_command_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
+import 'package:hear_and_see_safe/utils/navigation.dart';
 import 'package:hear_and_see_safe/screens/language_selection_screen.dart';
 import 'package:hear_and_see_safe/voice_system/application/language_manager.dart';
 import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
@@ -17,10 +18,7 @@ import 'package:hear_and_see_safe/voice_system/voice_system_factory.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 
-/// Глобален клуч на навигаторот - му треба на `_GlobalHomeShortcut` за да може
-/// да "исфрли" се до почетниот екран со игри без разлика колку екрани длабоко
-/// е тргнал корисникот (категорија → мени со категории → мени со игри).
-final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
 
 /// Копчето со кое корисникот може веднаш да се врати до главното мени со игри
 /// од БИЛО КОЈА длабочина во апликацијата - Escape (копче кое не се користи

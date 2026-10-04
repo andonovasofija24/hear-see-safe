@@ -39,6 +39,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onHardwareKey);
     if (!_awaitingFirstTap) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _playExplanation());
     }
@@ -46,8 +47,68 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onHardwareKey);
     _unlockFocus.dispose();
     super.dispose();
+  }
+
+  /// Копчето М (физичкото M - исто на кирилица и латиница) го вклучува
+  /// микрофонот, исто како допир на копчето-микрофон.
+  bool _onHardwareKey(KeyEvent event) {
+    if (event is! KeyDownEvent || event.physicalKey != PhysicalKeyboardKey.keyM) return false;
+    if (!mounted || _awaitingFirstTap || _listening) return false;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    final focused = FocusManager.instance.primaryFocus?.context;
+    if (focused != null && (focused.widget is EditableText || focused.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+    final voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
+    _startVoiceLanguagePick(context, voiceAssistant);
+    return true;
+  }
+
+  /// Тројазичен потсетник под копчето-микрофон: „М“ на тастатура = микрофон.
+  Widget _keyHint({required bool highContrast}) {
+    final fg = highContrast ? AccessibilityUtils.getContrastColor(context) : AppStyle.textSecondary;
+    final keyBg = highContrast ? AccessibilityUtils.getAccentColor(context) : const Color(0xFF6366F1);
+    Widget line(String text) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Text(text, style: GoogleFonts.lexend(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+        );
+    return Semantics(
+      label: 'М: микрофон. M: microphone. M: mikrofoni.',
+      child: ExcludeSemantics(
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: keyBg,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: highContrast
+                    ? null
+                    : [BoxShadow(color: keyBg.withValues(alpha: 0.35), blurRadius: 8, offset: const Offset(0, 3))],
+              ),
+              child: Text('M', style: GoogleFonts.lexend(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.white)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  line('М – вклучи микрофон'),
+                  line('M – turn on the microphone'),
+                  line('M – ndiz mikrofonin'),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _unlockAndStart() {
@@ -144,7 +205,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
       return Scaffold(
         backgroundColor: AccessibilityUtils.getBackgroundColor(context),
         body: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -510,11 +571,18 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AccessibilityUtils.getAccentColor(context), width: 2),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            micButton,
-            const SizedBox(width: 18),
-            Expanded(child: textArea),
+            Row(
+              children: [
+                micButton,
+                const SizedBox(width: 18),
+                Expanded(child: textArea),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _keyHint(highContrast: true),
           ],
         ),
       );
@@ -533,11 +601,18 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          micButton,
-          const SizedBox(width: 18),
-          Expanded(child: textArea),
+          Row(
+            children: [
+              micButton,
+              const SizedBox(width: 18),
+              Expanded(child: textArea),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _keyHint(highContrast: false),
         ],
       ),
     );

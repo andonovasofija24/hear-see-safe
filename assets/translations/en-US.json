@@ -17,7 +17,7 @@
     "guide_esc": "ESC – return directly to the main menu from any screen.",
     "guide_g": "G – turn on the voice command (same as the voice command button).",
     "guide_home": "Voice commands in the menu: a game name ({}), \"settings\", \"change language\" or a language name (\"Macedonian\", \"English\", \"Albanian\").",
-    "guide_games": "Inside the games, the voice command recognises the categories and games on the current screen; \"back\" goes one level back, while ESC goes straight to the menu.",
+    "guide_games": "Every game and category has a voice command button (and G): say the name of another game or category (e.g. from Braille Alphabet – Compose: \"group 2\", \"word game\" or \"learn and listen\") and you go straight there, without returning to the menu. \"Back\" goes one level back, \"main menu\" or ESC goes straight to the menu.",
     "guide_books": "The picture books ({} and {}) can also be paged with the < and > keys on the keyboard.",
     "section_learn": "Learn & explore",
     "section_learn_hint": "Learning section. Five activities below.",

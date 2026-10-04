@@ -181,9 +181,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   void _startRound(_GameMode mode) {
     _narrationToken++;
+    // Може да се повика и од друг режим (со глас) - прекини го броењето.
+    _countToken++;
     setState(() {
       _mode = mode;
       _view = _View.playing;
+      _countDemoRunning = false;
       _score = 0;
       _asked = 0;
       _streak = 0;
@@ -1354,6 +1357,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'number_games.title'.tr().isNotEmpty ? 'number_games.title'.tr() : 'features.number_games'.tr(),
+      voiceCommand: _view != _View.modeSelect,
+      voiceOptions: _modeVoiceOptions(),
+      onVoiceBack: _backToModeSelect,
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -1370,6 +1376,108 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       ),
     );
   }
+
+  /// Режимите со глас - во менито, но и од внатре во игра (копчето горе
+  /// десно), за директно префрлање од режим во режим.
+  List<VoiceCategoryOption> _modeVoiceOptions() => [
+      VoiceCategoryOption(
+        keywords: const [
+          'кој е бројот',
+          'what is the number',
+          'cili është numri',
+          'broj',
+          'number',
+          'numri',
+        ],
+        onSelected: () => _startRound(_GameMode.recognize),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'поголем или помал',
+          'поголем',
+          'помал',
+          'bigger or smaller',
+          'bigger',
+          'smaller',
+          'më i madh apo më i vogël',
+          'më i madh',
+          'më i vogël',
+        ],
+        onSelected: () => _startRound(_GameMode.biggerSmaller),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'собирање и одземање',
+          'собирање',
+          'одземање',
+          'плус',
+          'минус',
+          'addition and subtraction',
+          'addition',
+          'subtraction',
+          'plus',
+          'minus',
+          'mbledhje dhe zbritje',
+          'mbledhje',
+          'zbritje',
+        ],
+        onSelected: () => _startRound(_GameMode.operations),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'броење предмети',
+          'предмети',
+          'count objects',
+          'objects',
+          'numëro objektet',
+          'objektet',
+        ],
+        onSelected: () => _startRound(_GameMode.countObjects),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'тактилен бројач',
+          'бројач',
+          'tactile counter',
+          'counter',
+          'numëruesi me prekje',
+          'numëruesi',
+        ],
+        onSelected: () => _startRound(_GameMode.tally),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'локатор на броеви',
+          'локатор',
+          'number locator',
+          'locator',
+          'gjetësi i numrave',
+          'gjetësi',
+        ],
+        onSelected: () => _startRound(_GameMode.grid),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'магична низа',
+          'низа',
+          'magic sequence',
+          'sequence',
+          'vargu magjik',
+          'vargu',
+        ],
+        onSelected: () => _startRound(_GameMode.sequence),
+      ),
+      VoiceCategoryOption(
+        keywords: const [
+          'редослед',
+          'ordering',
+          'order',
+          'sort',
+          'renditja',
+        ],
+        onSelected: () => _startRound(_GameMode.sort),
+      ),
+    ];
 
   // --- Избор на режим ---
 
@@ -1405,105 +1513,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           child: CategoryVoiceCommandButton(
             background: _moduleAccent,
             onBack: () => Navigator.of(context).pop(),
-            options: [
-              VoiceCategoryOption(
-                keywords: const [
-                  'кој е бројот',
-                  'what is the number',
-                  'cili është numri',
-                  'broj',
-                  'number',
-                  'numri',
-                ],
-                onSelected: () => _startRound(_GameMode.recognize),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'поголем или помал',
-                  'поголем',
-                  'помал',
-                  'bigger or smaller',
-                  'bigger',
-                  'smaller',
-                  'më i madh apo më i vogël',
-                  'më i madh',
-                  'më i vogël',
-                ],
-                onSelected: () => _startRound(_GameMode.biggerSmaller),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'собирање и одземање',
-                  'собирање',
-                  'одземање',
-                  'плус',
-                  'минус',
-                  'addition and subtraction',
-                  'addition',
-                  'subtraction',
-                  'plus',
-                  'minus',
-                  'mbledhje dhe zbritje',
-                  'mbledhje',
-                  'zbritje',
-                ],
-                onSelected: () => _startRound(_GameMode.operations),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'броење предмети',
-                  'предмети',
-                  'count objects',
-                  'objects',
-                  'numëro objektet',
-                  'objektet',
-                ],
-                onSelected: () => _startRound(_GameMode.countObjects),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'тактилен бројач',
-                  'бројач',
-                  'tactile counter',
-                  'counter',
-                  'numëruesi me prekje',
-                  'numëruesi',
-                ],
-                onSelected: () => _startRound(_GameMode.tally),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'локатор на броеви',
-                  'локатор',
-                  'number locator',
-                  'locator',
-                  'gjetësi i numrave',
-                  'gjetësi',
-                ],
-                onSelected: () => _startRound(_GameMode.grid),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'магична низа',
-                  'низа',
-                  'magic sequence',
-                  'sequence',
-                  'vargu magjik',
-                  'vargu',
-                ],
-                onSelected: () => _startRound(_GameMode.sequence),
-              ),
-              VoiceCategoryOption(
-                keywords: const [
-                  'редослед',
-                  'ordering',
-                  'order',
-                  'sort',
-                  'renditja',
-                ],
-                onSelected: () => _startRound(_GameMode.sort),
-              ),
-            ],
+            options: _modeVoiceOptions(),
           ),
         ),
         const SizedBox(height: 14),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
 /// Shared shell for game / activity screens: accent-tinted gradient, soft blobs,
 /// Lexend titles — high contrast stays flat and semantic-friendly.
@@ -14,7 +15,20 @@ class GameScreenChrome extends StatelessWidget {
     this.actions,
     this.leading,
     this.titleFontSize = 22,
+    this.voiceCommand = true,
+    this.voiceOptions = const [],
+    this.onVoiceBack,
   });
+
+  /// Копче за гласовна команда горе десно (и копчето Г), во секоја игра:
+  /// „назад“, имињата на другите игри / „поставки“ / „главно мени“ и
+  /// `voiceOptions` (категориите/режимите на самата игра). Се исклучува кај
+  /// екраните што веќе имаат свое копче на секој поглед (Брајова азбука).
+  final bool voiceCommand;
+  final List<VoiceCategoryOption> voiceOptions;
+
+  /// Што значи „назад“ (стандардно: затвори го екранот).
+  final VoidCallback? onVoiceBack;
 
   final Color accent;
   final String title;
@@ -22,6 +36,22 @@ class GameScreenChrome extends StatelessWidget {
   final List<Widget>? actions;
   final Widget? leading;
   final double titleFontSize;
+
+  List<Widget>? _actions(BuildContext context, Color fg) {
+    if (!voiceCommand) return actions;
+    return [
+      ...?actions,
+      CategoryVoiceCommandButton(
+        options: voiceOptions,
+        onBack: onVoiceBack ?? () => Navigator.of(context).maybePop(),
+        iconOnly: true,
+        foreground: fg,
+        respondToHotkey: true,
+        hotkeyPriority: 0,
+      ),
+      const SizedBox(width: 6),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +84,7 @@ class GameScreenChrome extends StatelessWidget {
           foregroundColor: contrast,
           iconTheme: IconThemeData(color: contrast),
           actionsIconTheme: IconThemeData(color: contrast),
-          actions: actions,
+          actions: _actions(context, contrast),
           leading: leading,
         ),
         body: child,
@@ -87,7 +117,7 @@ class GameScreenChrome extends StatelessWidget {
         foregroundColor: Colors.white,
         iconTheme: const IconThemeData(color: Colors.white),
         actionsIconTheme: const IconThemeData(color: Colors.white),
-        actions: actions,
+        actions: _actions(context, Colors.white),
         leading: leading,
       ),
       body: Stack(

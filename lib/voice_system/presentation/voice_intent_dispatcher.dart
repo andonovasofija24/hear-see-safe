@@ -23,6 +23,55 @@ import '../../services/voice_assistant_service.dart';
 import '../../utils/accessibility_utils.dart';
 import '../domain/entities/voice_intent.dart';
 
+/// Клучеви за однапред снимените имиња на игрите (assets/audio/home/<јазик>/<клуч>.mp3).
+const Map<String, String> kVoiceActionAudioKeys = {
+  'navigate_braille': 'braille_alphabet',
+  'navigate_picture_book': 'picture_book',
+  'navigate_number_games': 'number_games',
+  'navigate_camera_recognition': 'camera_recognition',
+  'navigate_spatial_orientation': 'spatial_orientation',
+  'navigate_sound_identification': 'sound_identification',
+  'navigate_cyber_safety': 'cyber_security',
+  'navigate_sound_memory': 'sound_memory',
+  'navigate_voice_pong': 'voice_pong',
+  'navigate_melody_memory': 'melody_memory',
+  'navigate_rhythm_tap': 'rhythm_tap',
+  'navigate_story_choices': 'story_choices',
+};
+
+/// Екранот за дадена акција (за отворање игра од било каде).
+Widget? screenForVoiceAction(String action) {
+  switch (action) {
+    case 'open_settings':
+      return const SettingsScreen();
+    case 'navigate_braille':
+      return const BrailleLearningScreen();
+    case 'navigate_picture_book':
+      return const PictureBookScreen();
+    case 'navigate_number_games':
+      return const NumberGamesScreen();
+    case 'navigate_camera_recognition':
+      return const CameraRecognitionScreen();
+    case 'navigate_spatial_orientation':
+      return const SpatialOrientationScreen();
+    case 'navigate_sound_identification':
+      return const SoundIdentificationScreen();
+    case 'navigate_cyber_safety':
+      return const CyberSafetyScreen();
+    case 'navigate_sound_memory':
+      return const SoundMemoryScreen();
+    case 'navigate_voice_pong':
+      return const VoicePongScreen();
+    case 'navigate_melody_memory':
+      return const MelodyMemoryScreen();
+    case 'navigate_rhythm_tap':
+      return const RhythmTapScreen();
+    case 'navigate_story_choices':
+      return const StoryChoicesScreen();
+  }
+  return null;
+}
+
 /// Maps normalized intents to navigation + spoken feedback (screen-reader friendly).
 Future<void> dispatchVoiceIntent({
   required BuildContext context,
@@ -34,20 +83,7 @@ Future<void> dispatchVoiceIntent({
   /// исти клучеви како во листата на почетниот екран (`_HomeFeature.audioKey`) -
   /// се користат за да не се изговара името на играта со вграден TTS кога е
   /// избрана преку гласовна команда.
-  const audioKeyByAction = <String, String>{
-    'navigate_braille': 'braille_alphabet',
-    'navigate_picture_book': 'picture_book',
-    'navigate_number_games': 'number_games',
-    'navigate_camera_recognition': 'camera_recognition',
-    'navigate_spatial_orientation': 'spatial_orientation',
-    'navigate_sound_identification': 'sound_identification',
-    'navigate_cyber_safety': 'cyber_security',
-    'navigate_sound_memory': 'sound_memory',
-    'navigate_voice_pong': 'voice_pong',
-    'navigate_melody_memory': 'melody_memory',
-    'navigate_rhythm_tap': 'rhythm_tap',
-    'navigate_story_choices': 'story_choices',
-  };
+  const audioKeyByAction = kVoiceActionAudioKeys;
 
   void go(Widget screen, String announcement) {
     final langCode = context.locale.languageCode;

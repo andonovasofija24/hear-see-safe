@@ -101,6 +101,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   String? _recognizePicked;
   bool _recognizeWasCorrect = false;
 
+  /// Како кај квизот во Кибер безбедност: прво се слушаат точките, па
+  /// понудените одговори еден по еден. Одговорот може да се избере дури
+  /// откако ќе се изговори (`index < _recognizeUnlocked`).
+  int _recognizeUnlocked = 0;
+  int? _recognizeReadingOption;
+  bool _recognizeDotsDone = false;
+
   final Set<PhysicalKeyboardKey> _pressedKeys = {};
 
   /// Кој пар точки е активен за тастатурата (0 = пар 1, 1 = пар 2).
@@ -386,10 +393,28 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   /// За вежбата „Препознај“: по прашањето се пуштаат звуците за секоја
   /// точка. Намерно НЕ се изговара самиот знак - тоа би го издало одговорот.
+  /// Потоа (како кај квизот во Кибер безбедност) ги изговара понудените
+  /// одговори еден по еден - секој станува достапен штом ќе се изговори.
   Future<void> _playRecognizeDotsSequence(BrailleSymbol target) async {
     final myToken = ++_narrationToken;
+    await _voicePlayer.stop();
+    if (mounted) setState(() => _recognizeReadingOption = null);
     await _playClipAwaitingCompletion('recognize_prompt');
+    if (myToken != _narrationToken || !mounted) return;
     await _playCellsNarration(target, myToken);
+    if (myToken != _narrationToken || !mounted || _practiceTarget != target) return;
+    setState(() => _recognizeDotsDone = true);
+    for (var i = 0; i < _recognizeChoices.length; i++) {
+      await Future.delayed(const Duration(milliseconds: 350));
+      if (myToken != _narrationToken || !mounted || _recognizePicked != null) return;
+      setState(() => _recognizeReadingOption = i);
+      await _playClipAwaitingCompletion(_recognizeChoices[i].audioClip);
+      if (myToken != _narrationToken || !mounted) return;
+      setState(() {
+        _recognizeReadingOption = null;
+        if (_recognizeUnlocked < i + 1) _recognizeUnlocked = i + 1;
+      });
+    }
   }
 
   /// Го „прочитува“ текстот симбол по симбол со постоечките снимки (char_*)
@@ -838,6 +863,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       _clearPairs(_correctDotsHit);
       _writeFailed = false;
       _recognizePicked = null;
+      _recognizeUnlocked = 0;
+      _recognizeReadingOption = null;
+      _recognizeDotsDone = false;
       if (_view == _View.practiceRecognize) {
         final others = _practiceableSymbols..removeWhere((s) => s.key == target.key);
         others.shuffle(_random);
@@ -924,6 +952,11 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Future<void> _pickRecognizeAnswer(BrailleSymbol choice) async {
     if (_practiceTarget == null || _recognizePicked != null) return;
+    final idx = _recognizeChoices.indexWhere((c) => c.key == choice.key);
+    if (idx < 0 || idx >= _recognizeUnlocked) return;
+    // Го прекинува читањето на останатите одговори.
+    _narrationToken++;
+    await _voicePlayer.stop();
     final correct = choice.key == _practiceTarget!.key;
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(
@@ -936,6 +969,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     setState(() {
       _recognizePicked = choice.key;
       _recognizeWasCorrect = correct;
+      _recognizeReadingOption = null;
     });
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted || _view != _View.practiceRecognize) return;
@@ -1359,6 +1393,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return GameScreenChrome(
       accent: _accent,
       title: 'braille.title'.tr(),
+      // Секој поглед има свое копче за гласовна команда.
+      voiceCommand: false,
       child: SafeArea(
         child: Focus(
           focusNode: _focusNode,
@@ -2066,6 +2102,23 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   // --- Избор на режим (Состави / Препознај / Напиши / Игра со зборови) ---
 
+  /// Гласовни опции за вежбите: „состави“, „препознај“, „напиши“ -
+  /// се користат во менито за вежба И во самите вежби (за премин во друга).
+  List<VoiceCategoryOption> _practiceVoiceOptions() => [
+        VoiceCategoryOption(
+          keywords: const ['состави', 'составување', 'compose', 'build', 'përbëj', 'perbej'],
+          onSelected: () => _startPractice(_View.practiceCompose),
+        ),
+        VoiceCategoryOption(
+          keywords: const ['препознај', 'препознавање', 'recognize', 'recognise', 'njih', 'njohje'],
+          onSelected: () => _startPractice(_View.practiceRecognize),
+        ),
+        VoiceCategoryOption(
+          keywords: const ['напиши', 'пишување', 'write', 'shkruaj'],
+          onSelected: () => _startPractice(_View.practiceWrite),
+        ),
+      ];
+
   static const List<String> _kwPractice = ['вежба', 'вежбај', 'вежби', 'вежбање', 'practice', 'exercise', 'ushtrim', 'ushtro'];
 
   Widget _buildPracticeModeSelect(BuildContext context) {
@@ -2081,20 +2134,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         // Гласовно: „состави“, „препознај“, „напиши“ (и „назад“).
         Center(
           child: CategoryVoiceCommandButton(
-            options: [
-              VoiceCategoryOption(
-                keywords: ['состави', 'составување', 'compose', 'build', 'përbëj', 'perbej'],
-                onSelected: () => _startPractice(_View.practiceCompose),
-              ),
-              VoiceCategoryOption(
-                keywords: ['препознај', 'препознавање', 'recognize', 'recognise', 'njih', 'njohje'],
-                onSelected: () => _startPractice(_View.practiceRecognize),
-              ),
-              VoiceCategoryOption(
-                keywords: ['напиши', 'пишување', 'write', 'shkruaj'],
-                onSelected: () => _startPractice(_View.practiceWrite),
-              ),
-            ],
+            options: [..._practiceVoiceOptions(), ..._categoryVoiceOptions()],
             onBack: _backToCategories,
             compact: true,
             background: _accent,
@@ -2172,7 +2212,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_practiceTarget == null) return const SizedBox.shrink();
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _openPracticeModeSelect),
+        _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceTargetHeader(contrast),
         Expanded(
           child: Center(
@@ -2190,7 +2230,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_practiceTarget == null) return const SizedBox.shrink();
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _openPracticeModeSelect),
+        _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceProgressLine(contrast),
         _practiceTargetHeader(contrast),
         Expanded(
@@ -2346,7 +2386,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_practiceTarget == null) return const SizedBox.shrink();
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _openPracticeModeSelect),
+        _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceProgressLine(contrast),
         Expanded(
           flex: 5,
@@ -2359,7 +2399,18 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   child: Text('braille.recognize_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 22)),
                 ),
                 const SizedBox(height: 20),
-                _bigCellsDisplay(_practiceTarget!.cells, hc, scale: 1.5),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: !_recognizeDotsDone ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B)) : Colors.transparent,
+                      width: 4,
+                    ),
+                  ),
+                  child: _bigCellsDisplay(_practiceTarget!.cells, hc, scale: 1.5),
+                ),
                 const SizedBox(height: 18),
                 Semantics(
                   label: 'braille.repeat'.tr(),
@@ -2386,31 +2437,52 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           flex: 5,
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            children: _recognizeChoices.map((choice) {
+            children: _recognizeChoices.asMap().entries.map((entry) {
+              final index = entry.key;
+              final choice = entry.value;
               final isPicked = _recognizePicked == choice.key;
               final isCorrectAnswer = choice.key == _practiceTarget!.key;
               final showFeedback = _recognizePicked != null && (isPicked || isCorrectAnswer);
+              final unlocked = index < _recognizeUnlocked;
+              final reading = _recognizeReadingOption == index;
               final bg = !showFeedback
                   ? AccessibilityUtils.getPrimaryButtonBackground(context)
                   : (isCorrectAnswer ? const Color(0xFF16A34A) : const Color(0xFFDC2626));
+              final label = choice.kind == BrailleKind.letter || choice.kind == BrailleKind.digit
+                  ? choice.char
+                  : '${choice.displayChar}  ${_symbolName(choice)}';
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 84,
-                  child: ElevatedButton(
-                    onPressed: () => _pickRecognizeAnswer(choice),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: bg,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    child: Text(
-                      choice.kind == BrailleKind.letter || choice.kind == BrailleKind.digit
-                          ? choice.char
-                          : '${choice.displayChar}  ${_symbolName(choice)}',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                child: AbsorbPointer(
+                  absorbing: _recognizePicked != null || !unlocked,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 250),
+                    opacity: (unlocked || reading || _recognizePicked != null) ? 1.0 : 0.3,
+                    child: Semantics(
+                      label: '${index + 1}. $label',
+                      button: unlocked,
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 84,
+                        child: ElevatedButton(
+                          onPressed: () => _pickRecognizeAnswer(choice),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: bg,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                              side: reading
+                                  ? BorderSide(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B), width: 4)
+                                  : BorderSide.none,
+                            ),
+                          ),
+                          child: Text(
+                            label,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -2562,6 +2634,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 onSelected: _repeatWord,
               ),
               VoiceCategoryOption(keywords: _kwRemoveLetter, onSelected: _clearWordLetter),
+              ..._categoryVoiceOptions(),
             ],
             onBack: _backToCategories,
             compact: true,
@@ -2760,6 +2833,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   onSelected: _openSavedSentences,
                 ),
                 ..._writingVoiceOptions(),
+                ..._categoryVoiceOptions(),
               ],
               onBack: _backToCategories,
               compact: true,
@@ -3056,6 +3130,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   onSelected: () => _playSentenceAudio(),
                 ),
                 ..._writingVoiceOptions(),
+                ..._categoryVoiceOptions(),
               ],
               onBack: _backToCategories,
               compact: true,
@@ -3125,6 +3200,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 keywords: ['избриши реченица', 'избриши', 'delete sentence', 'delete', 'fshi fjalinë', 'fshi'],
                 onSelected: _deleteLastSavedSentenceByVoice,
               ),
+              ..._categoryVoiceOptions(),
             ],
             onBack: _closeSavedSentences,
             compact: true,
@@ -3179,7 +3255,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final contrast = AccessibilityUtils.getContrastColor(context);
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _closeReference),
+        _buildBackRow(contrast, onBack: _closeReference, withVoiceBack: true),
         Center(
           child: Semantics(
             button: true,
@@ -3425,15 +3501,30 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     );
   }
 
-  Widget _buildBackRow(Color contrast, {required VoidCallback onBack, bool withVoiceBack = false}) {
+  /// Ред со копче назад. Со `withVoiceBack` или `voiceOptions` има и копче
+  /// за гласовна команда („назад“ + дадените опции + имиња на други игри).
+  Widget _buildBackRow(
+    Color contrast, {
+    required VoidCallback onBack,
+    bool withVoiceBack = false,
+    List<VoiceCategoryOption>? voiceOptions,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
         children: [
           Semantics(label: 'braille.back'.tr(), button: true, child: IconButton(icon: Icon(Icons.arrow_back_rounded, color: contrast), onPressed: onBack)),
-          if (withVoiceBack) ...[
+          if (withVoiceBack || voiceOptions != null) ...[
             const SizedBox(width: 8),
-            CategoryVoiceCommandButton(options: const [], onBack: onBack, compact: true, background: _accent),
+            // Покрај „назад“ и локалните опции: имињата на другите групи и
+            // вежби во Брајовата азбука (пр. од „Состави“ директно „група 2“),
+            // а преку копчето - и имињата на другите игри.
+            CategoryVoiceCommandButton(
+              options: [...?voiceOptions, ..._categoryVoiceOptions()],
+              onBack: onBack,
+              compact: true,
+              background: _accent,
+            ),
           ],
         ],
       ),
