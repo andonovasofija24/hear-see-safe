@@ -13,6 +13,12 @@
   "home": {
     "welcome": "Mirë se vini në Dëgjo dhe Shiko i Sigurt. Zgjidhni një funksion për të filluar.",
     "hero_subtitle": "Mësim · tingull · siguri — i aksesueshëm për të gjithë",
+    "guide_title": "Udhëzim i shkurtër",
+    "guide_esc": "ESC – kthim direkt në menynë kryesore, nga çdo ekran.",
+    "guide_g": "G – ndez komandën me zë (njësoj si kopsa e komandës me zë).",
+    "guide_home": "Komandat me zë në meny: emri i lojës ({}), „cilësimet“, „ndrysho gjuhën“ ose emri i gjuhës („maqedonisht“, „anglisht“, „shqip“).",
+    "guide_games": "Në lojëra, komanda me zë njeh kategoritë dhe lojërat në ekranin aktual; „prapa“ kthen një nivel prapa, kurse ESC – direkt në meny.",
+    "guide_books": "Librat me figura ({} dhe {}) shfletohen edhe me kopsat < dhe > të tastierës.",
     "section_learn": "Mëso dhe eksploro",
     "section_learn_hint": "Seksioni i mësimit. Pesë aktivitete më poshtë.",
     "section_sound": "Dëgjo dhe luaj",

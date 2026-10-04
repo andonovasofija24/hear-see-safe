@@ -8,6 +8,7 @@ import 'package:hear_and_see_safe/providers/accessibility_provider.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/services/speech_command_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/screens/language_selection_screen.dart';
 import 'package:hear_and_see_safe/voice_system/application/language_manager.dart';
 import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
@@ -48,6 +49,15 @@ class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
 
   bool _onKey(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
+    // Г (физичкото G, на секој распоред) - гласовна команда. Не се "голта"
+    // (враќа false), за екраните што самите го користат Г да го добијат и
+    // понатаму. Се игнорира додека се пишува во текстуално поле.
+    if (event.physicalKey == PhysicalKeyboardKey.keyG) {
+      final focusCtx = FocusManager.instance.primaryFocus?.context;
+      final typing = focusCtx != null && focusCtx.findAncestorWidgetOfExactType<EditableText>() != null;
+      if (!typing) VoiceHotkey.pressed.value++;
+      return false;
+    }
     if (event.logicalKey != LogicalKeyboardKey.escape) return false;
     final nav = rootNavigatorKey.currentState;
     if (nav == null) return false;

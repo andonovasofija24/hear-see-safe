@@ -11,6 +11,7 @@ import 'package:hear_and_see_safe/voice_system/application/voice_command_orchest
 import 'package:hear_and_see_safe/voice_system/application/voice_ui_strings.dart';
 import 'package:hear_and_see_safe/voice_system/presentation/voice_intent_dispatcher.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/widgets/ambient_background.dart';
 import 'package:hear_and_see_safe/screens/braille_learning_screen.dart';
@@ -218,6 +219,8 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     _updateVoiceAssistantSettings();
     _announceHomeScreen();
 
+    VoiceHotkey.pressed.addListener(_onVoiceHotkey);
+
     _fabPulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
@@ -227,8 +230,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
   }
 
+  /// Г на тастатура = копчето за гласовна команда (само кога менито е
+  /// најгоре и пораката за добредојде е завршена).
+  void _onVoiceHotkey() {
+    if (!mounted || _welcomeLocked || _isListening) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    _startVoiceCommand();
+  }
+
   @override
   void dispose() {
+    VoiceHotkey.pressed.removeListener(_onVoiceHotkey);
     _voiceAssistant.stop();
     _featureNamePlayer.dispose();
     _fabPulse.dispose();
@@ -491,6 +504,90 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   color: Colors.white.withValues(alpha: 0.92),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Кратко техничко упатство пред менито со игри: ESC, Г, гласовни команди
+  /// во менито и во игрите, листање на сликовниците со < и >.
+  Widget _buildGuide({
+    required bool hc,
+    required double buttonSize,
+    required Color contrastColor,
+    required Color secondaryColor,
+  }) {
+    final gameNames = [
+      for (final section in _sections)
+        for (final f in section.features) f.titleKey.tr(),
+    ].join(', ');
+    final lines = <(IconData, String)>[
+      (Icons.keyboard_return_rounded, 'home.guide_esc'.tr()),
+      (Icons.mic_rounded, 'home.guide_g'.tr()),
+      (Icons.record_voice_over_rounded, 'home.guide_home'.tr(args: [gameNames])),
+      (Icons.sports_esports_rounded, 'home.guide_games'.tr()),
+      (Icons.menu_book_rounded, 'home.guide_books'.tr(args: ['features.braille'.tr(), 'features.picture_book'.tr()])),
+    ];
+    final accent = hc ? AccessibilityUtils.getAccentColor(context) : AppStyle.brandTeal;
+    final title = 'home.guide_title'.tr();
+
+    return Semantics(
+      container: true,
+      label: '$title. ${lines.map((l) => l.$2).join(' ')}',
+      child: ExcludeSemantics(
+        child: Container(
+          margin: EdgeInsets.only(bottom: 8 * buttonSize),
+          padding: EdgeInsets.all(16 * buttonSize),
+          decoration: BoxDecoration(
+            color: hc ? AccessibilityUtils.getCardBackgroundColor(context) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: hc ? contrastColor : accent.withValues(alpha: 0.35), width: hc ? 2 : 1.5),
+            boxShadow: AppStyle.cardShadow(hc),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: accent, size: 24 * buttonSize),
+                  SizedBox(width: 8 * buttonSize),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: GoogleFonts.lexend(
+                        fontSize: 17 * buttonSize,
+                        fontWeight: FontWeight.w800,
+                        color: contrastColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: 10 * buttonSize),
+              for (final (icon, text) in lines)
+                Padding(
+                  padding: EdgeInsets.only(bottom: 8 * buttonSize),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(icon, size: 18 * buttonSize, color: accent),
+                      SizedBox(width: 8 * buttonSize),
+                      Expanded(
+                        child: Text(
+                          text,
+                          style: GoogleFonts.lexend(
+                            fontSize: 13.5 * buttonSize,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
+                            color: secondaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),
@@ -773,6 +870,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                 padding: EdgeInsets.fromLTRB(20, 8, 20, 110),
                 children: [
                   _buildHero(
+                    hc: hc,
+                    buttonSize: buttonSize,
+                    contrastColor: contrastColor,
+                    secondaryColor: secondaryColor,
+                  ),
+                  _buildGuide(
                     hc: hc,
                     buttonSize: buttonSize,
                     contrastColor: contrastColor,

@@ -13,6 +13,12 @@
   "home": {
     "welcome": "Welcome to Hear and See Safe. Choose a feature to begin.",
     "hero_subtitle": "Learning · sound · safety — accessible for everyone",
+    "guide_title": "Quick guide",
+    "guide_esc": "ESC – return directly to the main menu from any screen.",
+    "guide_g": "G – turn on the voice command (same as the voice command button).",
+    "guide_home": "Voice commands in the menu: a game name ({}), \"settings\", \"change language\" or a language name (\"Macedonian\", \"English\", \"Albanian\").",
+    "guide_games": "Inside the games, the voice command recognises the categories and games on the current screen; \"back\" goes one level back, while ESC goes straight to the menu.",
+    "guide_books": "The picture books ({} and {}) can also be paged with the < and > keys on the keyboard.",
     "section_learn": "Learn & explore",
     "section_learn_hint": "Learning section. Five activities below.",
     "section_sound": "Listen & play",

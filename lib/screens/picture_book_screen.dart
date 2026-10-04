@@ -10,6 +10,8 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/utils/book_page_keys.dart';
+import 'package:flutter/services.dart';
 
 /// Мултимедијална сликовница за слабовиди/наглуви (модул „Учи и Слушај“).
 /// Тек: категории -> мрежа од картички (по категорија) -> поединечна
@@ -143,6 +145,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onBookKey);
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
     // Никакво автоматско објаснување - целосно опционално, преку копчето
@@ -157,8 +160,26 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     });
   }
 
+  /// < > (и стрелките) за листање кога е отворена страница од сликовницата.
+  bool _onBookKey(KeyEvent event) {
+    if (!mounted || _view != _View.itemDetail) return false;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    final dir = bookPageDirection(event);
+    if (dir < 0) {
+      _goToPrevItem();
+      return true;
+    }
+    if (dir > 0) {
+      _goToNextItem();
+      return true;
+    }
+    return false;
+  }
+
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onBookKey);
     _voiceAssistant.stop();
     _voicePlayer.dispose();
     _effectsPlayer.dispose();

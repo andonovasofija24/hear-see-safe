@@ -15,6 +15,7 @@ import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
 import 'package:hear_and_see_safe/braille/braille_data.dart';
+import 'package:hear_and_see_safe/utils/book_page_keys.dart';
 
 class BrailleLearningScreen extends StatefulWidget {
   const BrailleLearningScreen({super.key});
@@ -599,6 +600,19 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
+    }
+
+    // Истражувај (сликовница): < > (и стрелките) за листање.
+    if (_view == _View.explore) {
+      final dir = bookPageDirection(event);
+      if (dir < 0) {
+        _goPrevExplore();
+        return KeyEventResult.handled;
+      }
+      if (dir > 0) {
+        _goNextExplore();
+        return KeyEventResult.handled;
+      }
     }
 
     final dot = _keyToDot[key];

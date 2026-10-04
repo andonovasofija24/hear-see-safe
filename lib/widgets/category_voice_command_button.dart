@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../services/voice_assistant_service.dart';
+import '../utils/voice_hotkey.dart';
 import '../voice_system/application/voice_command_orchestrator.dart';
 
 /// Клучни зборови (mk/en/sq) кои значат "врати се назад" - се препознаваат
@@ -92,6 +93,17 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
   void initState() {
     super.initState();
     widget.trigger?.addListener(_onTrigger);
+    VoiceHotkey.pressed.addListener(_onGlobalHotkey);
+  }
+
+  /// Глобалното Г: реагира само копчето што има свои опции (не само
+  /// „назад“), нема сопствен `trigger` (тие екрани самите го обработуваат
+  /// Г) и е на екранот што е моментално најгоре.
+  void _onGlobalHotkey() {
+    if (!mounted || widget.trigger != null || widget.options.isEmpty) return;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    _startListening();
   }
 
   @override
@@ -110,6 +122,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
   @override
   void dispose() {
     widget.trigger?.removeListener(_onTrigger);
+    VoiceHotkey.pressed.removeListener(_onGlobalHotkey);
     _feedbackPlayer.dispose();
     super.dispose();
   }
