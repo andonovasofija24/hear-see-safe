@@ -597,16 +597,12 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       return KeyEventResult.ignored;
     }
 
-    // Игра со зборови: Г - гласовна команда, : - поништи буква. (Нема
-    // „поништи точка“ - погрешна точка овде и онака не се додава.)
-    if (_view == _View.wordRound && (key == _keyVoice || key == _keyReset)) {
+    // Игра со зборови: Г - гласовна команда. (Нема „поништи точка/буква“ -
+    // погрешна точка овде и онака не се додава, па нема ни грешка за бришење.)
+    if (_view == _View.wordRound && key == _keyVoice) {
       if (event is KeyDownEvent) {
         if (_pressedKeys.add(key)) {
-          if (key == _keyVoice) {
-            _voiceTrigger.value++;
-          } else {
-            _clearWordLetter();
-          }
+          _voiceTrigger.value++;
         }
         return KeyEventResult.handled;
       } else if (event is KeyUpEvent) {
@@ -1034,13 +1030,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   void _repeatWord() {
     if (_currentWord == null) return;
     _announceWord();
-  }
-
-  /// „:“ во Играта со зборови - ги брише сите точки на тековната буква.
-  void _clearWordLetter() {
-    if (_view != _View.wordRound) return;
-    setState(() => _clearPairs(_wordCorrectDotsHit));
-    _playPongEffect('miss.mp3');
   }
 
   /// Точка-по-точка (исто како Состави): точна точка - светнува и останува
@@ -2610,15 +2599,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 label: Text('braille.word_listen'.tr(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
               ),
             ),
-            Semantics(
-              label: 'braille.action_reset'.tr(),
-              button: true,
-              child: OutlinedButton.icon(
-                onPressed: _clearWordLetter,
-                icon: const Icon(Icons.backspace_rounded),
-                label: Text('braille.action_reset'.tr(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-              ),
-            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -2633,7 +2613,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 ],
                 onSelected: _repeatWord,
               ),
-              VoiceCategoryOption(keywords: _kwRemoveLetter, onSelected: _clearWordLetter),
               ..._categoryVoiceOptions(),
             ],
             onBack: _backToCategories,
