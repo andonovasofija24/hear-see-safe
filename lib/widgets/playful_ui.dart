@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../braille/braille_data.dart';
+import '../utils/accessibility_utils.dart';
 import '../utils/voice_level.dart';
 
 /// Заеднички изглед за почетниот екран и екранот за јазик: темна „ноќна“
@@ -887,23 +888,16 @@ class KaraokeText extends StatelessWidget {
           final start = acc;
           acc += weights[i];
           final Color color;
-          TextDecoration? deco;
           if (p >= 1 || spoken >= acc) {
             color = doneColor;
           } else if (spoken >= start) {
             color = activeColor;
-            deco = TextDecoration.underline;
           } else {
             color = idleColor;
           }
           spans.add(TextSpan(
             text: i == words.length - 1 ? words[i] : '${words[i]} ',
-            style: style.copyWith(
-              color: color,
-              decoration: deco,
-              decorationColor: activeColor,
-              decorationThickness: 3,
-            ),
+            style: style.copyWith(color: color),
           ));
         }
         return Text.rich(TextSpan(children: spans));
@@ -1019,4 +1013,646 @@ class SpeechBubbleBorder extends ShapeBorder {
 
   @override
   ShapeBorder scale(double t) => SpeechBubbleBorder(radius: radius * t, tail: tail * t, side: side.scale(t));
+}
+
+/// Темна позадина за квиз: сликите (емоџи) од категоријата полека лебдат,
+/// со меко светло во бојата на категоријата. Реагира на звукот (VoiceLevel)
+/// исто како позадината на почетниот екран.
+class EmojiBackdrop extends StatefulWidget {
+  const EmojiBackdrop({super.key, required this.emojis, required this.tint});
+
+  final List<String> emojis;
+  final Color tint;
+
+  @override
+  State<EmojiBackdrop> createState() => _EmojiBackdropState();
+}
+
+class _EmojiBackdropState extends State<EmojiBackdrop> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(seconds: 36))
+    ..addListener(_tick);
+  double _energy = 0;
+  final Stopwatch _clock = Stopwatch()..start();
+  final Map<String, TextPainter> _cache = {};
+
+  void _tick() {
+    final secs = _clock.elapsedMilliseconds / 1000.0;
+    var target = VoiceLevel.level.value;
+    if (VoiceLevel.speaking.value) {
+      target = math.max(target, 0.25 + 0.15 * math.sin(secs * 9) * math.sin(secs * 2.3).abs());
+    }
+    _energy += (target - _energy) * 0.12;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (Playful.reduceMotion(context)) {
+      _c.stop();
+    } else if (!_c.isAnimating) {
+      _c.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    for (final p in _cache.values) {
+      p.dispose();
+    }
+    super.dispose();
+  }
+
+  TextPainter _painter(String emoji) => _cache.putIfAbsent(emoji, () {
+        return TextPainter(
+          text: TextSpan(text: emoji, style: const TextStyle(fontSize: 64)),
+          textDirection: TextDirection.ltr,
+        )..layout();
+      });
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(gradient: Playful.background),
+          child: RepaintBoundary(
+            child: CustomPaint(
+              painter: _EmojiBackdropPainter(_c, () => _energy, widget.emojis, widget.tint, _painter),
+              child: const SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmojiBackdropPainter extends CustomPainter {
+  _EmojiBackdropPainter(this.t, this.energy, this.emojis, this.tint, this.painterFor) : super(repaint: t);
+
+  final Animation<double> t;
+  final double Function() energy;
+  final List<String> emojis;
+  final Color tint;
+  final TextPainter Function(String) painterFor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty || emojis.isEmpty) return;
+    final e = energy();
+    void glow(Offset c, double r, Color color) {
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()..shader = RadialGradient(colors: [color, color.withValues(alpha: 0)]).createShader(Rect.fromCircle(center: c, radius: r)),
+      );
+    }
+
+    glow(Offset(size.width * 0.15, size.height * 0.12), size.shortestSide * 0.8, tint.withValues(alpha: 0.35 + 0.2 * e));
+    glow(Offset(size.width * 0.95, size.height * 0.75), size.shortestSide * 0.7, const Color(0xFF0E7490).withValues(alpha: 0.3));
+
+    final rnd = math.Random(11);
+    const count = 16;
+    for (var i = 0; i < count; i++) {
+      final baseX = rnd.nextDouble();
+      final speed = 0.4 + rnd.nextDouble() * 0.8;
+      final phase = rnd.nextDouble();
+      final scale = 0.45 + rnd.nextDouble() * 0.6;
+      final p = (phase + t.value * speed) % 1.0;
+      final tp = painterFor(emojis[i % emojis.length]);
+      final x = size.width * baseX + math.sin((p + phase) * math.pi * 2) * 24;
+      final y = size.height * (1.1 - p * 1.3);
+      final alpha = math.min(0.55, (0.14 + 0.1 * math.sin(p * math.pi)) * (1 + 1.6 * e));
+      canvas.save();
+      canvas.translate(x, y);
+      canvas.rotate(math.sin((p + phase) * math.pi * 4) * 0.25);
+      final s = scale * (1 + 0.25 * e);
+      canvas.scale(s, s);
+      canvas.saveLayer(null, Paint()..color = Colors.white.withValues(alpha: alpha));
+      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      canvas.restore();
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _EmojiBackdropPainter old) => old.tint != tint || old.emojis != emojis;
+}
+
+
+// =====================================================================
+// Заеднички делови за игрите (ноќен изглед): објаснување, напредок по
+// рунди, голем „звучен круг“, екран со резултат.
+// =====================================================================
+
+/// Копче „Прикажи / Скриј објаснување“ - проѕирно со бел раб.
+class PlayfulExplainButton extends StatelessWidget {
+  const PlayfulExplainButton({super.key, required this.open, required this.label, required this.onTap});
+
+  final bool open;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getPrimaryButtonForeground(context) : Colors.white;
+    return Semantics(
+      label: label,
+      button: true,
+      child: PressableScale(
+        child: Material(
+          color: hc ? AccessibilityUtils.getPrimaryButtonBackground(context) : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white.withValues(alpha: 0.6), width: 2),
+              ),
+              child: ExcludeSemantics(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(open ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: 28, color: hc ? fg : Playful.sun),
+                    const SizedBox(width: 10),
+                    Flexible(child: Text(label, style: Playful.title(19, color: fg))),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Отвореното објаснување - бела картичка со темен текст и златен раб.
+class PlayfulExplainPanel extends StatelessWidget {
+  const PlayfulExplainPanel({super.key, required this.icon, required this.title, required this.text, required this.accent});
+
+  final IconData icon;
+  final String title;
+  final String text;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? Colors.white : Playful.ink;
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: hc ? Colors.black : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: hc ? Colors.white : Playful.sun, width: 3),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: hc ? Colors.white : accent, size: 28),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: Playful.title(20, color: fg))),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(text, style: Playful.body(17.5, color: fg)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Наслов на рундата + лента од сегменти (поминати - злато, тековна -
+/// поголема).
+class RoundProgress extends StatelessWidget {
+  const RoundProgress({super.key, required this.label, required this.current, required this.total, this.extra});
+
+  final String label;
+  final int current; // 0-базирано
+  final int total;
+  final String? extra;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    return Semantics(
+      label: extra == null ? label : '$label. $extra',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(label, style: Playful.display(24, color: fg))),
+                if (extra != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: hc ? Colors.black : Playful.sun,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: hc ? 1.5 : 2),
+                    ),
+                    child: Text(extra!, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                for (var i = 0; i < total; i++)
+                  Expanded(
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: EdgeInsets.only(right: i == total - 1 ? 0 : 3),
+                      height: i == current ? 11 : 7,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        color: i <= current
+                            ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
+                            : (hc ? Colors.white24 : Colors.white.withValues(alpha: 0.22)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Голем жолт круг (пушти звук / почни) со бранови додека свири.
+class SoundOrb extends StatelessWidget {
+  const SoundOrb({super.key, required this.icon, required this.label, required this.onTap, this.active = false, this.size = 124});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+  final bool active;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Semantics(
+      label: label,
+      button: onTap != null,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RippleRings(
+              color: hc ? Colors.white : Playful.sun,
+              active: active,
+              spread: 24,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOutBack,
+                scale: active ? 1.08 : 1.0,
+                child: Container(
+                  width: size,
+                  height: size,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: hc ? Colors.black : Playful.sun,
+                    border: Border.all(color: Colors.white, width: hc ? 3 : 4),
+                    boxShadow: hc ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 24)],
+                  ),
+                  child: Center(
+                    child: active && !hc
+                        ? SoundWave(color: Playful.ink, bars: 7, height: size * 0.4, barWidth: 6)
+                        : Icon(icon, size: size * 0.48, color: hc ? Colors.white : Playful.ink),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ExcludeSemantics(
+              child: Text(label, textAlign: TextAlign.center, style: Playful.title(20, color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Крај на играта: трофеј со бранови, текстот и „Играј повторно“.
+class PlayfulResult extends StatelessWidget {
+  const PlayfulResult({super.key, required this.text, required this.buttonLabel, required this.onAgain, this.stars, this.total});
+
+  final String text;
+  final String buttonLabel;
+  final VoidCallback onAgain;
+  final int? stars;
+  final int? total;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 560) / 2).clamp(24.0, double.infinity);
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 24, side, 32),
+          children: [
+            PopIn(
+              child: Center(
+                child: RippleRings(
+                  color: hc ? Colors.white : Playful.sun,
+                  spread: 24,
+                  child: Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      color: hc ? Colors.black : Playful.night,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: hc ? Colors.white : Playful.sun, width: 5),
+                    ),
+                    child: Icon(Icons.emoji_events_rounded, size: 76, color: hc ? const Color(0xFFFFFF00) : Playful.sun),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (stars != null && total != null && total! > 0) ...[
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 2,
+                runSpacing: 2,
+                children: [
+                  for (var i = 0; i < total!; i++)
+                    PopIn(
+                      index: 1 + i,
+                      stepMs: 50,
+                      child: Icon(
+                        i < stars! ? Icons.star_rounded : Icons.star_outline_rounded,
+                        size: total! > 12 ? 30 : 40,
+                        color: i < stars! ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B)) : fg.withValues(alpha: 0.4),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+            PopIn(index: 2, child: Text(text, textAlign: TextAlign.center, style: Playful.title(22, color: fg))),
+            const SizedBox(height: 28),
+            PressableScale(
+              child: Material(
+                color: hc ? Colors.black : Playful.sun,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: onAgain,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: hc ? Border.all(color: Colors.white, width: 2) : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.refresh_rounded, color: hc ? Colors.white : Playful.ink, size: 28),
+                        const SizedBox(width: 10),
+                        Flexible(child: Text(buttonLabel, style: Playful.title(20, color: hc ? Colors.white : Playful.ink))),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Плочка со звук (икона + име) во полна боја: затемнет градиент (бел
+/// текст секогаш читлив), бел раб, сјај; `flash` = свети (се пушта),
+/// `state` = null / true (точно) / false (погрешно).
+class SoundTile extends StatelessWidget {
+  const SoundTile({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.enabled = true,
+    this.dimmed = false,
+    this.flash = false,
+    this.state,
+    this.showLabel = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onTap;
+  final bool enabled;
+  final bool dimmed;
+  final bool flash;
+  final bool? state;
+  final bool showLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    var c = color;
+    if (state == true) c = const Color(0xFF16A34A);
+    if (state == false) c = const Color(0xFFDC2626);
+    final top = Color.lerp(c, Colors.black, 0.05)!;
+    final bottom = Color.lerp(c, Colors.black, 0.42)!;
+    return Semantics(
+      label: label,
+      button: enabled,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: dimmed ? 0.35 : 1.0,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutBack,
+          scale: flash || state != null ? 1.06 : 1.0,
+          child: AbsorbPointer(
+            absorbing: !enabled,
+            child: PressableScale(
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(24),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(24),
+                  onTap: onTap,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      color: hc ? (flash ? Colors.white24 : Colors.black) : null,
+                      gradient: hc
+                          ? null
+                          : LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: flash ? [Colors.white, Color.lerp(c, Colors.white, 0.4)!] : [top, bottom],
+                            ),
+                      border: Border.all(color: flash ? Playful.sun : Colors.white.withValues(alpha: hc ? 1 : 0.85), width: flash ? 5 : 3),
+                      boxShadow: hc ? null : [BoxShadow(color: (flash ? Playful.sun : c).withValues(alpha: flash ? 0.7 : 0.4), blurRadius: flash ? 26 : 14)],
+                    ),
+                    child: ExcludeSemantics(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final iconSize = math.min(constraints.maxWidth, constraints.maxHeight) * (showLabel ? 0.5 : 0.62);
+                          final fg = flash && !hc ? Color.lerp(c, Colors.black, 0.45)! : Colors.white;
+                          return Stack(
+                            children: [
+                              Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(icon, size: iconSize, color: fg),
+                                    if (showLabel) ...[
+                                      const SizedBox(height: 6),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(label, style: GoogleFonts.lexend(fontSize: 19, fontWeight: FontWeight.w800, color: fg)),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              if (state != null)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    width: 34,
+                                    height: 34,
+                                    decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white, border: Border.all(color: c, width: 2)),
+                                    child: Icon(state! ? Icons.check_rounded : Icons.close_rounded, color: c, size: 22),
+                                  ),
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Секундарно копче (пушти повторно / слушај пак): проѕирно, бел раб.
+class PlayfulGhostButton extends StatelessWidget {
+  const PlayfulGhostButton({super.key, required this.icon, required this.label, required this.onTap});
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    return Semantics(
+      label: label,
+      button: true,
+      enabled: onTap != null,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: PressableScale(
+          enabled: onTap != null,
+          child: OutlinedButton.icon(
+            onPressed: onTap,
+            icon: Icon(icon, size: 24, color: hc ? fg : Playful.sun),
+            label: Text(label, style: Playful.title(17, color: fg)),
+            style: OutlinedButton.styleFrom(
+              backgroundColor: hc ? Colors.black : Colors.white.withValues(alpha: 0.1),
+              side: BorderSide(color: hc ? fg : Colors.white.withValues(alpha: 0.7), width: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Кратка инструкција на темна позадина (бел текст, во проѕирна лента).
+class PlayfulHint extends StatelessWidget {
+  const PlayfulHint(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: hc ? fg : Colors.white.withValues(alpha: 0.25), width: hc ? 2 : 1),
+      ),
+      child: Text(text, textAlign: TextAlign.center, style: Playful.body(17, color: fg)),
+    );
+  }
+}
+
+/// Мрежа од плочки БЕЗ сопствено лизгање (редови со иста ширина) - за
+/// во листа што веќе се лизга, без вгнездени лизгачи.
+class PlayfulGrid extends StatelessWidget {
+  const PlayfulGrid({super.key, required this.columns, required this.children, this.spacing = 16, this.aspectRatio = 1.0});
+
+  final int columns;
+  final List<Widget> children;
+  final double spacing;
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var start = 0; start < children.length; start += columns) {
+      if (rows.isNotEmpty) rows.add(SizedBox(height: spacing));
+      rows.add(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var c = 0; c < columns; c++) ...[
+              if (c > 0) SizedBox(width: spacing),
+              Expanded(
+                child: start + c < children.length
+                    ? AspectRatio(aspectRatio: aspectRatio, child: children[start + c])
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+    return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
+  }
 }

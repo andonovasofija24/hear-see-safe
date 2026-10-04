@@ -524,6 +524,7 @@ class _HomeScreenState extends State<HomeScreen> {
       (null, Icons.record_voice_over_rounded, 'home.guide_home'.tr(args: [gameNames])),
       (null, Icons.sports_esports_rounded, 'home.guide_games'.tr()),
       ('< >', Icons.menu_book_rounded, 'home.guide_books'.tr(args: ['features.braille'.tr(), 'features.picture_book'.tr()])),
+      ('↑ ↓', Icons.swap_vert_rounded, 'home.guide_scroll'.tr()),
     ];
     final title = 'home.guide_title'.tr();
 
@@ -786,18 +787,18 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // На широк екран (компјутер, таблет) - две колони картички.
-                  final width = math.min(constraints.maxWidth, 1100.0);
-                  final columns = width >= 760 ? 2 : 1;
+                  // Низ целиот екран: листата е широка колку екранот (лизгачот
+                  // е скроз десно), а картичките се во 1 / 2 / 3 колони.
+                  final width = constraints.maxWidth;
+                  final side = width >= 1200 ? 40.0 : (width >= 760 ? 28.0 : 20.0);
+                  final columns = width >= 1300 ? 3 : (width >= 760 ? 2 : 1);
                   const gap = 16.0;
-                  final innerWidth = width - 40;
-                  final cardWidth = (innerWidth - gap * (columns - 1)) / columns;
-                  return Align(
-                    alignment: Alignment.topCenter,
-                    child: SizedBox(
+                  final innerWidth = width - side * 2;
+                  final cardWidth = (innerWidth - gap * (columns - 1)) / columns - 0.5;
+                  return SizedBox(
                       width: width,
                       child: ListView(
-                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 140),
+                        padding: EdgeInsets.fromLTRB(side, 8, side, 140),
                         children: [
                           _buildHero(
                             hc: hc,
@@ -857,7 +858,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ],
                       ),
-                    ),
                   );
                 },
               ),

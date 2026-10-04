@@ -370,11 +370,15 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
           SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final maxWidth = constraints.maxWidth > 540 ? 540.0 : constraints.maxWidth;
-                return Center(
-                  child: SingleChildScrollView(
+                // Листата е широка колку екранот (лизгачот е скроз десно),
+                // а содржината е во средина, до 720 широка.
+                final maxWidth = constraints.maxWidth > 720 ? 720.0 : constraints.maxWidth;
+                return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                     child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: (constraints.maxHeight - 40).clamp(0.0, double.infinity)),
+                      child: Center(
+                      child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -472,7 +476,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                         ],
                       ),
                     ),
-                  ),
+                      ),
+                    ),
                 );
               },
             ),

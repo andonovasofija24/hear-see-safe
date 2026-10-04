@@ -1,13 +1,14 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 /// Приказна – твој избор: слушаш/читаш кратка приказна, избираш што ќе се
 /// случи понатаму, слушаш/читаш го исходот. И приказната И исходот се
@@ -333,312 +334,337 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
     _readStory();
   }
 
+  /// Боја на секоја од двете опции.
+  static const List<Color> _optionColors = [Color(0xFF2563EB), Color(0xFFDB2777)];
+
+  bool get _hc => AccessibilityUtils.isHighContrast(context);
+  Color get _fg => _hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+
   @override
   Widget build(BuildContext context) {
-    final contrastColor = AccessibilityUtils.getContrastColor(context);
-    final hc = AccessibilityUtils.isHighContrast(context);
-
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'features.story_choices'.tr(),
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['📖', '✨', '🌳', '🚀', '🐾', '⭐'],
+        tint: _moduleAccent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            _buildExplanationButton(contrastColor),
-            if (_explanationOpen) _buildExplanationPanel(contrastColor),
-            Expanded(
-              child: _showingOutcome
-                  ? _buildOutcomeView(contrastColor, hc)
-                  : _buildStoryView(contrastColor, hc),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final sceneHeight = (constraints.maxHeight * 0.36).clamp(220.0, 400.0);
+            return ListView(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 28),
+              children: [
+                _buildExplanationButton(),
+                if (_explanationOpen)
+                  PlayfulExplainPanel(
+                    icon: Icons.auto_stories_rounded,
+                    title: 'story.explanation_title'.tr(),
+                    text: 'story.explanation_text'.tr(),
+                    accent: _moduleAccent,
+                  ),
+                const SizedBox(height: 16),
+                _storyProgress(),
+                const SizedBox(height: 16),
+                if (_showingOutcome)
+                  ..._buildOutcomeView(sceneHeight)
+                else
+                  ..._buildStoryView(sceneHeight),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildExplanationButton(Color contrast) {
+  /// Објаснувањето може да се отвори само еднаш - потоа е заклучено.
+  Widget _buildExplanationButton() {
     final label = _explanationEverUsed
         ? 'story.explanation_used'.tr()
         : (_explanationOpen ? 'story.explanation_toggle_close'.tr() : 'story.explanation_toggle_open'.tr());
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Opacity(
+    return AbsorbPointer(
+      absorbing: _explanationEverUsed,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
         opacity: _explanationEverUsed ? 0.5 : 1.0,
-        child: Semantics(
+        child: PlayfulExplainButton(
+          open: _explanationOpen,
           label: label,
-          button: !_explanationEverUsed,
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _explanationEverUsed ? null : _toggleExplanation,
-              icon: Icon(
-                _explanationEverUsed
-                    ? Icons.lock_rounded
-                    : (_explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded),
-                size: 26,
-              ),
-              label: Text(
-                label,
-                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _explanationEverUsed
-                    ? AccessibilityUtils.getDisabledColor(context)
-                    : (_explanationOpen ? AccessibilityUtils.getDisabledColor(context) : _moduleAccent),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
-              ),
-            ),
-          ),
+          onTap: _toggleExplanation,
         ),
       ),
     );
   }
 
-  Widget _buildExplanationPanel(Color contrast) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _moduleAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _moduleAccent.withOpacity(0.35), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// Три книги - поминатите и тековната приказна светат златно.
+  Widget _storyProgress() {
+    final hc = _hc;
+    return ExcludeSemantics(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Icon(Icons.auto_stories_rounded, color: _moduleAccent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'story.explanation_title'.tr(),
-                  style: GameTypography.heading(context, contrast, 17),
-                ),
+          for (var i = 0; i < _storyCount; i++) ...[
+            if (i > 0)
+              Container(
+                width: 28,
+                height: 3,
+                color: i <= _currentStory
+                    ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
+                    : Colors.white.withValues(alpha: 0.25),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'story.explanation_text'.tr(),
-            style: GameTypography.body(context, contrast, 15),
-          ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              width: i == _currentStory ? 50 : 40,
+              height: i == _currentStory ? 50 : 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: i <= _currentStory
+                    ? (hc ? Colors.black : Playful.sun)
+                    : (hc ? Colors.black : Colors.white.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: i <= _currentStory ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                  width: i == _currentStory ? 3 : 2,
+                ),
+                boxShadow: i == _currentStory && !hc
+                    ? [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 16)]
+                    : null,
+              ),
+              child: Icon(
+                i < _currentStory ? Icons.check_rounded : Icons.menu_book_rounded,
+                size: i == _currentStory ? 26 : 20,
+                color: i <= _currentStory
+                    ? (hc ? const Color(0xFFFFFF00) : Playful.ink)
+                    : Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
-  /// Сцена на тековната приказна: позадина прилагодена на бои (или чисто
-  /// црна во режим висок контраст), со позиционирани икони во различни
-  /// големини според важноста во приказната. Чисто визуелно (исклучено од
-  /// читачот на екран, за да не се дуплира со гласовниот опис).
-  Widget _storyScene(BuildContext context, bool hc, double height) {
+  /// Сцена на тековната приказна: осветлена „страница од сликовница“
+  /// (пастелна позадина, златен раб, сјај) со позиционирани икони. Во
+  /// висок контраст - црна со жолти икони. Чисто визуелно.
+  Widget _storyScene(bool hc, double height) {
     final items = _storyScenes[_currentStory] ?? const [];
     if (items.isEmpty) return const SizedBox.shrink();
     final bg = _sceneBackgrounds[_currentStory] ?? const [Color(0xFFF1F5F9), Color(0xFFE2E8F0)];
 
     return ExcludeSemantics(
-      child: Container(
-        height: height,
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 14),
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          gradient: hc
-              ? null
-              : LinearGradient(colors: bg, begin: Alignment.topCenter, end: Alignment.bottomCenter),
-          color: hc ? Colors.black : null,
-          border: Border.all(
-            color: hc ? Colors.white : _moduleAccent.withOpacity(0.3),
-            width: hc ? 2 : 1.5,
+      child: PopIn(
+        key: ValueKey('scene_$_currentStory'),
+        child: Container(
+          height: height,
+          width: double.infinity,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            gradient: hc ? null : LinearGradient(colors: bg, begin: Alignment.topCenter, end: Alignment.bottomCenter),
+            color: hc ? Colors.black : null,
+            border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 2 : 4),
+            boxShadow: hc ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.35), blurRadius: 26)],
           ),
-        ),
-        child: Stack(
-          children: items.map((item) {
-            // Во режим висок контраст: секоја икона станува светло жолта на
-            // црна позадина, со бел раб околу неа за максимална видливост.
-            final iconColor = hc ? const Color(0xFFFFFF00) : item.color;
-            return Align(
-              alignment: item.align,
-              child: Container(
-                padding: EdgeInsets.all(hc ? 4 : 0),
-                decoration: hc
-                    ? BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                      )
-                    : null,
-                child: Icon(item.icon, size: item.size, color: iconColor),
-              ),
-            );
-          }).toList(),
+          // Иконите се смалуваат на тесни екрани (пр. 360px) за да не се
+          // преклопуваат; на широки екрани остануваат во полна големина.
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final s = math.min(c.maxWidth / 480, c.maxHeight / 260).clamp(0.55, 1.0);
+              return Stack(
+            children: [
+              for (final item in items)
+                Align(
+                  alignment: item.align,
+                  child: Container(
+                    padding: EdgeInsets.all(hc ? 4 : 0),
+                    decoration: hc
+                        ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2))
+                        : null,
+                    child: Icon(
+                      item.icon,
+                      size: item.size * s,
+                      color: hc ? const Color(0xFFFFFF00) : item.color,
+                      shadows: hc ? null : [Shadow(color: Colors.white.withValues(alpha: 0.8), blurRadius: 12)],
+                    ),
+                  ),
+                ),
+            ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
-  /// Секогаш видлив текст-облак - и приказната, и исходот, се прикажуваат
-  /// тука (никогаш само изговорени) - клучно за деца со оштетен слух.
-  Widget _captionBox(Color contrast, String text) {
+  /// Секогаш видлив текст - приказната и исходот се и прикажани, не само
+  /// изговорени (клучно за деца со оштетен слух). Бел облак со опашка.
+  Widget _captionBox(String text) {
+    final hc = _hc;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: _moduleAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _moduleAccent.withOpacity(0.3), width: 1.5),
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      decoration: ShapeDecoration(
+        color: hc ? Colors.black : Colors.white,
+        shape: SpeechBubbleBorder(
+          radius: 26,
+          side: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
+        ),
+        shadows: hc ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 18, offset: const Offset(0, 8))],
       ),
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: GameTypography.body(context, contrast, 21),
+        style: Playful.body(21, color: hc ? Colors.white : Playful.ink),
       ),
     );
   }
 
-  Widget _buildStoryView(Color contrast, bool hc) {
-    final screenH = MediaQuery.of(context).size.height;
-    final sceneHeight = (screenH * 0.34).clamp(240.0, 420.0);
+  List<Widget> _buildStoryView(double sceneHeight) {
+    final hc = _hc;
     final opt1Key = _opt1Key(_currentStory);
     final opt2Key = _opt2Key(_currentStory);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Column(
+    return [
+      _storyScene(hc, sceneHeight),
+      const SizedBox(height: 16),
+      _captionBox(_t(_storyKey(_currentStory))),
+      const SizedBox(height: 18),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Сцена + текст на приказната - зафаќаат поголем дел од екранот.
-          Expanded(
-            flex: 11,
-            child: SingleChildScrollView(
-              physics: const ClampingScrollPhysics(),
-              child: Column(
-                children: [
-                  _storyScene(context, hc, sceneHeight),
-                  _captionBox(contrast, _t(_storyKey(_currentStory))),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'story.what_next'.tr(),
-            textAlign: TextAlign.center,
-            style: GameTypography.heading(context, contrast, 20),
-          ),
-          const SizedBox(height: 10),
-          // Опциите го пополнуваат преостанатиот простор.
-          Expanded(
-            flex: 9,
-            child: Column(
-              children: [
-                Expanded(
-                  child: _optionButton(
-                    contrast,
-                    number: 1,
-                    text: _t(opt1Key),
-                    icon: _optionIcons[opt1Key] ?? Icons.touch_app_rounded,
-                    selected: _selectedOption == 1,
-                    onTap: () => _choose(1),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Expanded(
-                  child: _optionButton(
-                    contrast,
-                    number: 2,
-                    text: _t(opt2Key),
-                    icon: _optionIcons[opt2Key] ?? Icons.touch_app_rounded,
-                    selected: _selectedOption == 2,
-                    onTap: () => _choose(2),
-                  ),
-                ),
-              ],
+          Icon(Icons.auto_awesome_rounded, color: hc ? _fg : Playful.sun, size: 26),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              'story.what_next'.tr(),
+              textAlign: TextAlign.center,
+              style: Playful.display(24, color: _fg),
             ),
           ),
         ],
       ),
-    );
+      const SizedBox(height: 10),
+      // Додека се чита - мал брановиден знак; копчињата се уште заклучени.
+      AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        child: _buttonsUnlocked || hc
+            ? const SizedBox(key: ValueKey('ready'), height: 8)
+            : const Center(
+                key: ValueKey('reading'),
+                child: Padding(
+                  padding: EdgeInsets.only(bottom: 8),
+                  child: SoundWave(color: Playful.sun, bars: 9, height: 26, barWidth: 5),
+                ),
+              ),
+      ),
+      _optionButton(
+        number: 1,
+        text: _t(opt1Key),
+        icon: _optionIcons[opt1Key] ?? Icons.touch_app_rounded,
+        selected: _selectedOption == 1,
+        onTap: () => _choose(1),
+      ),
+      const SizedBox(height: 14),
+      _optionButton(
+        number: 2,
+        text: _t(opt2Key),
+        icon: _optionIcons[opt2Key] ?? Icons.touch_app_rounded,
+        selected: _selectedOption == 2,
+        onTap: () => _choose(2),
+      ),
+    ];
   }
 
-  /// 3Д копче за опција - со сопствена икона, а при избор кратко "светнува"
-  /// (посветла боја + поголема сенка) пред премин кон исходот.
-  Widget _optionButton(
-    Color contrast, {
+  /// Шарена картичка за опција: златен број, икона во бел круг, текст.
+  /// При избор кратко светнува зелено пред премин кон исходот.
+  Widget _optionButton({
     required int number,
     required String text,
     required IconData icon,
     required bool selected,
     required VoidCallback onTap,
   }) {
-    final hc = AccessibilityUtils.isHighContrast(context);
-    final baseColor = AccessibilityUtils.getPrimaryButtonBackground(context);
-    final glowColor = hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A);
+    final hc = _hc;
+    final base = selected ? const Color(0xFF16A34A) : _optionColors[(number - 1) % _optionColors.length];
     return Semantics(
       label: '${'story.option_$number'.tr()}: $text. ${'features.tap_to_open'.tr()}',
       button: _buttonsUnlocked,
-      child: AbsorbPointer(
-        absorbing: !_buttonsUnlocked,
-        child: Opacity(
-          opacity: _buttonsUnlocked ? 1.0 : 0.4,
-          child: AnimatedScale(
-            scale: selected ? 1.04 : 1.0,
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOut,
-            child: AnimatedContainer(
+      child: ExcludeSemantics(
+        child: AbsorbPointer(
+          absorbing: !_buttonsUnlocked,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: _buttonsUnlocked ? 1.0 : 0.4,
+            child: AnimatedScale(
+              scale: selected ? 1.04 : 1.0,
               duration: const Duration(milliseconds: 180),
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: (selected ? glowColor : Colors.black).withOpacity(selected ? 0.55 : 0.25),
-                    blurRadius: selected ? 26 : 10,
-                    spreadRadius: selected ? 2 : 0,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: selected ? glowColor : baseColor,
-                borderRadius: BorderRadius.circular(22),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: onTap,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: Colors.white.withOpacity(hc ? 0.9 : 0.35), width: hc ? 2 : 1),
-                      gradient: hc
-                          ? null
-                          : LinearGradient(
-                              colors: [
-                                Color.lerp(selected ? glowColor : baseColor, Colors.white, 0.22)!,
-                                selected ? glowColor : baseColor,
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                            ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, size: 46, color: Colors.white),
-                        const SizedBox(width: 16),
-                        Flexible(
-                          child: Text(
-                            text,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
+              curve: Curves.easeOut,
+              child: PressableScale(
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(26),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(26),
+                    onTap: onTap,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      constraints: const BoxConstraints(minHeight: 110),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(26),
+                        color: hc ? (selected ? const Color(0xFF333300) : Colors.black) : null,
+                        gradient: hc
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [Color.lerp(base, Colors.white, 0.08)!, Color.lerp(base, Colors.black, 0.35)!],
+                              ),
+                        border: Border.all(
+                          color: hc ? (selected ? const Color(0xFFFFFF00) : Colors.white) : (selected ? Playful.sun : Colors.white),
+                          width: selected ? 4 : 3,
                         ),
-                      ],
+                        boxShadow: hc
+                            ? null
+                            : [BoxShadow(color: (selected ? Playful.sun : base).withValues(alpha: selected ? 0.7 : 0.45), blurRadius: selected ? 28 : 16)],
+                      ),
+                      child: Row(
+                        children: [
+                          // Број на опцијата.
+                          Container(
+                            width: 40,
+                            height: 40,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: hc ? Colors.black : Playful.sun,
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Text('$number', style: Playful.display(20, color: hc ? Colors.white : Playful.ink)),
+                          ),
+                          const SizedBox(width: 12),
+                          Container(
+                            width: 70,
+                            height: 70,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: hc ? Colors.black : Colors.white.withValues(alpha: 0.18),
+                              border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.8), width: 2),
+                            ),
+                            child: Icon(icon, size: 42, color: Colors.white),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              text,
+                              style: Playful.title(23, color: Colors.white),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -650,98 +676,109 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
     );
   }
 
-  Widget _buildOutcomeView(Color contrast, bool hc) {
-    final screenH = MediaQuery.of(context).size.height;
-    final sceneHeight = (screenH * 0.34).clamp(240.0, 420.0);
+  List<Widget> _buildOutcomeView(double sceneHeight) {
+    final hc = _hc;
     final isLastStory = _currentStory + 1 >= _storyCount;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-      child: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _storyScene(context, hc, sceneHeight),
-                  if (_lastOutcomeKey != null) _captionBox(contrast, _t(_lastOutcomeKey!)),
-                  const SizedBox(height: 18),
-                  Text(
-                    'story.the_end'.tr(),
-                    style: GameTypography.heading(context, contrast, 22),
-                  ),
-                  if (_allDone) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      'story.all_done'.tr(),
-                      textAlign: TextAlign.center,
-                      style: GameTypography.body(context, contrast, 16),
-                    ),
-                  ],
-                ],
+    return [
+      _storyScene(hc, sceneHeight),
+      const SizedBox(height: 16),
+      if (_lastOutcomeKey != null) _captionBox(_t(_lastOutcomeKey!)),
+      const SizedBox(height: 20),
+      PopIn(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.auto_stories_rounded, color: hc ? _fg : Playful.sun, size: 30),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                'story.the_end'.tr(),
+                textAlign: TextAlign.center,
+                style: Playful.display(26, color: _fg),
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          if (_allDone)
-            // Последната приказна целосно заврши (вклучувајќи го all_done.mp3) -
-            // сега се појавуваат излез и обиди повторно.
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _bigCircleButton(icon: Icons.home_rounded, label: 'story.exit_to_menu'.tr(), color: AccessibilityUtils.getDisabledColor(context), onTap: () => Navigator.of(context).pop()),
-                const SizedBox(width: 28),
-                _bigCircleButton(icon: Icons.replay_rounded, label: 'story.play_again'.tr(), color: _moduleAccent, onTap: _restart),
-              ],
-            )
-          else if (!isLastStory)
-            // Не е последната приказна - копче за продолжување кон следната.
-            _bigCircleButton(icon: Icons.arrow_forward_rounded, label: 'story.next_story'.tr(), color: _moduleAccent, onTap: _continue)
-          else
-            // Последна приказна, но all_done.mp3 сè уште не завршило - нема
-            // копче "следна приказна" (нема потреба), а излез/рестарт сè
-            // уште не се појавуваат.
-            const SizedBox(height: 74),
-        ],
+          ],
+        ),
       ),
-    );
+      if (_allDone) ...[
+        const SizedBox(height: 8),
+        Text(
+          'story.all_done'.tr(),
+          textAlign: TextAlign.center,
+          style: Playful.body(18, color: _fg),
+        ),
+      ],
+      const SizedBox(height: 24),
+      if (_allDone)
+        // Последната приказна целосно заврши - излез и обиди повторно.
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 32,
+          runSpacing: 20,
+          children: [
+            _bigCircleButton(
+              icon: Icons.home_rounded,
+              label: 'story.exit_to_menu'.tr(),
+              gold: false,
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            _bigCircleButton(
+              icon: Icons.replay_rounded,
+              label: 'story.play_again'.tr(),
+              gold: true,
+              onTap: _restart,
+            ),
+          ],
+        )
+      else if (!isLastStory)
+        Center(
+          child: _bigCircleButton(
+            icon: Icons.arrow_forward_rounded,
+            label: 'story.next_story'.tr(),
+            gold: true,
+            onTap: _continue,
+          ),
+        )
+      else
+        // Последна приказна, но завршната порака сè уште трае.
+        const SizedBox(height: 74),
+    ];
   }
 
-  /// Големо кружно 3Д копче (само икона) - продолжи / излез / обиди повторно.
-  Widget _bigCircleButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
-    final hc = AccessibilityUtils.isHighContrast(context);
+  /// Голем круг со икона и натпис под него - продолжи / излез / одново.
+  Widget _bigCircleButton({required IconData icon, required String label, required bool gold, required VoidCallback onTap}) {
+    final hc = _hc;
+    final shown = label.replaceAll(RegExp(r'\.\s*$'), '');
     return Semantics(
       label: label,
       button: true,
-      child: Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(hc ? 0 : 0.35), blurRadius: 16, offset: const Offset(0, 6)),
-          ],
-        ),
-        child: Material(
-          color: hc ? Colors.black : color,
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: hc
-                    ? null
-                    : LinearGradient(
-                        colors: [Color.lerp(color, Colors.white, 0.3)!, color],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                border: hc ? Border.all(color: Colors.white, width: 2) : null,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: onTap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RippleRings(
+                color: hc ? Colors.white : Playful.sun,
+                active: gold && !hc,
+                spread: 18,
+                child: PressableScale(
+                  child: Container(
+                    width: 108,
+                    height: 108,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hc ? Colors.black : (gold ? Playful.sun : Colors.white.withValues(alpha: 0.12)),
+                      border: Border.all(color: Colors.white, width: hc ? 2 : 4),
+                      boxShadow: hc || !gold ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 22)],
+                    ),
+                    child: Icon(icon, size: 52, color: hc ? Colors.white : (gold ? Playful.ink : Colors.white)),
+                  ),
+                ),
               ),
-              padding: const EdgeInsets.all(30),
-              child: Icon(icon, size: 52, color: Colors.white),
-            ),
+              const SizedBox(height: 10),
+              Text(shown, textAlign: TextAlign.center, style: Playful.title(18, color: _fg)),
+            ],
           ),
         ),
       ),

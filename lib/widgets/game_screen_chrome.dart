@@ -18,7 +18,12 @@ class GameScreenChrome extends StatelessWidget {
     this.voiceCommand = true,
     this.voiceOptions = const [],
     this.onVoiceBack,
+    this.bodyBackground,
   });
+
+  /// По избор: сопствена позадина наместо светлиот градиент со круговите
+  /// (пр. темната позадина во квизот). Во висок контраст се игнорира.
+  final Widget? bodyBackground;
 
   /// Копче за гласовна команда горе десно (и копчето Г), во секоја игра:
   /// „назад“, имињата на другите игри / „поставки“ / „главно мени“ и
@@ -123,24 +128,28 @@ class GameScreenChrome extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [bodyTop, bodyBottom],
-              ),
-            ),
-          ),
-          IgnorePointer(
-            child: ExcludeSemantics(
-              child: SizedBox.expand(
-                child: CustomPaint(
-                  painter: _GameBlobsPainter(accent: accent),
+          if (bodyBackground != null)
+            bodyBackground!
+          else ...[
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [bodyTop, bodyBottom],
                 ),
               ),
             ),
-          ),
+            IgnorePointer(
+              child: ExcludeSemantics(
+                child: SizedBox.expand(
+                  child: CustomPaint(
+                    painter: _GameBlobsPainter(accent: accent),
+                  ),
+                ),
+              ),
+            ),
+          ],
           child,
         ],
       ),

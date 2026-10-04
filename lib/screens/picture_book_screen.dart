@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
+import 'package:hear_and_see_safe/utils/voice_level.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
@@ -135,6 +137,17 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   PictureBookItem? _quizPicked;
   bool? _quizPickedCorrect;
 
+  /// Тек на прашањето (како кај квизот во Кибер безбедност): трагата е
+  /// слушната, колку одговори се веќе изговорени (и достапни), кој се чита.
+  bool _quizClueDone = false;
+  bool _quizCluePlaying = false;
+  int _quizUnlocked = 0;
+  int? _quizReadingIndex;
+  /// Точно/неточно по прашање - за патеката со резултати горе.
+  final List<bool> _quizResults = [];
+  /// Колку од особината е изговорено (за текстот што светнува збор по збор).
+  final ValueNotifier<double> _clueProgress = ValueNotifier<double>(0);
+
   String get _langCode => context.locale.languageCode;
   PictureBookCategory get _category => _categories[_categoryIndex];
   PictureBookItem get _item => _category.items[_itemIndex];
@@ -186,6 +199,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _flipPlayer.dispose();
     _itemPageController?.dispose();
     _effectsStateSub.cancel();
+    _clueProgress.dispose();
+    VoiceLevel.speaking.value = false;
     super.dispose();
   }
 
@@ -452,19 +467,14 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _narrationToken++;
     final items = List<PictureBookItem>.from(_category.items);
 
-    // БАРЕМ ДВЕ РАЗЛИЧНИ прашања за секој предмет од категоријата:
-    // предметите СО звук добиваат звучно + описно прашање; предметите БЕЗ
-    // звук добиваат описно + факт-за-учење прашање (две навистина
-    // различни траги, никогаш исто прашање двапати).
+    // Секој предмет добива описно прашање - само првата реченица од
+    // сликовницата (<id>_desc), која никаде не го спомнува името. Предметите
+    // СО звук добиваат и прашање „погоди го звукот“. (Реченицата „Научи“ не
+    // се користи - речиси секогаш го содржи името и го издава одговорот.)
     final questions = <_QuizQuestion>[];
     for (final i in items) {
-      if (i.hasSound) {
-        questions.add(_QuizQuestion(i, _ClueType.sound));
-        questions.add(_QuizQuestion(i, _ClueType.description));
-      } else {
-        questions.add(_QuizQuestion(i, _ClueType.description));
-        questions.add(_QuizQuestion(i, _ClueType.learnFact));
-      }
+      if (i.hasSound) questions.add(_QuizQuestion(i, _ClueType.sound));
+      questions.add(_QuizQuestion(i, _ClueType.description));
     }
     questions.shuffle(_random);
 
@@ -472,6 +482,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       _quizQuestions = questions;
       _quizQuestionIndex = 0;
       _quizScore = 0;
+      _quizResults.clear();
       _view = _View.quiz;
     });
     _prepareQuizQuestion();
@@ -479,8 +490,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   void _prepareQuizQuestion() {
     final q = _quizQuestions[_quizQuestionIndex];
-    // Сите предмети од категоријата се опции за одговор - за да го исполнат
-    // екранот и играта да биде подизвикувачка.
+    // Сите предмети од категоријата се опции за одговор.
     final choices = List<PictureBookItem>.from(_category.items)..shuffle(_random);
     setState(() {
       _quizTarget = q.item;
@@ -488,22 +498,202 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       _quizLocked = false;
       _quizPicked = null;
       _quizPickedCorrect = null;
+      _quizClueDone = false;
+      _quizCluePlaying = false;
+      _quizUnlocked = 0;
+      _quizReadingIndex = null;
     });
-    // Насловот на прашањето ("Погоди го звукот!" / "Погоди за кој предмет
-    // важи следново!") - исклучиво снимка, БЕЗ TTS-резерва.
-    final introKey = q.isSound ? 'quiz_intro' : 'quiz_intro_info';
-    _speak(introKey, '', allowTtsFallback: false);
-    // Ниту звукот ниту особината повеќе не се пуштаат автоматски - детето
-    // мора самo да го притисне копчето-звучник кога е спремно.
+    _clueProgress.value = 0;
+    _runQuizSequence(withIntro: true);
   }
 
-  /// Ја пушта веќе постојната снимка за објаснување на предметот
-  /// (<item>_explanation.mp3, истата како во сликовницата) - за информативни
-  /// прашања, само на барање преку копчето-звучник. Исклучиво снимка, БЕЗ
-  /// TTS-резерва.
-  Future<void> _speakClue() async {
-    if (_quizTarget == null) return;
-    await _speak('${_quizTarget!.id}_explanation', '', allowTtsFallback: false);
+  /// Текстот на трагата за описните прашања (`<id>_quiz_desc`) - посебен
+  /// кус опис само за квизот, без името на поимот.
+  String _clueKey(_QuizQuestion q) => 'picture_book.${q.item.id}_quiz_desc';
+
+  /// Снимката за трагата: assets/audio/picture_book/<јазик>/<id>_desc.mp3 -
+  /// САМО првата реченица (описот).
+  String _clueClip(_QuizQuestion q) => '${q.item.id}_desc';
+
+  /// Како квизот во Кибер безбедност: воведна порака → трагата (звукот или
+  /// особината) → понудените одговори еден по еден (секое копче станува
+  /// достапно штом ќе се изговори неговото име). Повторувањето (`withIntro:
+  /// false`) не ги заклучува веќе слушнатите одговори.
+  Future<void> _runQuizSequence({required bool withIntro}) async {
+    final myToken = ++_narrationToken;
+    bool alive() => mounted && myToken == _narrationToken && _view == _View.quiz && !_quizLocked;
+    final q = _quizQuestions[_quizQuestionIndex];
+    try {
+      await _effectsPlayer.stop();
+    } catch (_) {}
+
+    if (withIntro) {
+      // Насловот - исклучиво снимка, без TTS-резерва (како досега).
+      await _speak(q.isSound ? 'quiz_intro' : 'quiz_intro_info', '', allowTtsFallback: false);
+      if (!alive()) return;
+      await Future.delayed(const Duration(milliseconds: 250));
+      if (!alive()) return;
+    }
+
+    // Трагата.
+    if (!mounted || myToken != _narrationToken) return;
+    setState(() => _quizCluePlaying = true);
+    if (q.isSound) {
+      VoiceLevel.speaking.value = true;
+      await _playEffectAndWait(q.item.id);
+      VoiceLevel.speaking.value = false;
+    } else {
+      await _speakWithProgress(_clueClip(q), _clueKey(q).tr(), _clueProgress);
+    }
+    if (!mounted || myToken != _narrationToken) return;
+    setState(() {
+      _quizCluePlaying = false;
+      _quizClueDone = true;
+    });
+    if (!alive()) return;
+
+    // Одговорите, еден по еден.
+    for (var i = 0; i < _quizChoices.length; i++) {
+      await Future.delayed(const Duration(milliseconds: 280));
+      if (!alive()) return;
+      setState(() => _quizReadingIndex = i);
+      final choice = _quizChoices[i];
+      await _speak('${choice.id}_name', choice.nameKey.tr());
+      if (!mounted || myToken != _narrationToken) return;
+      setState(() {
+        _quizReadingIndex = null;
+        if (_quizUnlocked < i + 1) _quizUnlocked = i + 1;
+      });
+    }
+  }
+
+  /// Како `_speak`, но додека снимката свири го пополнува `progress` (0..1)
+  /// - текстот на трагата светнува збор по збор (караоке). Без снимка:
+  /// системски глас и проценето време.
+  Future<void> _speakWithProgress(String key, String text, ValueNotifier<double> progress) async {
+    progress.value = 0;
+    Duration? total;
+    final posSub = _voicePlayer.onPositionChanged.listen((pos) async {
+      total ??= await _voicePlayer.getDuration();
+      final ms = total?.inMilliseconds ?? 0;
+      if (ms > 0 && mounted) progress.value = (pos.inMilliseconds / ms).clamp(0.0, 1.0);
+    });
+    // Резерва за системски глас: тече по проценето време, ако позицијата
+    // не стигнува (нема снимка).
+    final sw = Stopwatch()..start();
+    final estimateMs = 70 * text.length + 400;
+    final ticker = Timer.periodic(const Duration(milliseconds: 90), (_) {
+      if (mounted && total == null && sw.elapsedMilliseconds > 600) {
+        progress.value = (sw.elapsedMilliseconds / estimateMs).clamp(0.0, 0.98);
+      }
+    });
+    VoiceLevel.speaking.value = true;
+    try {
+      await _speak(key, text);
+    } finally {
+      ticker.cancel();
+      await posSub.cancel();
+      VoiceLevel.speaking.value = false;
+      if (mounted) progress.value = 1;
+    }
+  }
+
+  /// Го пушта звукот на поимот и чека да заврши (најмногу 10 секунди).
+  Future<void> _playEffectAndWait(String itemId) async {
+    final done = Completer<void>();
+    var seenPlaying = false;
+    final sub = _effectsPlayer.onPlayerStateChanged.listen((st) {
+      if (st == PlayerState.playing) seenPlaying = true;
+      if (st == PlayerState.completed || (st == PlayerState.stopped && seenPlaying)) {
+        if (!done.isCompleted) done.complete();
+      }
+    });
+    try {
+      await _playEffect(itemId);
+      // Ако не почне за 3 секунди (нема звук), продолжи.
+      await Future.any([
+        done.future,
+        Future.delayed(const Duration(seconds: 3)).then((_) {
+          if (!seenPlaying && !done.isCompleted) done.complete();
+          return done.future;
+        }),
+      ]).timeout(const Duration(seconds: 10), onTimeout: () {});
+    } finally {
+      await sub.cancel();
+    }
+  }
+
+  /// Повтори: трагата и одговорите повторно (без воведот).
+  void _replayQuizClue() {
+    if (_quizLocked) return;
+    setState(() => _quizReadingIndex = null);
+    _runQuizSequence(withIntro: false);
+  }
+
+  /// Штом почне гласовната команда: запри го говорот (за микрофонот да не
+  /// го слуша) и отклучи ги сите одговори - детето сака да одговори со глас.
+  void _onQuizVoiceStart() {
+    _narrationToken++;
+    VoiceLevel.speaking.value = false;
+    _voicePlayer.stop();
+    _effectsPlayer.stop();
+    _voiceAssistant.stop();
+    if (!mounted) return;
+    setState(() {
+      _quizReadingIndex = null;
+      _quizCluePlaying = false;
+      _quizClueDone = true;
+      _quizUnlocked = _quizChoices.length;
+    });
+    _clueProgress.value = 1;
+  }
+
+  /// Одговор со глас: името на поимот на кој било од трите јазици.
+  void _answerQuizByVoice(PictureBookItem choice) {
+    if (_quizLocked || !_quizClueDone) return;
+    _answerQuiz(choice);
+  }
+
+  /// Имињата (со најчестите облици) на трите јазици - за гласовен одговор.
+  static const Map<String, List<String>> _voiceNames = {
+    'cat': ['мачка', 'маче', 'cat', 'kitty', 'mace', 'maçe'],
+    'dog': ['куче', 'кучe', 'dog', 'puppy', 'qen', 'qeni'],
+    'bird': ['птица', 'птичка', 'bird', 'zog', 'zogu'],
+    'cow': ['крава', 'cow', 'lopë', 'lope', 'lopa'],
+    'rain': ['дожд', 'rain', 'shi', 'shiu'],
+    'sun': ['сонце', 'sun', 'diell', 'dielli'],
+    'tree': ['дрво', 'tree', 'pemë', 'peme', 'pema'],
+    'water': ['вода', 'water', 'ujë', 'uje', 'uji'],
+    'fire': ['оган', 'огнот', 'огин', 'fire', 'zjarr', 'zjarri'],
+    'wind': ['ветар', 'ветер', 'ветрот', 'wind', 'erë', 'ere', 'era'],
+    'car': ['автомобил', 'кола', 'car', 'makinë', 'makine', 'makina'],
+    'bicycle': ['велосипед', 'точак', 'bicycle', 'bike', 'bicikletë', 'biciklete', 'biçikletë'],
+    'book': ['книга', 'book', 'libër', 'liber', 'libri'],
+    'phone': ['телефон', 'phone', 'telephone', 'telefon', 'telefoni'],
+    'clock': ['часовник', 'саат', 'clock', 'watch', 'orë', 'ore', 'ora'],
+    'star': ['ѕвезда', 'звезда', 'star', 'yll', 'ylli'],
+    'moon': ['месечина', 'месечината', 'moon', 'hënë', 'hëna', 'hena', 'hene'],
+    'rocket': ['ракета', 'rocket', 'raketë', 'rakete', 'raketa'],
+    'planet': ['планета', 'planet', 'planeti'],
+    'drum': ['тапан', 'тапанот', 'drum', 'daulle', 'daullja', 'daulja'],
+    'guitar': ['гитара', 'guitar', 'kitarë', 'kitare', 'kitara'],
+    'bell': ['ѕвонче', 'звонче', 'ѕвоно', 'звоно', 'bell', 'zile', 'zilja'],
+  };
+
+  /// Дали транскриптот го содржи името (како посебен збор, со дозволени
+  /// наставки: „кучето“, „мачката“, „qeni“...). Кратките зборови (до 3
+  /// букви, пр. „shi“, „yll“) мора да се речиси точни.
+  static bool _saysItem(String transcript, PictureBookItem item) {
+    final names = _voiceNames[item.id] ?? [item.id];
+    final words = transcript.toLowerCase().split(RegExp(r'[\s,.!?]+')).where((w) => w.isNotEmpty);
+    for (final w in words) {
+      for (final n in names) {
+        if (w == n) return true;
+        final extra = n.length <= 3 ? 1 : 4;
+        if (w.startsWith(n) && w.length - n.length <= extra) return true;
+      }
+    }
+    return false;
   }
 
   /// hit.mp3 / miss.mp3 од Гласовен Понг (assets/sounds/pong/) - истите
@@ -519,8 +709,10 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   Future<void> _answerQuiz(PictureBookItem chosen) async {
     if (_quizLocked) return;
-    // Веднаш прекини го звукот на поимот (ако сè уште свири) штом ќе се
-    // одговори прашањето.
+    // Веднаш прекини го звукот / читањето штом ќе се одговори.
+    _narrationToken++;
+    VoiceLevel.speaking.value = false;
+    _voicePlayer.stop();
     _effectsPlayer.stop();
     _voiceAssistant.stop();
     final correct = chosen.id == _quizTarget!.id;
@@ -528,6 +720,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       _quizLocked = true;
       _quizPicked = chosen;
       _quizPickedCorrect = correct;
+      _quizReadingIndex = null;
+      _quizCluePlaying = false;
+      _quizResults.add(correct);
     });
 
     if (correct) {
@@ -543,8 +738,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       await _playPongEffect('miss.mp3');
     }
 
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
+    // Подолго кај погрешен одговор - да се види кој бил точниот.
+    await Future.delayed(Duration(milliseconds: correct ? 1100 : 1900));
+    if (!mounted || _view != _View.quiz) return;
 
     final nextIndex = _quizQuestionIndex + 1;
     if (nextIndex >= _quizQuestions.length) {
@@ -554,8 +750,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       setState(() {
         _view = _View.quizResult;
         // Категоријата се заклучува само ако е совршен резултат ИЛИ ако веќе
-        // се искористени сите дозволени обиди - инаку останува "прегледана,
-        // но не заклучена", и квизот сепак може повторно да се пробa.
+        // се искористени сите дозволени обиди.
         if (isPerfect || noRetriesLeft) {
           _completedCategories.add(_category.id);
         }
@@ -576,8 +771,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     return GameScreenChrome(
       accent: const Color(0xFF2563EB),
       title: _t('title').isNotEmpty ? _t('title') : 'features.picture_book'.tr(),
-      // Менито со категории и сликовницата веќе имаат свое копче.
-      voiceCommand: _view != _View.categorySelect && _view != _View.itemDetail,
+      // Темна позадина со сликите што лебдат: во менито - од сите
+      // категории, внатре во категорија - од таа категорија, во нејзината боја.
+      bodyBackground: _view == _View.categorySelect
+          ? EmojiBackdrop(
+              key: const ValueKey('pb-bg-all'),
+              emojis: [for (final c in _categories) c.items.first.emoji, for (final c in _categories) c.items.last.emoji],
+              tint: const Color(0xFF2563EB),
+            )
+          : EmojiBackdrop(
+              key: ValueKey('pb-bg-${_category.id}'),
+              emojis: [for (final i in _category.items) i.emoji],
+              tint: _category.color,
+            ),
+      // Менито со категории, сликовницата и квизот имаат свое копче.
+      voiceCommand: _view != _View.categorySelect && _view != _View.itemDetail && _view != _View.quiz,
       voiceOptions: _categoryVoiceOptions(),
       onVoiceBack: _backToCategories,
       child: SafeArea(
@@ -602,34 +810,64 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   // --- Категории ---
+  //
+  // Изглед (ист распоред како досега, нова визуелност): темна позадина со
+  // сликите што лебдат, бел текст, полно обоени картички за категориите,
+  // бели картички за сликовниците и темни „сцени“ за самите сликовници.
+
+  /// Боја на текстот врз темната позадина.
+  Color _onBg(bool hc, Color contrast) => hc ? contrast : Colors.white;
 
   Widget _buildCategorySelect(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        _buildExplanationButton(contrast),
-        if (_explanationOpen) _buildExplanationPanel(contrast, _t('intro')),
-        const SizedBox(height: 12),
-        Text(
-          _t('choose_category'),
-          textAlign: TextAlign.center,
-          style: GameTypography.heading(context, contrast, 20),
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: CategoryVoiceCommandButton(
-            options: _categoryVoiceOptions(),
-            onBack: () => Navigator.of(context).pop(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        for (final cat in _categories) ...[
-          _categoryCard(context, cat, contrast, hc),
-          const SizedBox(height: 18),
-        ],
-      ],
+    // Низ целиот екран (лизгачот е скроз десно); на широк екран категориите
+    // се во 2 колони.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final side = width >= 1200 ? 40.0 : (width >= 760 ? 28.0 : 20.0);
+        final columns = width >= 900 ? 2 : 1;
+        const gap = 18.0;
+        final cardW = (width - side * 2 - gap * (columns - 1)) / columns - 0.5;
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 20, side, 28),
+          children: [
+            _buildExplanationButton(contrast),
+            if (_explanationOpen) _buildExplanationPanel(contrast, _t('intro')),
+            const SizedBox(height: 18),
+            PopIn(
+              index: 0,
+              child: Text(
+                _t('choose_category'),
+                textAlign: TextAlign.center,
+                style: GameTypography.heading(context, _onBg(hc, contrast), 28),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: CategoryVoiceCommandButton(
+                options: _categoryVoiceOptions(),
+                onBack: () => Navigator.of(context).pop(),
+                background: hc ? null : Playful.sun,
+                foreground: hc ? null : Playful.ink,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: gap,
+              runSpacing: gap,
+              children: [
+                for (var i = 0; i < _categories.length; i++)
+                  SizedBox(
+                    width: cardW,
+                    child: PopIn(index: 1 + i, child: _categoryCard(context, _categories[i], contrast, hc)),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -667,26 +905,42 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     ];
 
   Widget _buildExplanationButton(Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
     final label = _explanationOpen
         ? 'picture_book.explanation_toggle_close'.tr()
         : 'picture_book.explanation_toggle_open'.tr();
     return Semantics(
       label: label,
       button: true,
-      child: SizedBox(
-        width: double.infinity,
-        child: ElevatedButton.icon(
-          onPressed: _toggleExplanation,
-          icon: Icon(_explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: 26),
-          label: Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _explanationOpen
-                ? AccessibilityUtils.getDisabledColor(context)
-                : const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
+      child: PressableScale(
+        child: Material(
+          color: hc ? AccessibilityUtils.getPrimaryButtonBackground(context) : Colors.white.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(20),
+            onTap: _toggleExplanation,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: hc ? contrast : Colors.white.withValues(alpha: 0.6), width: 2),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(_explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
+                      size: 28, color: hc ? AccessibilityUtils.getPrimaryButtonForeground(context) : Playful.sun),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(label,
+                        style: GoogleFonts.lexend(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                            color: hc ? AccessibilityUtils.getPrimaryButtonForeground(context) : Colors.white)),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -695,77 +949,107 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   Widget _categoryCard(BuildContext context, PictureBookCategory cat, Color contrast, bool hc) {
     final index = _categories.indexOf(cat);
-    final visitedCount = (_visitedByCategory[cat.id] ?? const {}).length;
-    // Категориите повеќе НЕ се заклучуваат - секогаш достапни за допир.
-    // `_completedCategories`/`_visitedByCategory` сепак се користат за
-    // прикажување на прогресот (виден/завршен), само визуелно.
-    const locked = false;
+    final seen = _visitedByCategory[cat.id] ?? const <String>{};
+    final visitedCount = seen.length;
+    final total = cat.items.length;
+    final allSeen = visitedCount >= total;
+    final deep = Color.lerp(cat.color, Colors.black, 0.35)!;
+    final fg = hc ? const Color(0xFFFFFF00) : Colors.white;
+    // Категориите НЕ се заклучуваат - секогаш достапни за допир; прогресот
+    // (прегледано) се прикажува само визуелно.
     return Semantics(
-      label: '${cat.titleKey.tr()}. ${cat.items.length} ${_t('items_count')}. $visitedCount ${_t('seen')}.',
+      label: '${cat.titleKey.tr()}. $total ${_t('items_count')}. $visitedCount ${_t('seen')}.',
       button: true,
-      child: Opacity(
-        opacity: 1.0,
+      child: PressableScale(
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           child: InkWell(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             onTap: () => _enterCategory(index),
-            child: Container(
-              padding: const EdgeInsets.all(28),
-              constraints: const BoxConstraints(minHeight: 120),
+            child: Ink(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: hc
-                    ? null
-                    : LinearGradient(
-                        colors: [cat.color, Color.lerp(cat.color, Colors.white, 0.3)!],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                borderRadius: BorderRadius.circular(28),
+                gradient: hc ? null : LinearGradient(colors: [cat.color, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 color: hc ? Colors.black : null,
-                border: Border.all(color: hc ? Colors.white : cat.color, width: hc ? 3 : 0),
+                border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
+                boxShadow: hc ? null : [BoxShadow(color: cat.color.withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 10))],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withOpacity(hc ? 0.1 : 0.25),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: Stack(
+                  children: [
+                    // Голема бледа слика во аголот - украс.
+                    Positioned(
+                      right: -10,
+                      bottom: -24,
+                      child: ExcludeSemantics(
+                        child: Opacity(opacity: hc ? 0 : 0.18, child: Text(cat.items.first.emoji, style: const TextStyle(fontSize: 120))),
+                      ),
                     ),
-                    child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: 48),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          cat.titleKey.tr(),
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: hc ? const Color(0xFFFFFF00) : Colors.white,
+                    Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 84,
+                            height: 84,
+                            decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white),
+                            child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : deep, size: 46),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          locked ? _t('category_locked') : '$visitedCount / ${cat.items.length} ${_t('seen')}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: (hc ? const Color(0xFFFFFF00) : Colors.white).withOpacity(0.85),
+                          const SizedBox(width: 20),
+                          Expanded(
+                            child: ExcludeSemantics(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(cat.titleKey.tr(), style: GoogleFonts.lexend(fontSize: 30, fontWeight: FontWeight.w800, color: fg, height: 1.15)),
+                                  const SizedBox(height: 10),
+                                  // Сликовниците од категоријата - прегледаните светат.
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    children: [
+                                      for (final item in cat.items)
+                                        Opacity(
+                                          opacity: seen.contains(item.id) ? 1.0 : 0.45,
+                                          child: Text(item.emoji, style: const TextStyle(fontSize: 24)),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: LinearProgressIndicator(
+                                      value: total == 0 ? 0 : visitedCount / total,
+                                      minHeight: 9,
+                                      backgroundColor: Colors.white.withValues(alpha: 0.25),
+                                      valueColor: AlwaysStoppedAnimation(hc ? const Color(0xFFFFFF00) : Playful.sun),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text('$visitedCount / $total ${_t('seen')}',
+                                      style: GoogleFonts.lexend(fontSize: 16, fontWeight: FontWeight.w600, color: fg)),
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: allSeen ? const Color(0xFF16A34A) : Colors.white.withValues(alpha: hc ? 0.1 : 0.22),
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: Icon(allSeen ? Icons.check_rounded : Icons.arrow_forward_rounded, color: Colors.white, size: 28),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  Icon(
-                    locked ? Icons.lock_rounded : Icons.arrow_forward_ios_rounded,
-                    color: hc ? Colors.white : Colors.white.withOpacity(0.8),
-                    size: locked ? 26 : 22,
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -781,111 +1065,156 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     final hc = AccessibilityUtils.isHighContrast(context);
     final cat = _category;
     final reviewedNotLocked = _visited.length >= cat.items.length && !_completedCategories.contains(cat.id);
-    return Column(
-      children: [
-        _buildBackRow(contrast, onBack: _backToCategories),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  cat.titleKey.tr(),
-                  style: GameTypography.heading(context, contrast, 20),
-                ),
-              ),
-              if (reviewedNotLocked)
-                Semantics(
-                  label: 'picture_book.go_to_quiz'.tr(),
-                  button: true,
-                  child: Material(
-                    color: hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A),
-                    borderRadius: BorderRadius.circular(16),
-                    elevation: hc ? 0 : 3,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: _startQuiz,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.quiz_rounded, size: 32, color: hc ? Colors.black : Colors.white),
-                            const SizedBox(width: 8),
-                            Text(
-                              'picture_book.go_to_quiz'.tr(),
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: hc ? Colors.black : Colors.white),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Низ целиот екран: 2 колони на телефон, до 4 на широк екран.
+        final width = constraints.maxWidth;
+        final columns = width >= 1300 ? 4 : (width >= 900 ? 3 : 2);
+        return Column(
+          children: [
+            _buildBackRow(contrast, onBack: _backToCategories),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : cat.color, border: Border.all(color: Colors.white, width: 2)),
+                    child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: 28),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(cat.titleKey.tr(), style: GameTypography.heading(context, _onBg(hc, contrast), 26)),
+                        Text('${_visited.length} / ${cat.items.length} ${_t('seen')}',
+                            style: GameTypography.body(context, _onBg(hc, contrast).withValues(alpha: 0.9), 16)),
+                      ],
+                    ),
+                  ),
+                  if (reviewedNotLocked)
+                    Flexible(
+                      child: Semantics(
+                      label: 'picture_book.go_to_quiz'.tr(),
+                      button: true,
+                      child: RippleRings(
+                        color: hc ? const Color(0xFFFFFF00) : Playful.sun,
+                        spread: 12,
+                        child: PressableScale(
+                          child: Material(
+                            color: hc ? const Color(0xFFFFFF00) : Playful.sun,
+                            borderRadius: BorderRadius.circular(18),
+                            elevation: hc ? 0 : 4,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(18),
+                              onTap: _startQuiz,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.quiz_rounded, size: 30, color: Playful.ink),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        'picture_book.go_to_quiz'.tr(),
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Playful.title(17, color: Playful.ink),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: cat.items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 0.95,
+                    ),
+                ],
+              ),
             ),
-            itemBuilder: (context, index) => _itemCard(context, cat.items[index], index, contrast, hc),
-          ),
-        ),
-      ],
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: cat.items.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: columns,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: 0.95,
+                ),
+                itemBuilder: (context, index) => PopIn(index: index, child: _itemCard(context, cat.items[index], index, contrast, hc)),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _itemCard(BuildContext context, PictureBookItem item, int index, Color contrast, bool hc) {
     final visited = _visited.contains(item.id);
+    final catColor = _category.color;
     return Semantics(
       label: '${item.nameKey.tr()}${visited ? '. ${_t('seen')}' : ''}',
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _openItem(index),
-          child: Opacity(
-            opacity: visited ? 0.55 : 1.0,
+      child: PressableScale(
+        child: Material(
+          color: hc ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(26),
+          elevation: hc ? 0 : 8,
+          shadowColor: Colors.black.withValues(alpha: 0.5),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(26),
+            onTap: () => _openItem(index),
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: hc ? Colors.black : Colors.white,
-                border: Border.all(color: hc ? Colors.white : contrast.withOpacity(0.2), width: hc ? 2 : 1.5),
-                boxShadow: hc ? const [] : AppStyle.cardShadow(false),
+                borderRadius: BorderRadius.circular(26),
+                // Дебел раб долу во бојата на категоријата - како копче.
+                border: hc
+                    ? Border.all(color: Colors.white, width: 2)
+                    : Border(bottom: BorderSide(color: Color.lerp(catColor, Colors.black, 0.2)!, width: 8)),
               ),
               child: Stack(
                 children: [
                   Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(item.emoji, style: const TextStyle(fontSize: 68)),
-                        const SizedBox(height: 8),
-                        Text(
-                          item.nameKey.tr(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: hc ? Colors.white : contrast),
-                        ),
-                      ],
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : catColor.withValues(alpha: 0.14)),
+                              child: FittedBox(child: Text(item.emoji, style: const TextStyle(fontSize: 70))),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              item.nameKey.tr(),
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.lexend(fontSize: 22, fontWeight: FontWeight.w800, color: hc ? Colors.white : Playful.ink),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   if (visited)
                     Positioned(
-                      top: 8,
-                      right: 8,
+                      top: 10,
+                      right: 10,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFF16A34A)),
-                        child: const Icon(Icons.check_rounded, color: Colors.white, size: 18),
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF16A34A), border: Border.all(color: Colors.white, width: 2)),
+                        child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
                       ),
                     ),
                 ],
@@ -901,56 +1230,71 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   Widget _buildItemDetail(BuildContext context) {
     final contrastColor = AccessibilityUtils.getContrastColor(context);
-    return Column(
-      children: [
-        _buildBackRow(contrastColor, onBack: _closeItemDetail),
-        Center(
-          child: CategoryVoiceCommandButton(
-            compact: true,
-            options: [
-              VoiceCategoryOption(
-                keywords: const ['квиз', 'quiz', 'kuiz'],
-                onSelected: _startQuiz,
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                _buildBackRow(contrastColor, onBack: _closeItemDetail),
+                const Spacer(),
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, right: 16),
+                  child: CategoryVoiceCommandButton(
+                    compact: true,
+                    background: hc ? null : Playful.sun,
+                    foreground: hc ? null : Playful.ink,
+                    options: [
+                      VoiceCategoryOption(
+                        keywords: const ['квиз', 'quiz', 'kuiz'],
+                        onSelected: _startQuiz,
+                      ),
+                      ..._categoryVoiceOptions(),
+                    ],
+                    onBack: _backToCategories,
+                  ),
+                ),
+              ],
+            ),
+            _buildStorySegments(context),
+            if (_item.hasSound) _buildPlaySoundButton(contrastColor),
+            Expanded(
+              child: PageView.builder(
+                controller: _itemPageController,
+                itemCount: _category.items.length,
+                onPageChanged: _onItemPageChanged,
+                itemBuilder: (context, index) => _build3DPage(context, contrastColor, _category.items[index], index),
               ),
-              ..._categoryVoiceOptions(),
-            ],
-            onBack: _backToCategories,
-          ),
+            ),
+          ],
         ),
-        _buildStorySegments(context),
-        if (_item.hasSound) _buildPlaySoundButton(contrastColor),
-        Expanded(
-          child: PageView.builder(
-            controller: _itemPageController,
-            itemCount: _category.items.length,
-            onPageChanged: _onItemPageChanged,
-            itemBuilder: (context, index) => _build3DPage(context, contrastColor, _category.items[index], index),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  /// Сегментирана лента на прогрес на врвот - точно како кај сторија на
-  /// Инстаграм: по едно сегментче за секоја сликовница во категоријата,
-  /// исполнето до тековната позиција.
+  /// Сегментирана лента на прогрес на врвот - како кај сторија на Инстаграм:
+  /// по едно сегментче за секоја сликовница во категоријата.
   Widget _buildStorySegments(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final total = _category.items.length;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: List.generate(total, (i) {
           final filled = i <= _itemIndex;
           return Expanded(
-            child: Container(
-              margin: EdgeInsets.only(right: i == total - 1 ? 0 : 4),
-              height: 5,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: EdgeInsets.only(right: i == total - 1 ? 0 : 6),
+              height: i == _itemIndex ? 10 : 7,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(3),
+                borderRadius: BorderRadius.circular(6),
                 color: filled
-                    ? (hc ? const Color(0xFFFFFF00) : const Color(0xFF2563EB))
-                    : AccessibilityUtils.getDisabledColor(context).withOpacity(0.35),
+                    ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
+                    : (hc ? AccessibilityUtils.getDisabledColor(context) : Colors.white.withValues(alpha: 0.25)),
               ),
             ),
           );
@@ -959,14 +1303,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     );
   }
 
-  /// Сликовница поделена на 3 зони со непрекината омбре позадина:
-  /// лева (стрелка претходна) - централна (икона + текст + копче повтори)
-  /// - десна (стрелка следна). Допир било каде во лева/десна зона исто така
-  /// навигира.
-  /// Ги завиткува сликовниците во лесна 3Д ротациска трансформација,
-  /// заснована на позицијата на PageController - страниците навистина
-  /// изгледаат како да се вртат во просторот при прелистување, не само
-  /// што лизгаат рамно.
+  /// Ги завиткува сликовниците во лесна 3Д ротација при прелистување.
   Widget _build3DPage(BuildContext context, Color contrastColor, PictureBookItem item, int index) {
     return AnimatedBuilder(
       animation: _itemPageController!,
@@ -990,19 +1327,13 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     );
   }
 
+  /// Сликовница поделена на 3 зони (ист распоред): лева (претходна) -
+  /// централна (слика + име + опис + „научи“ + повтори) - десна (следна).
   Widget _itemDetailCard(BuildContext context, Color contrastColor, PictureBookItem item, int index) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final catColor = _category.color;
     final hasPrev = index > 0;
     final hasNext = index < _category.items.length - 1;
-
-    final gradientColors = hc
-        ? const [Colors.black, Colors.black, Colors.black]
-        : [
-            Color.lerp(catColor, Colors.white, 0.72)!,
-            Color.lerp(catColor, Colors.white, 0.28)!,
-            Color.lerp(catColor, Colors.white, 0.72)!,
-          ];
 
     final name = item.nameKey.tr();
     final description = item.descriptionKey.tr();
@@ -1012,19 +1343,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       margin: const EdgeInsets.all(16),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: hc ? Colors.white : contrastColor, width: 3),
-        gradient: LinearGradient(
-          colors: gradientColors,
-          stops: const [0.0, 0.5, 1.0],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.85), width: 3),
+        color: hc ? Colors.black : null,
+        gradient: hc
+            ? null
+            : LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color.lerp(catColor, Playful.night, 0.25)!, Color.lerp(catColor, Playful.night, 0.65)!],
+              ),
+        boxShadow: hc ? null : [BoxShadow(color: catColor.withValues(alpha: 0.5), blurRadius: 30, spreadRadius: 2)],
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // --- Лева зона: стрелка претходна ---
           Expanded(
             flex: 2,
             child: _NavZone(
@@ -1035,7 +1368,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               highContrast: hc,
             ),
           ),
-          // --- Централна зона: икона, текст, копче повтори ---
           Expanded(
             flex: 5,
             child: GestureDetector(
@@ -1048,75 +1380,111 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                   builder: (context, constraints) {
                     final h = constraints.maxHeight;
                     final w = constraints.maxWidth;
-                    final emojiSize = (h * 0.22).clamp(90.0, 170.0);
-                    final titleSize = (w * 0.19).clamp(25.0, 36.0);
-                    final descSize = (w * 0.10).clamp(16.0, 21.0);
-                    final learnSize = (w * 0.088).clamp(15.0, 19.0);
-                    final textColor = hc ? Colors.white : contrastColor;
+                    final emojiSize = (h * 0.2).clamp(80.0, 150.0);
+                    final titleSize = (w * 0.19).clamp(28.0, 40.0);
+                    final descSize = (w * 0.10).clamp(18.0, 23.0);
+                    final learnSize = (w * 0.09).clamp(17.0, 21.0);
 
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(item.emoji, style: TextStyle(fontSize: emojiSize)),
-                          const SizedBox(height: 14),
-                          Text(
-                            name,
-                            style: TextStyle(fontSize: titleSize, fontWeight: FontWeight.bold, color: textColor),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            description,
-                            style: TextStyle(fontSize: descSize, color: textColor.withOpacity(0.85)),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            learn,
-                            style: TextStyle(fontSize: learnSize, color: textColor.withOpacity(0.75), fontStyle: FontStyle.italic),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          Semantics(
-                            label: 'picture_book.repeat_explanation'.tr(),
-                            button: true,
-                            child: Material(
-                              color: hc ? Colors.black : const Color(0xFF2563EB),
-                              shape: const CircleBorder(),
-                              elevation: 3,
-                              child: InkWell(
-                                customBorder: const CircleBorder(),
-                                onTap: _repeatItem,
-                                child: Padding(
-                                  padding: const EdgeInsets.all(18),
-                                  child: Icon(Icons.replay_rounded, size: 40, color: hc ? Colors.white : Colors.white),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 20),
+                      child: ExcludeSemantics(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Сликата во бел круг со бранови.
+                            RippleRings(
+                              color: Colors.white,
+                              active: _itemSoundPlaying,
+                              spread: 18,
+                              child: Container(
+                                padding: EdgeInsets.all(emojiSize * 0.18),
+                                decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white, border: hc ? Border.all(color: Colors.white, width: 2) : null),
+                                child: Text(item.emoji, style: TextStyle(fontSize: emojiSize)),
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            Text(
+                              name,
+                              style: GoogleFonts.lexend(fontSize: titleSize, fontWeight: FontWeight.w800, color: hc ? const Color(0xFFFFFF00) : Colors.white, height: 1.1),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              description,
+                              style: GoogleFonts.lexend(fontSize: descSize, fontWeight: FontWeight.w600, color: Colors.white, height: 1.35),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 14),
+                            // „Научи“ - во балонче (бело, темен текст).
+                            Material(
+                              color: hc ? Colors.black : Colors.white,
+                              shape: SpeechBubbleBorder(radius: 22, tail: 14, side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14 + 14),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(Icons.lightbulb_rounded, color: hc ? const Color(0xFFFFFF00) : catColor, size: 26),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        learn,
+                                        style: GoogleFonts.lexend(fontSize: learnSize, fontWeight: FontWeight.w600, color: hc ? Colors.white : Playful.ink, height: 1.4),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
-                          ),
-                          if (_visited.length >= _category.items.length) ...[
                             const SizedBox(height: 18),
-                            Semantics(
-                              label: 'picture_book.go_to_quiz'.tr(),
-                              button: true,
-                              child: Material(
-                                color: hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A),
-                                shape: const CircleBorder(),
-                                elevation: hc ? 0 : 4,
-                                child: InkWell(
-                                  customBorder: const CircleBorder(),
-                                  onTap: _startQuiz,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: Icon(Icons.quiz_rounded, size: 34, color: hc ? Colors.black : Colors.white),
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 16,
+                              runSpacing: 12,
+                              children: [
+                                Semantics(
+                                  label: 'picture_book.repeat_explanation'.tr(),
+                                  button: true,
+                                  child: PressableScale(
+                                    child: Material(
+                                      color: hc ? Colors.black : Playful.sun,
+                                      shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
+                                      elevation: hc ? 0 : 4,
+                                      child: InkWell(
+                                        customBorder: const CircleBorder(),
+                                        onTap: _repeatItem,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(18),
+                                          child: Icon(Icons.replay_rounded, size: 40, color: hc ? Colors.white : Playful.ink),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                if (_visited.length >= _category.items.length)
+                                  Semantics(
+                                    label: 'picture_book.go_to_quiz'.tr(),
+                                    button: true,
+                                    child: PressableScale(
+                                      child: Material(
+                                        color: hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A),
+                                        shape: const CircleBorder(side: BorderSide(color: Colors.white, width: 2)),
+                                        elevation: hc ? 0 : 4,
+                                        child: InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: _startQuiz,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(18),
+                                            child: Icon(Icons.quiz_rounded, size: 38, color: hc ? Colors.black : Colors.white),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -1124,7 +1492,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               ),
             ),
           ),
-          // --- Десна зона: стрелка следна ---
           Expanded(
             flex: 2,
             child: _NavZone(
@@ -1141,22 +1508,33 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   Widget _buildPlaySoundButton(Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final color = _itemSoundPlaying ? const Color(0xFFF97316) : (hc ? Colors.black : Playful.sun);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       child: Center(
         child: Semantics(
           label: _itemSoundPlaying ? 'picture_book.pause_sound'.tr() : 'picture_book.play_sound'.tr(),
           button: true,
-          child: Material(
-            color: _itemSoundPlaying ? const Color(0xFFD97706) : const Color(0xFF16A34A),
-            shape: const CircleBorder(),
-            elevation: 4,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _playItemSound,
-              child: Padding(
-                padding: const EdgeInsets.all(22),
-                child: Icon(_itemSoundPlaying ? Icons.pause_rounded : Icons.volume_up_rounded, size: 40, color: Colors.white),
+          child: RippleRings(
+            color: hc ? Colors.white : Playful.sun,
+            active: _itemSoundPlaying,
+            spread: 16,
+            child: PressableScale(
+              child: Material(
+                color: color,
+                shape: CircleBorder(side: BorderSide(color: Colors.white, width: hc ? 2 : 3)),
+                elevation: hc ? 0 : 6,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: _playItemSound,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: _itemSoundPlaying
+                        ? const SizedBox(width: 44, height: 44, child: Center(child: SoundWave(color: Colors.white, bars: 5, height: 34, barWidth: 5)))
+                        : Icon(Icons.volume_up_rounded, size: 44, color: hc ? Colors.white : Playful.ink),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1166,15 +1544,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   Widget _buildBackRow(Color contrast, {required VoidCallback onBack}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Semantics(
             label: _t('back_to_categories'),
             button: true,
             child: IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: contrast),
+              icon: Icon(Icons.arrow_back_rounded, color: hc ? contrast : Colors.white, size: 30),
+              style: IconButton.styleFrom(
+                backgroundColor: hc ? null : Colors.white.withValues(alpha: 0.15),
+                side: hc ? null : BorderSide(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+              ),
               onPressed: onBack,
             ),
           ),
@@ -1184,82 +1568,123 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   Widget _buildExplanationPanel(Color contrast, String text) {
+    final hc = AccessibilityUtils.isHighContrast(context);
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.fromLTRB(0, 12, 0, 0),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF2563EB).withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.35), width: 1.5),
+        color: hc ? Colors.black : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: hc ? Colors.white : Playful.sun, width: 3),
       ),
-      child: Text(text, style: GameTypography.body(context, contrast, 15)),
+      child: Text(text, style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.w500, height: 1.5, color: hc ? Colors.white : Playful.ink)),
     );
   }
 
   // --- Квиз ---
+  //
+  // Изглед: горе патека со прашањата (точно / неточно / тековно), темна
+  // „сцена“ со трагата (звучен круг со бранови или балонче со особината што
+  // светнува збор по збор), под неа големи плочки со одговорите. Плочката
+  // што се чита свети жолто; додека не се изговори, плочката е бледа и не
+  // може да се избере.
+
+  static const Color _quizGreen = Color(0xFF16A34A);
+  static const Color _quizRed = Color(0xFFDC2626);
+
+  List<VoiceCategoryOption> _quizVoiceOptions() => [
+        for (final choice in _quizChoices)
+          VoiceCategoryOption(
+            keywords: const [],
+            matches: (t) => _saysItem(t, choice),
+            onSelected: () => _answerQuizByVoice(choice),
+          ),
+        ..._categoryVoiceOptions(),
+      ];
+
+  /// Боја на текстот врз темната позадина на квизот.
+  Color _onQuizBg(bool hc, Color contrast) => hc ? contrast : Colors.white;
 
   Widget _buildQuiz(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
     if (_quizTarget == null) return const SizedBox.shrink();
-    final isSoundQuestion = _quizQuestions[_quizQuestionIndex].isSound;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+    // Листата е широка колку екранот (лизгачот е скроз десно), а
+    // содржината е во средина, до 860 широка.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 860) / 2).clamp(20.0, double.infinity);
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 16, side, 32),
+          children: [
+            _quizTrail(contrast, hc),
+            const SizedBox(height: 16),
+            _quizStage(contrast, hc),
+            const SizedBox(height: 16),
+            _quizStatus(contrast, hc),
+            const SizedBox(height: 16),
+            // Одговорите - еден под друг, како порано.
+            for (var i = 0; i < _quizChoices.length; i++) ...[
+              _quizAnswerTile(_quizChoices[i], i, contrast, hc),
+              const SizedBox(height: 14),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  /// Патека со прашањата: ✓ точно, ✗ неточно, тековното е поголемо.
+  Widget _quizTrail(Color contrast, bool hc) {
+    final accent = hc ? AccessibilityUtils.getAccentColor(context) : _category.color;
+    final total = _quizQuestions.length;
+    return Semantics(
+      label: 'picture_book.quiz_progress'.tr(args: ['${_quizQuestionIndex + 1}', '$total']),
+      child: ExcludeSemantics(
         child: Column(
           children: [
             Text(
-              'picture_book.quiz_progress'.tr(args: [(_quizQuestionIndex + 1).toString(), _quizQuestions.length.toString()]),
-              style: GameTypography.heading(context, contrast, 28),
+              'picture_book.quiz_progress'.tr(args: ['${_quizQuestionIndex + 1}', '$total']),
+              style: GameTypography.heading(context, _onQuizBg(hc, contrast), 24),
             ),
-            const SizedBox(height: 8),
-            Text(
-              _t(isSoundQuestion ? 'quiz_intro' : 'quiz_intro_info'),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 20),
-            ),
-            const SizedBox(height: 20),
-            if (!isSoundQuestion)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(20),
-                margin: const EdgeInsets.only(bottom: 8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: const Color(0xFF2563EB).withOpacity(0.3), width: 1.5),
-                ),
-                child: Text(
-                  (_quizQuestions[_quizQuestionIndex].clueType == _ClueType.learnFact ? _quizTarget!.learnKey : _quizTarget!.descriptionKey).tr(),
-                  textAlign: TextAlign.center,
-                  style: GameTypography.body(context, contrast, 21),
-                ),
-              ),
-            // Единствен извор на звук/особина во квизот - само на притискање.
-            Semantics(
-              label: isSoundQuestion ? _t('quiz_replay') : 'picture_book.play_sound'.tr(),
-              button: true,
-              child: Material(
-                color: const Color(0xFF2563EB),
-                shape: const CircleBorder(),
-                elevation: 4,
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: isSoundQuestion ? () => _playEffect(_quizTarget!.id) : _speakClue,
-                  child: const Padding(
-                    padding: EdgeInsets.all(28),
-                    child: Icon(Icons.volume_up_rounded, size: 52, color: Colors.white),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: ListView.separated(
-                itemCount: _quizChoices.length,
-                separatorBuilder: (context, i) => const SizedBox(height: 12),
-                itemBuilder: (context, i) => _quizAnswerButton(context, _quizChoices[i], contrast, hc),
-              ),
+            const SizedBox(height: 10),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (var i = 0; i < total; i++)
+                  Builder(builder: (context) {
+                    final done = i < _quizResults.length;
+                    final current = i == _quizQuestionIndex && !done;
+                    final size = current ? 38.0 : 30.0;
+                    Color bg;
+                    Widget inner;
+                    if (done) {
+                      bg = _quizResults[i] ? _quizGreen : _quizRed;
+                      inner = Icon(_quizResults[i] ? Icons.check_rounded : Icons.close_rounded, color: Colors.white, size: 18);
+                    } else if (current) {
+                      bg = accent;
+                      inner = Text('${i + 1}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16));
+                    } else {
+                      bg = Colors.transparent;
+                      inner = Text('${i + 1}', style: TextStyle(color: _onQuizBg(hc, contrast).withValues(alpha: 0.75), fontWeight: FontWeight.w700, fontSize: 13));
+                    }
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: size,
+                      height: size,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: bg,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: done || current ? Colors.white : _onQuizBg(hc, contrast).withValues(alpha: 0.45), width: 2),
+                        boxShadow: current && !hc ? [BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 10)] : null,
+                      ),
+                      child: inner,
+                    );
+                  }),
+              ],
             ),
           ],
         ),
@@ -1267,129 +1692,446 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     );
   }
 
-  /// Правоаголно, малку повисоко копче со иконата на поимот + името - со
-  /// псевдо-3Д изглед (градиент + сенка) за да наликува на физичко копче.
-  Widget _quizAnswerButton(BuildContext context, PictureBookItem choice, Color contrast, bool hc) {
-    final isPicked = _quizPicked?.id == choice.id;
-    Color bg = AccessibilityUtils.getPrimaryButtonBackground(context);
-    Color fg = AccessibilityUtils.getPrimaryButtonForeground(context);
-    if (isPicked && _quizPickedCorrect != null) {
-      if (_quizPickedCorrect!) {
-        bg = hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A);
-        fg = hc ? Colors.black : Colors.white;
-      } else {
-        bg = hc ? const Color(0xFF3A3A3A) : const Color(0xFF6B7280);
-        fg = Colors.white;
-      }
-    }
-    // Го блокираме допирот со AbsorbPointer наместо onPressed: null - на тој
-    // начин копчето секогаш останува во "вклучена" визуелна состојба, и
-    // нашата boja секогаш се применува (некои Flutter верзии не ја
-    // применуваат disabledBackgroundColor правилно).
-    const tileSize = 84.0;
-    return AbsorbPointer(
-      absorbing: _quizLocked,
-      child: Material(
-        color: bg,
-        borderRadius: BorderRadius.circular(18),
-        elevation: hc ? 0 : 6,
-        shadowColor: Colors.black.withOpacity(0.45),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: () => _answerQuiz(choice),
-          child: Container(
-            height: tileSize,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: hc
-                  ? Border.all(color: contrast, width: 2)
-                  : Border.all(color: Colors.white.withOpacity(0.35), width: 1),
-              gradient: hc
-                  ? null
-                  : LinearGradient(
-                      colors: [Color.lerp(bg, Colors.white, 0.18)!, bg],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+  /// Темната „сцена“ со трагата.
+  Widget _quizStage(Color contrast, bool hc) {
+    final q = _quizQuestions[_quizQuestionIndex];
+    final isSound = q.isSound;
+    final title = _t(isSound ? 'quiz_intro' : 'quiz_intro_info');
+    final sun = hc ? const Color(0xFFFFFF00) : Playful.sun;
+
+    final Widget clue;
+    if (isSound) {
+      clue = Semantics(
+        button: true,
+        label: _t('quiz_replay'),
+        child: GestureDetector(
+          onTap: _replayQuizClue,
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              RippleRings(
+                color: sun,
+                active: _quizCluePlaying,
+                spread: 28,
+                child: AnimatedScale(
+                  duration: const Duration(milliseconds: 300),
+                  scale: _quizCluePlaying ? 1.08 : 1.0,
+                  child: Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(color: sun, shape: BoxShape.circle),
+                    child: Icon(
+                      _quizCluePlaying ? Icons.graphic_eq_rounded : Icons.volume_up_rounded,
+                      size: 64,
+                      color: Playful.ink,
                     ),
-            ),
-            child: Row(
-              children: [
-                // Иконата ја исполнува сопствената квадратна зона ~70%.
-                SizedBox(
-                  width: tileSize - 14,
-                  height: tileSize - 14,
-                  child: Center(
-                    child: Text(choice.emoji, style: TextStyle(fontSize: (tileSize - 14) * 0.7)),
                   ),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    choice.nameKey.tr(),
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: fg),
-                    overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 36,
+                child: _quizCluePlaying
+                    ? SoundWave(color: sun, bars: 11, height: 36, barWidth: 6)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      clue = Semantics(
+        label: _clueKey(q).tr(),
+        child: Material(
+          color: Colors.white,
+          shape: const SpeechBubbleBorder(radius: 24, tail: 16),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 20 + 16),
+            child: ExcludeSemantics(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 12),
+                    child: Icon(Icons.format_quote_rounded, size: 34, color: _category.color),
                   ),
-                ),
-              ],
+                  Expanded(
+                    child: KaraokeText(
+                      text: _clueKey(q).tr(),
+                      progress: _clueProgress,
+                      style: GoogleFonts.lexend(fontSize: 24, fontWeight: FontWeight.w700, height: 1.35),
+                      activeColor: const Color(0xFF4338CA),
+                      idleColor: const Color(0xFF6B7280),
+                      doneColor: Playful.ink,
+                    ),
+                  ),
+                ],
+              ),
             ),
+          ),
+        ),
+      );
+    }
+
+    final replay = Semantics(
+      button: true,
+      label: _t('quiz_replay_all'),
+      child: PressableScale(
+        enabled: !_quizLocked,
+        child: Material(
+          color: sun,
+          borderRadius: BorderRadius.circular(18),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: _quizLocked ? null : _replayQuizClue,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.replay_rounded, color: Playful.ink, size: 26),
+                  const SizedBox(width: 8),
+                  Text(_t('quiz_replay_all'), style: Playful.title(17, color: Playful.ink)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final voice = CategoryVoiceCommandButton(
+      options: _quizVoiceOptions(),
+      onBack: _backToCategories,
+      onListenStart: _onQuizVoiceStart,
+      respondToHotkey: true,
+      compact: true,
+      background: Colors.white,
+      foreground: Playful.ink,
+    );
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+      decoration: BoxDecoration(
+        // Во бојата на категоријата (затемнета за бел текст), со бел раб
+        // и сјај - се издвојува од темната позадина.
+        gradient: hc
+            ? null
+            : LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color.lerp(_category.color, Playful.night, 0.3)!, Color.lerp(_category.color, Playful.night, 0.62)!],
+              ),
+        color: hc ? Colors.black : null,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.85), width: hc ? 2 : 3),
+        boxShadow: hc ? null : [BoxShadow(color: _category.color.withValues(alpha: 0.55), blurRadius: 30, spreadRadius: 2)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(isSound ? Icons.hearing_rounded : Icons.lightbulb_rounded, color: sun, size: 30),
+              const SizedBox(width: 10),
+              Expanded(child: Text(title, style: Playful.title(22))),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Center(child: clue),
+          const SizedBox(height: 18),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
+            children: [replay, voice],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Што се случува сега: слушај / слушај ги одговорите / одговори.
+  Widget _quizStatus(Color contrast, bool hc) {
+    IconData icon;
+    String text;
+    Color color = _onQuizBg(hc, contrast);
+    if (_quizLocked && _quizPickedCorrect != null) {
+      final ok = _quizPickedCorrect!;
+      icon = ok ? Icons.celebration_rounded : Icons.sentiment_dissatisfied_rounded;
+      text = _t(ok ? 'quiz_correct' : 'quiz_incorrect');
+      color = hc ? contrast : (ok ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5));
+    } else if (!_quizClueDone) {
+      icon = Icons.hearing_rounded;
+      text = _t('quiz_listen');
+    } else if (_quizUnlocked < _quizChoices.length) {
+      icon = Icons.record_voice_over_rounded;
+      text = _t('quiz_listen_answers');
+    } else {
+      icon = Icons.touch_app_rounded;
+      text = _t('quiz_answer_now');
+    }
+    return Semantics(
+      liveRegion: true,
+      label: text,
+      child: ExcludeSemantics(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 250),
+          child: Row(
+            key: ValueKey(text),
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 28),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(text, textAlign: TextAlign.center, style: GameTypography.heading(context, color, 22)),
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
+  /// Ред со одговор (еден под друг): лево голема слика во круг во бојата
+  /// на категоријата, името, десно бројот / бранот (се чита) / ✓ ✗.
+  /// Состојби: бледо (сè уште не е изговорен), жолто (се чита), зелено /
+  /// црвено по одговорот.
+  Widget _quizAnswerTile(PictureBookItem choice, int index, Color contrast, bool hc) {
+    final isPicked = _quizPicked?.id == choice.id;
+    final isCorrectAnswer = choice.id == _quizTarget!.id;
+    final unlocked = index < _quizUnlocked;
+    final reading = _quizReadingIndex == index;
+    final revealCorrect = _quizLocked && isCorrectAnswer && !isPicked;
+    final pickedOk = isPicked && _quizPickedCorrect == true;
+    final pickedWrong = isPicked && _quizPickedCorrect == false;
+
+    Color bg = hc ? AccessibilityUtils.getPrimaryButtonBackground(context) : Colors.white;
+    Color fg = hc ? AccessibilityUtils.getPrimaryButtonForeground(context) : Playful.ink;
+    Color border = hc ? contrast : Colors.white;
+    double borderW = hc ? 2 : 0;
+    if (pickedOk) {
+      bg = hc ? const Color(0xFFFFFF00) : _quizGreen;
+      fg = hc ? Colors.black : Colors.white;
+      border = Colors.white;
+      borderW = 4;
+    } else if (pickedWrong) {
+      bg = hc ? const Color(0xFF3A3A3A) : _quizRed;
+      fg = Colors.white;
+      border = Colors.white;
+      borderW = 4;
+    } else if (revealCorrect) {
+      bg = hc ? Colors.black : const Color(0xFFDCFCE7);
+      fg = hc ? Colors.white : const Color(0xFF14532D);
+      border = hc ? const Color(0xFFFFFF00) : const Color(0xFF4ADE80);
+      borderW = 5;
+    } else if (reading) {
+      bg = hc ? Colors.black : Playful.sun;
+      fg = hc ? Colors.white : Playful.ink;
+      border = hc ? const Color(0xFFFFFF00) : Colors.white;
+      borderW = 4;
+    }
+
+    final dimmed = !unlocked && !reading && !_quizLocked;
+    final circle = hc ? Colors.black : (pickedOk || pickedWrong ? Colors.white.withValues(alpha: 0.25) : _category.color.withValues(alpha: 0.15));
+
+    // Десно: бројот на одговорот, бран додека се чита, или ✓ / ✗.
+    Widget trailing;
+    if (pickedOk || revealCorrect) {
+      trailing = _roundBadge(Icons.check_rounded, pickedOk ? Colors.white : _quizGreen, pickedOk ? _quizGreen : Colors.white);
+    } else if (pickedWrong) {
+      trailing = _roundBadge(Icons.close_rounded, Colors.white, _quizRed);
+    } else if (reading) {
+      trailing = SoundWave(color: hc ? Colors.white : Playful.ink, bars: 5, height: 30, barWidth: 5);
+    } else {
+      trailing = Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: hc ? Colors.black : _category.color, shape: BoxShape.circle),
+        child: Text('${index + 1}', style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+      );
+    }
+
+    Widget tile = AnimatedScale(
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutBack,
+      scale: reading || isPicked ? 1.03 : 1.0,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: dimmed ? 0.4 : 1.0,
+        child: Material(
+          color: bg,
+          borderRadius: BorderRadius.circular(26),
+          elevation: hc ? 0 : (reading ? 16 : 6),
+          shadowColor: reading ? Playful.sun : Colors.black.withValues(alpha: 0.5),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(26),
+            onTap: () => _answerQuiz(choice),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              padding: const EdgeInsets.fromLTRB(12, 10, 16, 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(26),
+                border: borderW > 0 ? Border.all(color: border, width: borderW) : null,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 76,
+                    height: 76,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: circle, shape: BoxShape.circle),
+                    child: Text(choice.emoji, style: const TextStyle(fontSize: 46)),
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Text(
+                      choice.nameKey.tr(),
+                      style: GoogleFonts.lexend(fontSize: 28, fontWeight: FontWeight.w800, color: fg),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  trailing,
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Погрешен одговор - редот „одмавнува“.
+    if (pickedWrong) {
+      tile = TweenAnimationBuilder<double>(
+        key: ValueKey('shake-${choice.id}-$_quizQuestionIndex'),
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 520),
+        builder: (context, v, child) => Transform.translate(
+          offset: Offset(sin(v * pi * 6) * 12 * (1 - v), 0),
+          child: child,
+        ),
+        child: tile,
+      );
+    }
+
+    return Semantics(
+      button: unlocked && !_quizLocked,
+      label: '${index + 1}. ${choice.nameKey.tr()}',
+      child: AbsorbPointer(
+        absorbing: _quizLocked || !unlocked,
+        child: tile,
+      ),
+    );
+  }
+
+  Widget _roundBadge(IconData icon, Color fg, Color bg) => Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(color: bg, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+        child: Icon(icon, color: fg, size: 28),
+      );
+
   Widget _buildQuizResult(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _onQuizBg(hc, AccessibilityUtils.getContrastColor(context));
     final isPerfect = _quizScore >= _quizQuestions.length;
     final retriesUsed = _quizRetriesUsed[_category.id] ?? 0;
     final retriesLeft = isPerfect ? 0 : (_maxQuizRetries - retriesUsed);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    final sun = hc ? const Color(0xFFFFFF00) : Playful.sun;
+    // Широка колку екранот (лизгачот скроз десно), содржината во средина.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 560) / 2).clamp(24.0, double.infinity);
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 40, side, 32),
           children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: Color(0xFF2563EB)),
-            const SizedBox(height: 16),
-            Text(
-              'picture_book.quiz_result'.tr(args: [_quizScore.toString(), _quizQuestions.length.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
+            PopIn(
+              index: 0,
+              child: Center(
+                child: RippleRings(
+                  color: _category.color,
+                  spread: 24,
+                  child: Container(
+                    width: 130,
+                    height: 130,
+                    decoration: BoxDecoration(
+                      color: hc ? Colors.black : Playful.night,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: sun, width: 5),
+                    ),
+                    child: Icon(isPerfect ? Icons.emoji_events_rounded : Icons.star_rounded, size: 76, color: sun),
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 26),
+            PopIn(
+              index: 1,
+              child: Text(
+                'picture_book.quiz_result'.tr(args: [_quizScore.toString(), _quizQuestions.length.toString()]),
+                textAlign: TextAlign.center,
+                style: GameTypography.heading(context, contrast, 28),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // По една ѕвезда за секое прашање: полна = точно.
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 4,
+              runSpacing: 4,
+              children: [
+                for (var i = 0; i < _quizResults.length; i++)
+                  PopIn(
+                    index: 2 + i,
+                    stepMs: 90,
+                    child: Icon(
+                      _quizResults[i] ? Icons.star_rounded : Icons.star_outline_rounded,
+                      size: 40,
+                      color: _quizResults[i] ? (hc ? sun : const Color(0xFFF59E0B)) : contrast.withValues(alpha: 0.35),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 26),
             if (retriesLeft > 0) ...[
               Text(
                 'picture_book.retries_left'.tr(args: [retriesLeft.toString()]),
                 textAlign: TextAlign.center,
-                style: GameTypography.body(context, contrast, 14),
+                style: GameTypography.body(context, contrast, 17),
               ),
               const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _retryQuiz,
-                icon: const Icon(Icons.refresh_rounded),
-                label: Text(_t('retry_quiz')),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF16A34A),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
+              _resultButton(icon: Icons.refresh_rounded, label: _t('retry_quiz'), color: _quizGreen, onTap: _retryQuiz),
               const SizedBox(height: 12),
             ],
-            ElevatedButton.icon(
-              onPressed: _backToCategories,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text(_t('back_to_categories')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2563EB),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
+            _resultButton(icon: Icons.grid_view_rounded, label: _t('back_to_categories'), color: const Color(0xFF2563EB), onTap: _backToCategories),
           ],
+        );
+      },
+    );
+  }
+
+  Widget _resultButton({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
+    return PressableScale(
+      child: Material(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        elevation: 4,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: Colors.white, size: 28),
+                const SizedBox(width: 10),
+                Flexible(child: Text(label, style: Playful.title(20))),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1493,14 +2235,14 @@ class _NavZoneState extends State<_NavZone> {
           children: [
             // Засенчување при притискање - секогаш видливо, без разлика на
             // бојата на позадината зад него.
-            if (_pressed) Container(color: Colors.black.withOpacity(0.2)),
+            if (_pressed) Container(color: Colors.white.withValues(alpha: 0.15)),
             Opacity(
               opacity: widget.enabled ? 1.0 : 0.25,
               child: Center(
                 child: Icon(
                   widget.icon,
-                  size: 72,
-                  color: widget.highContrast ? Colors.white : Colors.black.withOpacity(0.55),
+                  size: 64,
+                  color: Colors.white.withValues(alpha: widget.highContrast ? 1.0 : 0.9),
                 ),
               ),
             ),

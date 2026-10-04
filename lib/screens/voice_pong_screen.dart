@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 /// Гласовен Понг за деца со оштетен вид и/или слух - верзија со подвижна
 /// палка.
@@ -262,254 +262,320 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
     }
   }
 
+  static const Color _accent = Color(0xFFD97706);
+
   @override
   Widget build(BuildContext context) {
-    final contrastColor = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
 
     return GameScreenChrome(
-      accent: const Color(0xFFD97706),
+      accent: _accent,
       title: 'features.voice_pong'.tr(),
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🏓', '🎾', '⚡', '🔊', '⭐', '🎧'],
+        tint: _accent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            _buildExplanationButton(contrastColor),
-            if (_explanationOpen) _buildExplanationPanel(contrastColor),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                _gameOver
-                    ? 'pong.game_over_title'.tr()
-                    : 'pong.score'.tr(args: [_hits.toString()]),
-                style: GameTypography.heading(context, contrastColor, 20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = ((constraints.maxWidth - 900) / 2).clamp(16.0, double.infinity);
+            final header = <Widget>[
+              PlayfulExplainButton(
+                open: _explanationOpen,
+                label: _explanationOpen
+                    ? 'pong.explanation_toggle_close'.tr()
+                    : 'pong.explanation_toggle_open'.tr(),
+                onTap: _toggleExplanation,
               ),
-            ),
-            Expanded(
-              child: _gameOver
-                  ? _buildEndScreen(contrastColor)
-                  : _buildPlayArea(contrastColor, hc),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExplanationButton(Color contrast) {
-    final label = _explanationOpen
-        ? 'pong.explanation_toggle_close'.tr()
-        : 'pong.explanation_toggle_open'.tr();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _toggleExplanation,
-            icon: Icon(
-              _explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
-              size: 26,
-            ),
-            label: Text(
-              label,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _explanationOpen
-                  ? AccessibilityUtils.getDisabledColor(context)
-                  : const Color(0xFFD97706),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExplanationPanel(Color contrast) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFD97706).withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD97706).withOpacity(0.35), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.sports_tennis_rounded, color: Color(0xFFD97706)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'pong.explanation_title'.tr(),
-                  style: GameTypography.heading(context, contrast, 17),
+              if (_explanationOpen)
+                PlayfulExplainPanel(
+                  icon: Icons.sports_tennis_rounded,
+                  title: 'pong.explanation_title'.tr(),
+                  text: 'pong.explanation_text'.tr(),
+                  accent: _accent,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'pong.explanation_text'.tr(),
-            style: GameTypography.body(context, contrast, 15),
-          ),
-        ],
+              const SizedBox(height: 12),
+            ];
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Објаснувањето може да е долго - се лизга и зазема најмногу
+                // 40% од висината, за теренот секогаш да има место.
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.4),
+                  child: SingleChildScrollView(
+                    primary: false,
+                    padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        ...header,
+                        if (_gameOver)
+                          Text(
+                            'pong.game_over_title'.tr(),
+                            textAlign: TextAlign.center,
+                            style: Playful.display(26, color: fg),
+                          )
+                        else
+                          Center(child: _scorePill(hc)),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _gameOver
+                      ? PlayfulResult(
+                          text: 'pong.final_summary_survival'.tr(args: [_hits.toString()]),
+                          buttonLabel: 'pong.play_again'.tr(),
+                          onAgain: _startGame,
+                        )
+                      : Padding(
+                          padding: EdgeInsets.fromLTRB(side, 12, side, 16),
+                          child: _buildPlayArea(hc),
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildPlayArea(Color contrastColor, bool hc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Column(
-        children: [
-          Expanded(
-            child: Semantics(
-              label: 'pong.explanation_text'.tr(),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final w = constraints.maxWidth;
-                  final h = constraints.maxHeight;
-                  final ballSize = 32.0;
-                  final paddleHeight = _paddleHalfHeight * 2 * h;
+  /// Бројот на удари во златна ознака што „отскокнува“ при секој удар.
+  Widget _scorePill(bool hc) {
+    final text = 'pong.score'.tr(args: [_hits.toString()]);
+    return Semantics(
+      label: text,
+      liveRegion: true,
+      child: ExcludeSemantics(
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 150),
+          scale: _paddleFlash ? 1.15 : 1.0,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
+            decoration: BoxDecoration(
+              color: hc ? Colors.black : Playful.sun,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: Colors.white, width: hc ? 2 : 3),
+              boxShadow: hc ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 18)],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.sports_tennis_rounded, size: 26, color: hc ? Colors.white : Playful.ink),
+                const SizedBox(width: 10),
+                Text(text, style: Playful.display(22, color: hc ? Colors.white : Playful.ink)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (d) => _onPaddleDrag(d.localPosition.dy, h),
-                    onPanStart: (d) => _onPaddleDrag(d.localPosition.dy, h),
-                    onPanUpdate: (d) => _onPaddleDrag(d.localPosition.dy, h),
-                    child: Container(
-                      width: double.infinity,
-                      height: double.infinity,
-                      decoration: BoxDecoration(
-                        color: hc ? const Color(0xFF1A1A1A) : Colors.black87,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: contrastColor, width: 4),
-                        boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
+  Widget _buildPlayArea(bool hc) {
+    return Semantics(
+      label: 'pong.explanation_text'.tr(),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth;
+          final h = constraints.maxHeight;
+          const ballSize = 32.0;
+          final paddleHeight = _paddleHalfHeight * 2 * h;
+
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (d) => _onPaddleDrag(d.localPosition.dy, h),
+            onPanStart: (d) => _onPaddleDrag(d.localPosition.dy, h),
+            onPanUpdate: (d) => _onPaddleDrag(d.localPosition.dy, h),
+            child: Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: hc ? const Color(0xFF1A1A1A) : null,
+                gradient: hc
+                    ? null
+                    : const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Playful.nightDeep, Playful.night, Color(0xFF2A1A5E)],
                       ),
-                      child: Stack(
-                        children: [
-                          // Палка - подвижна, лево (без анимација на позиција,
-                          // за да ја следи прецизно раката без задршка)
-                          Positioned(
-                            left: 12,
-                            top: (_paddleY * h) - paddleHeight / 2,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 120),
-                              width: 16,
-                              height: paddleHeight,
-                              decoration: BoxDecoration(
-                                color: _paddleFlash
-                                    ? const Color(0xFFFFEB3B)
-                                    : AccessibilityUtils.getAccentColor(context),
-                                borderRadius: BorderRadius.circular(8),
-                                boxShadow: _paddleFlash
-                                    ? [
-                                        BoxShadow(
-                                          color: const Color(0xFFFFEB3B).withOpacity(0.7),
-                                          blurRadius: 20,
-                                          spreadRadius: 4,
-                                        ),
-                                      ]
-                                    : null,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white, width: hc ? 4 : 3),
+                boxShadow: hc ? null : [BoxShadow(color: _accent.withValues(alpha: 0.45), blurRadius: 26)],
+              ),
+              child: Stack(
+                children: [
+                  // Терен: испрекината средна линија, светнат десен ѕид.
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: CustomPaint(painter: _CourtPainter(highContrast: hc)),
+                    ),
+                  ),
+                  // Палка - подвижна, лево (без анимација на позиција,
+                  // за да ја следи прецизно раката без задршка).
+                  Positioned(
+                    left: 12,
+                    top: (_paddleY * h) - paddleHeight / 2,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      width: 18,
+                      height: paddleHeight,
+                      decoration: BoxDecoration(
+                        color: hc ? (_paddleFlash ? const Color(0xFFFFFF00) : Colors.white) : null,
+                        gradient: hc
+                            ? null
+                            : LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: _paddleFlash
+                                    ? [Colors.white, const Color(0xFFFFF4C2)]
+                                    : [const Color(0xFFFFE08A), Playful.sun, _accent],
                               ),
-                            ),
-                          ),
-                          // Топче - светла боја (не зависи од темата) + сјај,
-                          // за да остане видливо на темната позадина.
-                          // Користи ја ИСТАТА координатна основа како палката
-                          // (_paddleY * h), за да се совпаѓаат визуелно.
-                          if (_playing)
-                            Positioned(
-                              left: (_ballX * w) - ballSize / 2,
-                              top: (_ballY * h) - ballSize / 2,
-                              child: Container(
-                                width: ballSize,
-                                height: ballSize,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFEE58),
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFFFFEE58).withOpacity(0.8),
-                                      blurRadius: 14,
-                                      spreadRadius: 3,
-                                    ),
-                                  ],
+                        borderRadius: BorderRadius.circular(9),
+                        border: hc ? null : Border.all(color: Colors.white, width: 2),
+                        boxShadow: hc
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: Playful.sun.withValues(alpha: _paddleFlash ? 0.9 : 0.5),
+                                  blurRadius: _paddleFlash ? 26 : 14,
+                                  spreadRadius: _paddleFlash ? 5 : 1,
                                 ),
-                              ),
-                            ),
-                          if (!_playing)
-                            Center(
-                              child: Semantics(
-                                label: 'pong.start_button'.tr(),
-                                button: true,
-                                child: ElevatedButton.icon(
-                                  onPressed: _startGame,
-                                  icon: const Icon(Icons.sports_tennis_rounded, size: 38),
-                                  label: Text(
-                                    'pong.start_button'.tr(),
-                                    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFFD97706),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                              ],
                       ),
                     ),
-                  );
-                },
+                  ),
+                  // Топче - светло, со сјај, за да е видливо на темната
+                  // позадина. Иста координатна основа како палката.
+                  if (_playing)
+                    Positioned(
+                      left: (_ballX * w) - ballSize / 2,
+                      top: (_ballY * h) - ballSize / 2,
+                      child: Container(
+                        width: ballSize,
+                        height: ballSize,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hc ? const Color(0xFFFFFF00) : null,
+                          gradient: hc
+                              ? null
+                              : const RadialGradient(
+                                  colors: [Colors.white, Color(0xFFFFE08A), Playful.sun],
+                                  stops: [0.0, 0.55, 1.0],
+                                ),
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: hc
+                              ? null
+                              : [
+                                  BoxShadow(
+                                    color: Playful.sun.withValues(alpha: 0.85),
+                                    blurRadius: 18,
+                                    spreadRadius: 4,
+                                  ),
+                                ],
+                        ),
+                      ),
+                    ),
+                  if (!_playing) Center(child: _startButton(hc)),
+                ],
               ),
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildEndScreen(Color contrast) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: Color(0xFFD97706)),
-            const SizedBox(height: 16),
-            Text(
-              'pong.final_summary_survival'.tr(args: [_hits.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _startGame,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('pong.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFD97706),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  /// „Почни“ - златно копче со бранови среде теренот.
+  Widget _startButton(bool hc) {
+    final label = 'pong.start_button'.tr();
+    return Semantics(
+      label: label,
+      button: true,
+      child: ExcludeSemantics(
+        child: RippleRings(
+          color: hc ? Colors.white : Playful.sun,
+          active: true,
+          spread: 18,
+          child: PressableScale(
+            child: Material(
+              color: hc ? Colors.black : Playful.sun,
+              borderRadius: BorderRadius.circular(40),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(40),
+                onTap: _startGame,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 20),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: Colors.white, width: hc ? 3 : 4),
+                    boxShadow: hc ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.55), blurRadius: 24)],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.sports_tennis_rounded, size: 36, color: hc ? Colors.white : Playful.ink),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(label, style: Playful.display(26, color: hc ? Colors.white : Playful.ink)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+/// Терен: испрекината линија по средината и светнат десен ѕид (од каде
+/// што топчето се одбива).
+class _CourtPainter extends CustomPainter {
+  _CourtPainter({required this.highContrast});
+
+  final bool highContrast;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final dash = Paint()
+      ..color = highContrast ? Colors.white54 : Colors.white.withValues(alpha: 0.28)
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    const dashLen = 14.0;
+    const gap = 14.0;
+    final x = size.width / 2;
+    for (var y = 12.0; y < size.height - 12; y += dashLen + gap) {
+      canvas.drawLine(Offset(x, y), Offset(x, (y + dashLen).clamp(0, size.height - 12).toDouble()), dash);
+    }
+    if (!highContrast) {
+      // Мек круг во средината.
+      canvas.drawCircle(
+        Offset(x, size.height / 2),
+        size.shortestSide * 0.16,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      // Светнат десен ѕид.
+      final wall = Rect.fromLTWH(size.width - 10, 0, 10, size.height);
+      canvas.drawRect(
+        wall,
+        Paint()
+          ..shader = LinearGradient(
+            colors: [Playful.sun.withValues(alpha: 0.0), Playful.sun.withValues(alpha: 0.45)],
+          ).createShader(wall),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CourtPainter old) => old.highContrast != highContrast;
 }

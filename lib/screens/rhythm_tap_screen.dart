@@ -5,13 +5,14 @@ import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
+import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
-/// Ритмичка игра: [Пушти звук] -> откриваат се [Удари], [Потврди: N] и
-/// [Пушти звук повторно]. Секое притискање на "Удари" го зголемува бројот
+/// Ритмичка игра: [Почни] -> [Пушти звук] -> откриваат се тапанот
+/// [Удари], полето со бројот + [Потврди] и [Пушти звук повторно]. Секое притискање на "Удари" го зголемува бројот
 /// прикажан на копчето "Потврди". Кога детето мисли дека тој број е точен,
 /// притиска "Потврди" - тоа е конечниот одговор за таа рунда. Играта трае
 /// вкупно 10 рунди, а на крајот се прикажува колку рунди се погодени.
@@ -337,277 +338,263 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
     }
   }
 
-  /// Затемнета/осветлена нијанса на дадена боја - користена за "3D" рабови
-  /// и сенки на копчињата (без разлика на бојата на копчето).
-  Color _shade(Color c, double factor) {
-    final hsl = HSLColor.fromColor(c);
-    final l = (hsl.lightness * factor).clamp(0.0, 1.0);
-    return hsl.withLightness(l).toColor();
+  // ===================================================================
+  // Гласовни команди: бројот на удари („седум“, „7“), „потврди“,
+  // „пушти“ / „пушти повторно“, „почни“, „избриши“. Може и заедно:
+  // „седум потврди“ го внесува бројот и веднаш потврдува.
+  // ===================================================================
+
+  /// Броевите со зборови (мк / en / sq). Албанските се без „ë/ç“, бидејќи
+  /// препознавањето понекогаш ги испушта - транскриптот се нормализира исто.
+  static const Map<String, int> _numberWords = {
+    // македонски
+    'нула': 0, 'еден': 1, 'една': 1, 'едно': 1, 'два': 2, 'две': 2, 'три': 3,
+    'четири': 4, 'пет': 5, 'шест': 6, 'седум': 7, 'осум': 8, 'девет': 9,
+    'десет': 10, 'единаесет': 11, 'дванаесет': 12, 'тринаесет': 13,
+    'четиринаесет': 14, 'петнаесет': 15, 'шеснаесет': 16, 'седумнаесет': 17,
+    'осумнаесет': 18, 'деветнаесет': 19, 'дваесет': 20,
+    // english
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
+    'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12,
+    'thirteen': 13, 'fourteen': 14, 'fifteen': 15, 'sixteen': 16,
+    'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+    // shqip
+    'nje': 1, 'dy': 2, 'tre': 3, 'tri': 3, 'kater': 4, 'pese': 5,
+    'gjashte': 6, 'shtate': 7, 'tete': 8, 'nente': 9, 'dhjete': 10,
+    'njembedhjete': 11, 'dymbedhjete': 12, 'trembedhjete': 13,
+    'katermbedhjete': 14, 'pesembedhjete': 15, 'gjashtembedhjete': 16,
+    'shtatembedhjete': 17, 'tetembedhjete': 18, 'nentembedhjete': 19,
+    'njezet': 20,
+  };
+
+  /// Англиски зборови што звучат како број - се прифаќаат само ако се
+  /// единствениот збор во командата („to“ = 2, „for“ = 4, ...).
+  static const Map<String, int> _soundAlikeNumbers = {
+    'to': 2, 'too': 2, 'for': 4, 'fore': 4, 'won': 1, 'ate': 8, 'tree': 3,
+  };
+
+  static const List<String> _confirmWords = [
+    'потврд', 'готово', 'confirm', 'done', 'konfirm', 'gati',
+  ];
+  static const List<String> _againWords = [
+    'повторно', 'пак', 'again', 'repeat', 'perseri', 'serish',
+  ];
+  static const List<String> _playWords = [
+    'пушти', 'слушни', 'слушај', 'play', 'listen', 'luaj', 'degjo',
+  ];
+  static const List<String> _startWords = [
+    'почни', 'старт', 'start', 'begin', 'fillo',
+  ];
+  static const List<String> _clearWords = [
+    'избриши', 'бриши', 'clear', 'delete', 'erase', 'fshi',
+  ];
+
+  /// Дејството што `_matchVoice` го пронашол - го извршува `_runVoice`.
+  VoidCallback? _pendingVoice;
+
+  static List<String> _voiceTokens(String t) {
+    final clean = t
+        .toLowerCase()
+        .replaceAll('ë', 'e')
+        .replaceAll('ç', 'c')
+        .replaceAll(RegExp(r'[.,!?;:„“"()]'), ' ')
+        .trim();
+    return clean.isEmpty ? const [] : clean.split(RegExp(r'\s+'));
   }
 
-  /// Заедничка "3D" (испакната) декорација за сите копчиња во играта -
-  /// градиент светло->база одозгора надолу, потемнет долен раб + мека
-  /// сенка за вистински волумен. Во контраст-режим останува рамно (само
-  /// поисполнета боја + бел раб), за да не се губи читливоста/контрастот.
-  BoxDecoration _threeD({
-    required Color base,
-    required bool hc,
-    required Color contrast,
-    double radius = 16,
-  }) {
-    if (hc) {
-      return BoxDecoration(
-        color: base,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: contrast, width: 3),
-      );
+  static bool _hasWord(List<String> tokens, List<String> stems) =>
+      tokens.any((tok) => stems.any(tok.startsWith));
+
+  /// Првиот број во командата (цифри или збор), или null.
+  static int? _spokenNumber(List<String> tokens) {
+    for (final tok in tokens) {
+      final digits = RegExp(r'^\d{1,3}$').firstMatch(tok);
+      if (digits != null) return int.parse(digits.group(0)!);
+      final n = _numberWords[tok];
+      if (n != null) return n;
     }
-    final light = _shade(base, 1.35);
-    final dark = _shade(base, 0.6);
-    return BoxDecoration(
-      borderRadius: BorderRadius.circular(radius),
-      gradient: LinearGradient(
-        colors: [light, base],
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-      ),
-      border: Border.all(color: dark, width: 1.5),
-      boxShadow: [
-        // Потемнет "раб" веднаш под копчето - создава испакнат/3D изглед.
-        BoxShadow(color: dark, offset: const Offset(0, 5), blurRadius: 0),
-        // Мека амбиентална сенка околу него.
-        BoxShadow(color: Colors.black.withOpacity(0.32), offset: const Offset(0, 9), blurRadius: 14),
-      ],
-    );
+    if (tokens.length == 1) return _soundAlikeNumbers[tokens.first];
+    return null;
   }
 
-  /// Генеричко правоаголно "3D" копче (со икона + текст) - користено за
-  /// Објаснување, Потврди и Играј повторно.
-  Widget _build3dButton({
-    required String label,
-    required IconData icon,
-    required VoidCallback? onPressed,
-    required Color base,
-    required bool hc,
-    required Color contrast,
-    double iconSize = 22,
-    double fontSize = 16,
-    EdgeInsets padding = const EdgeInsets.symmetric(vertical: 14),
-    double radius = 16,
-  }) {
-    final disabled = onPressed == null;
-    return Semantics(
-      label: label,
-      button: !disabled,
-      child: Opacity(
-        opacity: disabled ? 0.45 : 1.0,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onPressed,
-            borderRadius: BorderRadius.circular(radius),
-            child: Container(
-              width: double.infinity,
-              padding: padding,
-              decoration: _threeD(base: base, hc: hc, contrast: contrast, radius: radius),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, size: iconSize, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  bool _matchVoice(String transcript) {
+    _pendingVoice = null;
+    if (_gameOver) return false;
+    final tokens = _voiceTokens(transcript);
+    if (tokens.isEmpty) return false;
+
+    if (_gameLocked) {
+      if (_hasWord(tokens, _startWords)) _pendingVoice = _startGame;
+      return _pendingVoice != null;
+    }
+
+    final wantsAgain = _hasWord(tokens, _againWords);
+    final wantsPlay = _hasWord(tokens, _playWords);
+    if (wantsAgain || wantsPlay) {
+      if (_playCount == 0) {
+        _pendingVoice = _playInstrumentSound;
+      } else if (_playCount < _maxPlays) {
+        _pendingVoice = _playAgainSound;
+      }
+      return _pendingVoice != null;
+    }
+
+    // Бројот и потврдата важат само откако звукот е пуштен.
+    if (!_revealed || _confirmLocked) return false;
+
+    final number = _spokenNumber(tokens);
+    final wantsConfirm = _hasWord(tokens, _confirmWords);
+    if (number != null) {
+      _pendingVoice = () {
+        setState(() => _tapController.text = number.toString());
+        if (wantsConfirm) _onConfirm();
+      };
+      return true;
+    }
+    if (_hasWord(tokens, _clearWords)) {
+      _pendingVoice = () => setState(_tapController.clear);
+      return true;
+    }
+    if (wantsConfirm) {
+      _pendingVoice = _onConfirm;
+      return true;
+    }
+    return false;
   }
+
+  void _runVoice() {
+    final action = _pendingVoice;
+    _pendingVoice = null;
+    action?.call();
+  }
+
+  List<VoiceCategoryOption> get _voiceOptions => [
+        VoiceCategoryOption(keywords: const [], matches: _matchVoice, onSelected: _runVoice),
+      ];
+
+  /// Микрофонот не смее да го слуша објаснувањето.
+  void _onVoiceListenStart() {
+    _voiceAssistant.stop();
+    _voicePlayer.stop();
+  }
+
+  static const Color _accent = Color(0xFFE11D48);
 
   @override
   Widget build(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
 
     return GameScreenChrome(
-      accent: const Color(0xFFE11D48),
+      accent: _accent,
       title: 'features.rhythm_tap'.tr(),
+      voiceOptions: _voiceOptions,
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🥁', '👏', '🚪', '❤️', '👠', '🎵'],
+        tint: _accent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            _buildExplanationButton(contrast),
-            if (_explanationOpen) _buildExplanationPanel(contrast),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                _gameOver
-                    ? 'rhythm.game_over_title'.tr()
-                    : 'rhythm.rounds_progress'.tr(args: [
-                        (_round + 1).toString(),
-                        _totalRounds.toString(),
-                      ]),
-                style: GameTypography.heading(context, contrast, 20),
-              ),
-            ),
-            Expanded(
-              child: _gameOver
-                  ? _buildEndScreen(contrast)
-                  : _buildStage(contrast, hc),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExplanationButton(Color contrast) {
-    final hc = AccessibilityUtils.isHighContrast(context);
-    final label = _explanationOpen
-        ? 'rhythm.explanation_toggle_close'.tr()
-        : 'rhythm.explanation_toggle_open'.tr();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: _build3dButton(
-        label: label,
-        icon: _explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
-        onPressed: _toggleExplanation,
-        base: _explanationOpen ? AccessibilityUtils.getDisabledColor(context) : const Color(0xFFE11D48),
-        hc: hc,
-        contrast: contrast,
-        iconSize: 26,
-        fontSize: 17,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-      ),
-    );
-  }
-
-  Widget _buildExplanationPanel(Color contrast) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE11D48).withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE11D48).withOpacity(0.35), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.graphic_eq_rounded, color: Color(0xFFE11D48)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'rhythm.explanation_title'.tr(),
-                  style: GameTypography.heading(context, contrast, 17),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'rhythm.explanation_text'.tr(),
-            style: GameTypography.body(context, contrast, 15),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Точна шема 3x3 (E=празно, F=полно):
-  ///   E F E   <- ред 1: старт во средината
-  ///   E F E   <- ред 2: пушти звук + пушти звук повторно, заедно во средината
-  ///   F E F   <- ред 3: помошно копче (лево) | празно | внес+потврди (десно)
-  Widget _buildStage(Color contrast, bool hc) {
-    return Stack(
-      children: [
-        Positioned.fill(child: _buildRhythmScene(hc)),
-        _buildStageContent(contrast, hc),
-      ],
-    );
-  }
-
-  /// Видлива "сцена" во позадина - темна градиентска подлога (како
-  /// концертна сцена), со централен "рефлектор" (spotlight) зад копчињата,
-  /// разбушени светла и еквилајзер-ленти. Многу повидлива од претходната
-  /// верзија, но сепак секое копче стои на сопствена контрастна плоча
-  /// (_threeD/панелите), па читливоста и контрастот остануваат зачувани.
-  Widget _buildRhythmScene(bool hc) {
-    if (hc) return const SizedBox.shrink(); // без декорации во контраст-режим
-    return IgnorePointer(
-      child: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFF1A0510), Color(0xFF3B0A1E), Color(0xFF1A0510)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final w = constraints.maxWidth;
-            final h = constraints.maxHeight;
-            const positions = [0.06, 0.16, 0.26, 0.36, 0.5, 0.64, 0.74, 0.84, 0.94];
-            const heights = [0.4, 0.7, 0.3, 0.85, 0.55, 0.9, 0.35, 0.75, 0.45];
-            return Stack(
-              children: [
-                // Централен "рефлектор" - светла топка зад главните копчиња.
-                Align(
-                  alignment: const Alignment(0, -0.35),
-                  child: Container(
-                    width: w * 0.95,
-                    height: h * 0.6,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          const Color(0xFFE11D48).withOpacity(0.38),
-                          const Color(0xFFE11D48).withOpacity(0.0),
+            final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+            final inner = constraints.maxWidth - side * 2;
+            final header = <Widget>[
+              PlayfulExplainButton(
+                open: _explanationOpen,
+                label: _explanationOpen
+                    ? 'rhythm.explanation_toggle_close'.tr()
+                    : 'rhythm.explanation_toggle_open'.tr(),
+                onTap: _toggleExplanation,
+              ),
+              if (_explanationOpen)
+                PlayfulExplainPanel(
+                  icon: Icons.graphic_eq_rounded,
+                  title: 'rhythm.explanation_title'.tr(),
+                  text: 'rhythm.explanation_text'.tr(),
+                  accent: _accent,
+                ),
+              const SizedBox(height: 16),
+            ];
+
+            if (_gameOver) {
+              final misses = _totalRounds - _hits;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ...header,
+                          Text(
+                            'rhythm.game_over_title'.tr(),
+                            textAlign: TextAlign.center,
+                            style: Playful.display(26, color: fg),
+                          ),
                         ],
                       ),
                     ),
                   ),
-                ),
-                // Разбушени "сценски" светла по аглите.
-                Positioned(
-                  top: -40,
-                  left: -40,
-                  child: _sceneGlow(140, const Color(0xFFFACC15)),
-                ),
-                Positioned(
-                  top: -30,
-                  right: -30,
-                  child: _sceneGlow(120, const Color(0xFF60A5FA)),
-                ),
-                // Еквилајзер-ленти долж дното - поживи и повидливи.
-                for (var i = 0; i < positions.length; i++)
-                  Positioned(
-                    left: positions[i] * w - 12,
-                    bottom: 0,
-                    width: 24,
-                    height: heights[i] * h * 0.42,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFB7185).withOpacity(0.55),
-                            const Color(0xFFFB7185).withOpacity(0.15),
-                          ],
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                        ),
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(10)),
-                      ),
+                  Expanded(
+                    child: PlayfulResult(
+                      text: 'rhythm.final_summary'.tr(args: [
+                        _hits.toString(),
+                        misses.toString(),
+                        _totalRounds.toString(),
+                      ]),
+                      buttonLabel: 'rhythm.play_again'.tr(),
+                      onAgain: _restart,
+                      stars: _hits,
+                      total: _totalRounds,
                     ),
                   ),
+                ],
+              );
+            }
+
+            final answerLocked = _gameLocked || !_revealed;
+            final pad = _gated(answerLocked, _buildDrumPad(hc));
+            final entry = _gated(answerLocked, _buildEntryCard(hc));
+
+            return ListView(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 28),
+              children: [
+                ...header,
+                RoundProgress(
+                  label: 'rhythm.rounds_progress'.tr(args: [
+                    (_round + 1).toString(),
+                    _totalRounds.toString(),
+                  ]),
+                  current: _round,
+                  total: _totalRounds,
+                  extra: 'rhythm.score'.tr(args: [_hits.toString()]),
+                ),
+                const SizedBox(height: 22),
+                // Чекор 1: Почни (само еднаш - потоа исчезнува).
+                if (_gameLocked) ...[
+                  Center(child: _buildStartButton(hc)),
+                  const SizedBox(height: 22),
+                ],
+                // Чекор 2: слушај (Пушти звук + Пушти повторно, вкупно 3).
+                _gated(_gameLocked, _buildListenStage(hc, fg)),
+                const SizedBox(height: 24),
+                // Чекор 3: тапан за броење + поле со бројот и Потврди.
+                if (inner >= 560)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: pad),
+                      const SizedBox(width: 16),
+                      Expanded(child: entry),
+                    ],
+                  )
+                else ...[
+                  pad,
+                  const SizedBox(height: 16),
+                  entry,
+                ],
               ],
             );
           },
@@ -616,137 +603,52 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
     );
   }
 
-  /// Мала кружна "светлосна дамка" - декоративен елемент за сцената.
-  Widget _sceneGlow(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [color.withOpacity(0.30), color.withOpacity(0.0)],
-        ),
+  /// Затемнето и недопирливо додека делот не е отклучен.
+  Widget _gated(bool locked, Widget child) {
+    return AbsorbPointer(
+      absorbing: locked,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: locked ? 0.35 : 1.0,
+        child: child,
       ),
     );
   }
 
-  Widget _buildStageContent(Color contrast, bool hc) {
-    // Текст исцртан ДИРЕКТНО врз сцената (не внатре во бела картичка) мора
-    // да биде светол за да остане читлив на темната позадина; во HC-режим
-    // веќе се користи бела/жолта боја преку `contrast`, па таму не менуваме.
-    final sceneTextColor = hc ? contrast : Colors.white;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: Column(
-        children: [
-          Text(
-            'rhythm.score'.tr(args: [_hits.toString()]),
-            style: GameTypography.body(context, sceneTextColor, 16),
-          ),
-          const SizedBox(height: 4),
-          Expanded(
-            child: Column(
-              children: [
-                // Ред 1: E F E - старт копчето.
-                Expanded(
-                  flex: 1,
-                  child: Row(
-                    children: [
-                      const Expanded(child: SizedBox.shrink()),
-                      Expanded(child: Center(child: _buildStartButton(contrast, hc))),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ),
-                ),
-                // Ред 2: E F E - звучните копчиња.
-                Expanded(
-                  flex: 2,
-                  child: Row(
-                    children: [
-                      const Expanded(child: SizedBox.shrink()),
-                      Expanded(
-                        child: AbsorbPointer(
-                          absorbing: _gameLocked,
-                          child: Opacity(
-                            opacity: _gameLocked ? 0.35 : 1.0,
-                            child: _buildPlayButtonsCell(contrast, hc, sceneTextColor),
-                          ),
-                        ),
-                      ),
-                      const Expanded(child: SizedBox.shrink()),
-                    ],
-                  ),
-                ),
-                // Ред 3: F E F - копчето за УДИРАЊЕ (лево) сега е многу
-                // поголемо - зазема многу поголем дел (flex: 5) отколку
-                // претходно, растејќи од каде што стоеше сега сè до дното
-                // на екранот; десно останува внесот на бројот + Потврди.
-                Expanded(
-                  flex: 5,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: AbsorbPointer(
-                          absorbing: _gameLocked || !_revealed,
-                          child: Opacity(
-                            opacity: (_gameLocked || !_revealed) ? 0.35 : 1.0,
-                            child: _buildHelperCell(contrast, hc),
-                          ),
-                        ),
-                      ),
-                      const Expanded(child: SizedBox.shrink()),
-                      Expanded(
-                        child: AbsorbPointer(
-                          absorbing: _gameLocked || !_revealed,
-                          child: Opacity(
-                            opacity: (_gameLocked || !_revealed) ? 0.35 : 1.0,
-                            child: _buildEntryCell(contrast, hc),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// СТАРТ - правоаголно, со икона, сега во "3D" стил - го исполнува целиот
-  /// свој дел од шемата. Ги отклучува останатите копчиња засекогаш штом ќе
-  /// се притисне.
-  Widget _buildStartButton(Color contrast, bool hc) {
-    final base = _gameLocked ? const Color(0xFFE11D48) : const Color(0xFF16A34A);
+  /// „Почни“ - широко златно копче што пулсира додека не се притисне.
+  Widget _buildStartButton(bool hc) {
+    final label = 'rhythm.start_button'.tr();
     return Semantics(
-      label: 'rhythm.start_button'.tr(),
-      button: _gameLocked,
-      child: SizedBox(
-        width: 170,
-        height: double.infinity,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: _gameLocked ? _startGame : null,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              decoration: _threeD(base: base, hc: hc, contrast: contrast, radius: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.play_arrow_rounded, size: 24, color: Colors.white),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      'rhythm.start_button'.tr(),
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
+      label: label,
+      button: true,
+      child: ExcludeSemantics(
+        child: RippleRings(
+          color: hc ? Colors.white : Playful.sun,
+          active: true,
+          spread: 16,
+          child: PressableScale(
+            child: Material(
+              color: hc ? Colors.black : Playful.sun,
+              borderRadius: BorderRadius.circular(40),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(40),
+                onTap: _startGame,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(40),
+                    border: Border.all(color: Colors.white, width: hc ? 3 : 4),
+                    boxShadow: hc ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 22)],
                   ),
-                ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_arrow_rounded, size: 34, color: hc ? Colors.white : Playful.ink),
+                      const SizedBox(width: 10),
+                      Text(label, style: Playful.display(24, color: hc ? Colors.white : Playful.ink)),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -755,194 +657,171 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
     );
   }
 
-  /// Пушти звук (само еднаш) + Пушти звук повторно (до 2 пати повеќе) -
-  /// заедно вкупно 3 пуштања по рунда, со бројач X/3.
-  Widget _buildPlayButtonsCell(Color contrast, bool hc, Color labelColor) {
+  /// Големиот круг „Пушти звук“ (трепка на секој удар), помал круг
+  /// „Пушти повторно“ и три звучници што покажуваат колку пуштања остануваат.
+  Widget _buildListenStage(bool hc, Color fg) {
     final canPlayFirst = _playCount == 0;
     final canPlayAgain = _playCount > 0 && _playCount < _maxPlays;
-    // LayoutBuilder + FittedBox: оваа ќелија добива фиксна (флекс) висина
-    // од родителот, која варира со висината на екранот. Претходно
-    // круговите имаа ФИКСЕН дијаметар (150/130) кој на пониски екрани/
-    // прозорци не стигаше (RenderFlex overflow). Сега содржината се
-    // смета според вистински достапниот простор и, ако сепак остане
-    // тесно, FittedBox ја смалува пропорционално - без overflow, без
-    // разлика на висината.
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final availableHeight = constraints.maxHeight.isFinite ? constraints.maxHeight : 220.0;
-        // ~34px за размаците + бројачот текст, остатокот за кругот+натпис.
-        final circleAreaHeight = (availableHeight - 34).clamp(70.0, 220.0);
-        final bigDiameter = (circleAreaHeight * 0.72).clamp(70.0, 150.0);
-        final smallDiameter = bigDiameter * (130 / 150);
-        return FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Opacity(
-                    opacity: canPlayFirst ? 1.0 : 0.35,
-                    child: AbsorbPointer(
-                      absorbing: !canPlayFirst,
-                      child: _buildCircleButton(
-                        contrast: contrast,
-                        hc: hc,
-                        labelColor: labelColor,
-                        icon: Icons.volume_up_rounded,
-                        label: 'rhythm.play_button'.tr(),
-                        flash: _flashPulse,
-                        onTap: _playInstrumentSound,
-                        diameter: bigDiameter,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  Opacity(
-                    opacity: canPlayAgain ? 1.0 : 0.35,
-                    child: AbsorbPointer(
-                      absorbing: !canPlayAgain,
-                      child: _buildCircleButton(
-                        contrast: contrast,
-                        hc: hc,
-                        labelColor: labelColor,
-                        icon: Icons.replay_rounded,
-                        label: 'rhythm.play_again_button'.tr(),
-                        flash: false,
-                        onTap: _playAgainSound,
-                        diameter: smallDiameter,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                '$_playCount/$_maxPlays',
-                style: GameTypography.body(context, labelColor, 15),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  /// Кратко објаснување + голем "3D" копче за удирање - копчето сега го
-  /// зазема речиси целиот преостанат простор во оваа ќелија (Expanded),
-  /// растејќи од каде што почнуваше сè до дното на екранот, со голема
-  /// икона која асоцира на удирање/тапкање (тропната дланка).
-  Widget _buildHelperCell(Color contrast, bool hc) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: hc ? const Color(0xFFE11D48).withOpacity(0.08) : Colors.white.withOpacity(0.94),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE11D48).withOpacity(hc ? 0.35 : 0.6),
-          width: 1.5,
-        ),
-        boxShadow: hc
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  offset: const Offset(0, 6),
-                  blurRadius: 14,
-                ),
-              ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'rhythm.helper_explanation'.tr(),
-            textAlign: TextAlign.center,
-            style: GameTypography.body(context, contrast, 12),
-          ),
-          const SizedBox(height: 8),
-          // Големото копче за удирање - пополнува сè до дното на екранот.
-          Expanded(
-            child: Semantics(
-              label: 'rhythm.hit_button'.tr(),
-              button: true,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _onHelperTap,
-                  borderRadius: BorderRadius.circular(20),
-                  child: Container(
-                    width: double.infinity,
-                    decoration: _threeD(
-                      base: const Color(0xFFBE123C),
-                      hc: hc,
-                      contrast: contrast,
-                      radius: 20,
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final iconSize = (constraints.maxHeight * 0.42).clamp(40.0, 96.0);
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.back_hand_rounded, size: iconSize, color: Colors.white),
-                            const SizedBox(height: 6),
-                            Text(
-                              'rhythm.hit_button'.tr(),
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.white),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
+    return Column(
+      children: [
+        Wrap(
+          alignment: WrapAlignment.center,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          spacing: 36,
+          runSpacing: 20,
+          children: [
+            _gated(
+              !canPlayFirst && !_isPlaying,
+              AnimatedScale(
+                duration: const Duration(milliseconds: 120),
+                scale: _flashPulse ? 1.12 : 1.0,
+                child: SoundOrb(
+                  icon: Icons.volume_up_rounded,
+                  label: 'rhythm.play_button'.tr(),
+                  onTap: canPlayFirst ? _playInstrumentSound : null,
+                  active: _isPlaying,
+                  size: 130,
                 ),
               ),
             ),
+            _gated(
+              !canPlayAgain,
+              SoundOrb(
+                icon: Icons.replay_rounded,
+                label: 'rhythm.play_again_button'.tr(),
+                onTap: canPlayAgain ? _playAgainSound : null,
+                size: 92,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Semantics(
+          label: '$_playCount/$_maxPlays',
+          child: ExcludeSemantics(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (var i = 0; i < _maxPlays; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: i < _playCount
+                            ? (hc ? Colors.white24 : Colors.white.withValues(alpha: 0.12))
+                            : (hc ? Colors.black : Playful.sun),
+                        border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.7), width: 2),
+                      ),
+                      child: Icon(
+                        i < _playCount ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                        size: 20,
+                        color: i < _playCount ? fg.withValues(alpha: 0.6) : (hc ? Colors.white : Playful.ink),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 8),
+                Text('$_playCount/$_maxPlays', style: Playful.title(18, color: fg)),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  /// Поле за внес на број + копче Потврди - заедно го исполнуваат целиот
-  /// свој дел од шемата. Копчето Потврди НЕ е низ цел екран - само ја
-  /// зафаќа ширината на овој дел.
-  Widget _buildEntryCell(Color contrast, bool hc) {
+  /// Темна картичка со бел раб - подлога за тапанот и за полето за број.
+  BoxDecoration _cardDecoration(bool hc) {
+    return BoxDecoration(
+      color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.5), width: hc ? 2 : 2.5),
+      boxShadow: hc ? null : [BoxShadow(color: _accent.withValues(alpha: 0.3), blurRadius: 18)],
+    );
+  }
+
+  /// Тапанот: голема тркалезна плоча - секој допир е еден удар (+1).
+  Widget _buildDrumPad(bool hc) {
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    final label = 'rhythm.hit_button'.tr();
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: hc ? const Color(0xFFE11D48).withOpacity(0.08) : Colors.white.withOpacity(0.94),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE11D48).withOpacity(hc ? 0.35 : 0.6),
-          width: 1.5,
-        ),
-        boxShadow: hc
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.35),
-                  offset: const Offset(0, 6),
-                  blurRadius: 14,
-                ),
-              ],
-      ),
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(hc),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Text(
+            'rhythm.helper_explanation'.tr(),
+            textAlign: TextAlign.center,
+            style: Playful.body(15.5, color: fg),
+          ),
+          const SizedBox(height: 16),
+          Semantics(
+            label: label,
+            button: true,
+            child: ExcludeSemantics(
+              child: PressableScale(
+                child: GestureDetector(
+                  onTap: _onHelperTap,
+                  child: Container(
+                    width: 190,
+                    height: 190,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hc ? Colors.black : null,
+                      gradient: hc
+                          ? null
+                          : const RadialGradient(
+                              colors: [Color(0xFFFB7185), _accent, Color(0xFF881337)],
+                              stops: [0.0, 0.6, 1.0],
+                            ),
+                      border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 3 : 6),
+                      boxShadow: hc
+                          ? null
+                          : [
+                              BoxShadow(color: _accent.withValues(alpha: 0.55), blurRadius: 26),
+                              const BoxShadow(color: Color(0xFF4C0519), offset: Offset(0, 8)),
+                            ],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.back_hand_rounded, size: 76, color: Colors.white),
+                        const SizedBox(height: 4),
+                        Text(label, style: Playful.display(24, color: Colors.white)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Бројот на удари (може и рачно) + преостанати обиди + „Потврди“.
+  Widget _buildEntryCard(bool hc) {
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    final attemptsLeft = (_maxAttempts - _attemptsThisRound).clamp(0, _maxAttempts);
+    final confirmLabel = 'rhythm.confirm_button'.tr();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: _cardDecoration(hc),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
             'rhythm.entry_explanation'.tr(),
             textAlign: TextAlign.center,
-            style: GameTypography.body(context, contrast, 13),
+            style: Playful.body(15.5, color: fg),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Semantics(
             label: 'rhythm.enter_taps_label'.tr(),
             textField: true,
@@ -951,150 +830,110 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               autofocus: false,
-              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
+              style: Playful.display(44, color: hc ? Colors.white : Playful.ink),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: contrast.withOpacity(0.06),
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: contrast, width: 2),
+                fillColor: hc ? Colors.black : Colors.white,
+                hintText: '0',
+                hintStyle: Playful.display(44, color: (hc ? Colors.white : Playful.ink).withValues(alpha: 0.25)),
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: Color(0xFFE11D48), width: 2.5),
+                  borderRadius: BorderRadius.circular(20),
+                  borderSide: BorderSide(color: hc ? const Color(0xFFFFFF00) : _accent, width: 4),
                 ),
               ),
             ),
           ),
           const SizedBox(height: 12),
-          _build3dButton(
-            label: 'rhythm.confirm_button'.tr(),
-            icon: Icons.check_circle_rounded,
-            onPressed: _confirmLocked ? null : _onConfirm,
-            base: const Color(0xFF16A34A),
-            hc: hc,
-            contrast: contrast,
-            fontSize: 16,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            radius: 14,
+          // Преостанати обиди во рундата (срца).
+          Semantics(
+            label: '$attemptsLeft/$_maxAttempts',
+            child: ExcludeSemantics(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < _maxAttempts; i++)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Icon(
+                        i < attemptsLeft ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                        size: 28,
+                        color: i < attemptsLeft
+                            ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFFB7185))
+                            : fg.withValues(alpha: 0.4),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _buildVoiceRow(hc, fg),
+          const SizedBox(height: 14),
+          Semantics(
+            label: confirmLabel,
+            button: !_confirmLocked,
+            child: ExcludeSemantics(
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: _confirmLocked ? 0.5 : 1.0,
+                child: PressableScale(
+                  enabled: !_confirmLocked,
+                  child: Material(
+                    color: hc ? Colors.black : const Color(0xFF16A34A),
+                    borderRadius: BorderRadius.circular(20),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: _confirmLocked ? null : _onConfirm,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white, width: hc ? 2 : 3),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.check_circle_rounded, size: 28, color: Colors.white),
+                            const SizedBox(width: 10),
+                            Flexible(child: Text(confirmLabel, style: Playful.title(20, color: Colors.white))),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Заедничкиот голем круг-копче користен и за "Пушти звук" и за "Удари" -
-  /// сега со изразена "3D" (испакната) сенка + блесок (визуелен + тактилен
-  /// преку вибрација) секогаш кога се тапне.
-  Widget _buildCircleButton({
-    required Color contrast,
-    required bool hc,
-    required IconData icon,
-    required String label,
-    required bool flash,
-    required VoidCallback onTap,
-    Color? labelColor,
-    double diameter = 150,
-  }) {
-    final darkEdge = _shade(const Color(0xFFE11D48), 0.55);
-    return Semantics(
-      label: label,
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedScale(
-              scale: flash ? 1.12 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: diameter,
-                height: diameter,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: hc
-                      ? null
-                      : LinearGradient(
-                          colors: flash
-                              ? [const Color(0xFFFB7185), const Color(0xFFFCA5A5)]
-                              : [const Color(0xFFFB7185), const Color(0xFFBE123C)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: hc ? const Color(0xFFE11D48) : null,
-                  border: Border.all(color: contrast, width: hc ? 3 : 0),
-                  boxShadow: hc
-                      ? const <BoxShadow>[]
-                      : [
-                          // Потемнет полукружен "раб" долу-десно - "3D" волумен.
-                          BoxShadow(
-                            color: darkEdge.withOpacity(0.9),
-                            offset: const Offset(0, 6),
-                            blurRadius: 0,
-                          ),
-                          BoxShadow(
-                            color: const Color(0xFFE11D48).withOpacity(flash ? 0.6 : 0.35),
-                            offset: const Offset(0, 4),
-                            blurRadius: flash ? 34 : 18,
-                            spreadRadius: flash ? 5 : 1,
-                          ),
-                        ],
-                ),
-                child: Icon(icon, size: diameter * 0.35, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              textAlign: TextAlign.center,
-              style: GameTypography.heading(context, labelColor ?? contrast, diameter >= 130 ? 17 : 13),
-            ),
-          ],
+  /// Златно копче за глас + потсетник што може да се каже.
+  Widget _buildVoiceRow(bool hc, Color fg) {
+    return Column(
+      children: [
+        CategoryVoiceCommandButton(
+          options: _voiceOptions,
+          onListenStart: _onVoiceListenStart,
+          respondToHotkey: true,
+          compact: true,
+          background: hc ? null : Playful.sun,
+          foreground: hc ? null : Playful.ink,
         ),
-      ),
-    );
-  }
-
-  Widget _buildEndScreen(Color contrast) {
-    final misses = _totalRounds - _hits;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: Color(0xFFE11D48)),
-            const SizedBox(height: 16),
-            Text(
-              'rhythm.final_summary'.tr(args: [
-                _hits.toString(),
-                misses.toString(),
-                _totalRounds.toString(),
-              ]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: 220,
-              child: _build3dButton(
-                label: 'rhythm.play_again'.tr(),
-                icon: Icons.refresh_rounded,
-                onPressed: _restart,
-                base: const Color(0xFFE11D48),
-                hc: AccessibilityUtils.isHighContrast(context),
-                contrast: contrast,
-                fontSize: 16,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-          ],
+        const SizedBox(height: 8),
+        Text(
+          'rhythm.voice_hint'.tr(),
+          textAlign: TextAlign.center,
+          style: Playful.body(14.5, color: hc ? fg : Colors.white.withValues(alpha: 0.85)),
         ),
-      ),
+      ],
     );
   }
 }

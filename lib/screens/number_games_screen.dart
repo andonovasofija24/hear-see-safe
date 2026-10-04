@@ -9,6 +9,7 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 enum _GameMode { recognize, biggerSmaller, operations, countObjects, tally, grid, sequence, sort }
 enum _Difficulty { easy, medium, hard }
@@ -733,68 +734,217 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   // ---------------------------------------------------------------------
 
   Widget _buildExtraFrame(Color contrast, Widget body) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
           child: Text(
             _promptText(),
             textAlign: TextAlign.center,
-            style: GameTypography.heading(context, contrast, 19),
+            style: Playful.title(19, color: fg),
           ),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            TextButton.icon(
-              onPressed: _replayPrompt,
-              icon: const Icon(Icons.replay_rounded),
-              label: Text('number_extra.replay'.tr()),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: _toggleExtraExplanation,
-              icon: Icon(_extraExplanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded),
-              label: Text(_extraExplanationOpen
-                  ? 'number_games.explanation_toggle_close'.tr()
-                  : 'number_games.explanation_toggle_open'.tr()),
-            ),
-          ],
+        const SizedBox(height: 6),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 10,
+            runSpacing: 8,
+            children: [
+              PlayfulGhostButton(
+                icon: Icons.replay_rounded,
+                label: 'number_extra.replay'.tr(),
+                onTap: _replayPrompt,
+              ),
+              PlayfulGhostButton(
+                icon: _extraExplanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
+                label: _extraExplanationOpen
+                    ? 'number_games.explanation_toggle_close'.tr()
+                    : 'number_games.explanation_toggle_open'.tr(),
+                onTap: _toggleExtraExplanation,
+              ),
+            ],
+          ),
         ),
         if (_extraExplanationOpen)
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: _moduleAccent.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _moduleAccent.withOpacity(0.35), width: 1.5),
-            ),
-            child: Text(
-              'number_extra.explanation_$_extraKey'.tr(),
-              style: GameTypography.body(context, contrast, 15),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.3),
+              child: SingleChildScrollView(
+                primary: false,
+                child: PlayfulExplainPanel(
+                  icon: Icons.menu_book_rounded,
+                  title: 'number_extra.title_$_extraKey'.tr(),
+                  text: 'number_extra.explanation_$_extraKey'.tr(),
+                  accent: _moduleAccent,
+                ),
+              ),
             ),
           ),
+        const SizedBox(height: 6),
         Expanded(child: body),
       ],
     );
   }
 
   Widget _extraConfirmButton(VoidCallback onTap, bool hc) {
+    final label = 'number_extra.confirm'.tr();
+    return _tapCard(
+      semanticsLabel: label,
+      onTap: _inputLocked ? null : onTap,
+      dimmed: _inputLocked,
+      height: 64,
+      color: hc ? const Color(0xFFFFFF00) : _green,
+      gradient: _vivid(_green),
+      glow: _green,
+      borderColor: hc ? Colors.black : Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.check_circle_rounded, size: 30, color: hc ? Colors.black : Colors.white),
+          const SizedBox(width: 10),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label, style: Playful.title(22, color: hc ? Colors.black : Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Заеднички делови за ноќниот изглед (само изглед, без логика).
+  // ---------------------------------------------------------------------
+
+  static const Color _green = Color(0xFF16A34A);
+  static const Color _red = Color(0xFFDC2626);
+
+  /// Живи бои за плочките (бел текст врз нив е секогаш читлив).
+  static const List<Color> _tileColors = [
+    Color(0xFF7C3AED),
+    Color(0xFFC2410C),
+    Color(0xFF0E7490),
+    Color(0xFFBE185D),
+    Color(0xFF2563EB),
+    Color(0xFF047857),
+  ];
+
+  /// Боја за текст врз темната позадина.
+  Color _fgOn(bool hc) => hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+
+  /// Градиент во дадената боја (горе посветло, долу потемно).
+  LinearGradient _vivid(Color c) => LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color.lerp(c, Colors.white, 0.06)!, Color.lerp(c, Colors.black, 0.38)!],
+      );
+
+  /// Темна табла со бел раб - подлога за тактилните игри.
+  BoxDecoration _boardDecoration(bool hc) {
+    return BoxDecoration(
+      color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.92),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.55), width: hc ? 3 : 2.5),
+      boxShadow: hc ? null : [BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 20)],
+    );
+  }
+
+  /// Бела картичка со златен раб (темен текст); во висок контраст - црна
+  /// со бел раб.
+  BoxDecoration _whiteCardDecoration(bool hc, {double radius = 22, double border = 3, bool glow = false}) {
+    return BoxDecoration(
+      color: hc ? Colors.black : Colors.white,
+      borderRadius: BorderRadius.circular(radius),
+      border: Border.all(color: hc ? Colors.white : Playful.sun, width: border),
+      boxShadow: hc || !glow ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.4), blurRadius: 22)],
+    );
+  }
+
+  /// Заедничко копче / плочка: полна боја или градиент, бел раб, мек сјај,
+  /// „притискање“ при допир. Во висок контраст - рамно (без градиент и сјај).
+  Widget _tapCard({
+    required String semanticsLabel,
+    required Widget child,
+    required VoidCallback? onTap,
+    required Color color,
+    Gradient? gradient,
+    Color? glow,
+    Color borderColor = Colors.white,
+    double borderWidth = 3,
+    double radius = 20,
+    double? width,
+    double? height,
+    bool dimmed = false,
+    EdgeInsetsGeometry padding = EdgeInsets.zero,
+  }) {
+    final hc = AccessibilityUtils.isHighContrast(context);
     return Semantics(
-      label: 'number_extra.confirm'.tr(),
+      label: semanticsLabel,
       button: true,
-      child: SizedBox(
-        width: double.infinity,
-        height: 64,
-        child: ElevatedButton.icon(
-          onPressed: _inputLocked ? null : onTap,
-          icon: const Icon(Icons.check_rounded, size: 30),
-          label: Text('number_extra.confirm'.tr(), style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A),
-            foregroundColor: hc ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      enabled: onTap != null,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 220),
+          opacity: dimmed ? 0.5 : 1.0,
+          child: PressableScale(
+            enabled: onTap != null,
+            child: Container(
+              width: width,
+              height: height,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(radius),
+                boxShadow: hc || glow == null ? null : [BoxShadow(color: glow.withValues(alpha: 0.45), blurRadius: 18)],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(radius),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(radius),
+                  onTap: onTap,
+                  child: Ink(
+                    padding: padding,
+                    decoration: BoxDecoration(
+                      color: hc || gradient == null ? color : null,
+                      gradient: hc ? null : gradient,
+                      borderRadius: BorderRadius.circular(radius),
+                      border: Border.all(color: borderColor, width: borderWidth),
+                    ),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Копче со број (одговор) во жива боја.
+  Widget _numberChoice(int v, Color color, bool hc, VoidCallback? onTap, {double height = 76, double fontSize = 34}) {
+    return _tapCard(
+      semanticsLabel: v.toString(),
+      onTap: onTap,
+      dimmed: onTap == null,
+      height: height,
+      color: hc ? const Color(0xFFFFFF00) : color,
+      gradient: _vivid(color),
+      glow: color,
+      borderColor: Colors.white,
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text(v.toString(), style: Playful.display(fontSize, color: hc ? Colors.black : Colors.white)),
           ),
         ),
       ),
@@ -852,11 +1002,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                   onPointerDown: (e) => _tallyPointer(e.localPosition, size),
                   onPointerMove: (e) => _tallyPointer(e.localPosition, size),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: AccessibilityUtils.getCardBackgroundColor(context),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 3),
-                    ),
+                    decoration: _boardDecoration(hc),
                     child: Stack(
                       children: [
                         for (var i = 0; i < _tallyPoints.length; i++)
@@ -881,21 +1027,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Semantics(
-                      label: v.toString(),
-                      button: true,
-                      child: SizedBox(
-                        height: 76,
-                        child: ElevatedButton(
-                          onPressed: _inputLocked ? null : () => _tallyAnswer(v),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: hc ? const Color(0xFFFFFF00) : _moduleAccent,
-                            foregroundColor: hc ? Colors.black : Colors.white,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                          ),
-                          child: Text(v.toString(), style: const TextStyle(fontSize: 34, fontWeight: FontWeight.bold)),
-                        ),
-                      ),
+                    child: _numberChoice(
+                      v,
+                      _tileColors[_tallyChoices.indexOf(v) % _tileColors.length],
+                      hc,
+                      _inputLocked ? null : () => _tallyAnswer(v),
                     ),
                   ),
                 ),
@@ -909,6 +1045,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   Widget _tallyCircle(int i, bool hc) {
     final touched = _tallyOrder.containsKey(i);
     final flash = _tallyFlash == i;
+    final Color fill;
+    if (hc) {
+      fill = touched ? const Color(0xFFFFFF00) : Colors.black;
+    } else {
+      fill = touched ? Playful.sun : Colors.white.withValues(alpha: 0.14);
+    }
     return AnimatedScale(
       scale: flash ? 1.18 : 1.0,
       duration: const Duration(milliseconds: 120),
@@ -917,21 +1059,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         height: _tallyRadius * 2,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: touched ? (hc ? const Color(0xFFFFFF00) : _moduleAccent) : _moduleAccent.withOpacity(0.18),
-          border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 3),
-          boxShadow: flash
-              ? [BoxShadow(color: _moduleAccent.withOpacity(0.7), blurRadius: 24, spreadRadius: 4)]
-              : const [],
+          color: fill,
+          border: Border.all(color: hc ? Colors.white : (touched ? Colors.white : Colors.white.withValues(alpha: 0.8)), width: 3),
+          boxShadow: flash && !hc
+              ? [BoxShadow(color: Playful.sun.withValues(alpha: 0.8), blurRadius: 24, spreadRadius: 4)]
+              : null,
         ),
         child: Center(
           child: touched
               ? Text(
                   '${_tallyOrder[i]}',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: hc ? Colors.black : Colors.white,
-                  ),
+                  style: Playful.display(26, color: hc ? Colors.black : Playful.ink),
                 )
               : null,
         ),
@@ -1007,7 +1145,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           const SizedBox(height: 8),
           Text(
             'number_extra.grid_wrong'.tr(args: [_gridWrong.length.toString()]),
-            style: GameTypography.body(context, contrast, 14),
+            textAlign: TextAlign.center,
+            style: Playful.body(15, color: _fgOn(hc)),
           ),
         ],
       ),
@@ -1017,19 +1156,41 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   Widget _gridCell(int index, Color contrast, bool hc) {
     final isTarget = index == _gridTarget;
     final isCurrent = index == _gridCurrent;
-    Color bg = AccessibilityUtils.getCardBackgroundColor(context);
-    if (_gridFound && isTarget) {
-      bg = hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A);
+    final found = _gridFound && isTarget;
+    Color bg;
+    Color fg;
+    Color border;
+    Gradient? gradient;
+    List<BoxShadow>? shadow;
+    if (hc) {
+      bg = found ? const Color(0xFFFFFF00) : (isCurrent ? Colors.white24 : Colors.black);
+      fg = found ? Colors.black : contrast;
+      border = Colors.white;
+    } else if (found) {
+      bg = _green;
+      fg = Colors.white;
+      border = Colors.white;
+      gradient = _vivid(_green);
+      shadow = [BoxShadow(color: _green.withValues(alpha: 0.6), blurRadius: 22)];
     } else if (isCurrent) {
-      bg = _moduleAccent.withOpacity(0.3);
+      bg = const Color(0xFFFFF4CC);
+      fg = Playful.ink;
+      border = _moduleAccent;
+      shadow = [BoxShadow(color: Playful.sun.withValues(alpha: 0.55), blurRadius: 18)];
+    } else {
+      bg = Colors.white;
+      fg = Playful.ink;
+      border = Playful.sun;
     }
-    final fg = (_gridFound && isTarget) ? (hc ? Colors.black : Colors.white) : contrast;
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 150),
       margin: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: bg,
+        color: gradient == null ? bg : null,
+        gradient: gradient,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 3),
+        border: Border.all(color: border, width: (isCurrent || found) ? 4 : 3),
+        boxShadow: shadow,
       ),
       child: Center(
         child: FittedBox(
@@ -1038,7 +1199,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             padding: const EdgeInsets.all(8),
             child: Text(
               _gridValues[index].toString(),
-              style: TextStyle(fontSize: 84, fontWeight: FontWeight.bold, color: fg),
+              style: Playful.display(84, color: fg),
             ),
           ),
         ),
@@ -1083,6 +1244,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _buildSequenceBody(Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
+    final valueColor = hc ? contrast : Playful.ink;
+    final arrowColor = hc ? Colors.white : _moduleAccent;
+    final fieldFg = hc ? Colors.white : Playful.ink;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
@@ -1123,23 +1287,21 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                       }
                     },
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: AccessibilityUtils.getCardBackgroundColor(context),
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 4),
-                      ),
+                      decoration: _whiteCardDecoration(hc, radius: 24, border: 4, glow: true),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.keyboard_arrow_up_rounded, size: 40, color: hc ? Colors.white : _moduleAccent),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            child: Text(
-                              _seqAnswer.toString(),
-                              style: TextStyle(fontSize: 110, fontWeight: FontWeight.bold, color: contrast),
+                          Icon(Icons.keyboard_arrow_up_rounded, size: 40, color: arrowColor),
+                          Flexible(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                _seqAnswer.toString(),
+                                style: Playful.display(110, color: valueColor),
+                              ),
                             ),
                           ),
-                          Icon(Icons.keyboard_arrow_down_rounded, size: 40, color: hc ? Colors.white : _moduleAccent),
+                          Icon(Icons.keyboard_arrow_down_rounded, size: 40, color: arrowColor),
                         ],
                       ),
                     ),
@@ -1169,12 +1331,29 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               onChanged: _seqTypedChange,
               onSubmitted: (_) => _seqConfirm(),
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: contrast),
+              style: Playful.title(24, color: fieldFg),
               decoration: InputDecoration(
                 labelText: 'number_extra.seq_type_label'.tr(),
+                labelStyle: Playful.body(16, color: hc ? Colors.white : Playful.ink.withValues(alpha: 0.75)),
+                floatingLabelStyle: Playful.title(16, color: hc ? Colors.white : Playful.ink),
                 filled: true,
-                fillColor: AccessibilityUtils.getCardBackgroundColor(context),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: contrast, width: 2)),
+                fillColor: hc ? Colors.black : Colors.white,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
+                ),
+                disabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: hc ? Colors.white54 : Playful.sun.withValues(alpha: 0.6), width: 2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: hc ? const Color(0xFFFFFF00) : _moduleAccent, width: 4),
+                ),
               ),
             ),
           ),
@@ -1188,15 +1367,26 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   Widget _seqTile(int i, double w, Color contrast, bool hc) {
     final isBlank = i == _seqBlank;
     final text = isBlank ? _seqAnswer.toString() : _seq[i].toString();
+    final Color bg;
+    final Color fg;
+    if (hc) {
+      bg = isBlank ? const Color(0xFFFFFF00) : Colors.black;
+      fg = isBlank ? Colors.black : contrast;
+    } else {
+      bg = isBlank ? Playful.sun : Colors.white;
+      fg = Playful.ink;
+    }
     return Container(
       width: w,
       height: 70,
       decoration: BoxDecoration(
-        color: isBlank
-            ? (hc ? const Color(0xFFFFFF00) : _moduleAccent.withOpacity(0.25))
-            : AccessibilityUtils.getCardBackgroundColor(context),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: hc ? Colors.white : _moduleAccent, width: isBlank ? 4 : 2),
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: hc ? Colors.white : (isBlank ? Colors.white : Playful.sun),
+          width: isBlank ? 4 : 2.5,
+        ),
+        boxShadow: hc || !isBlank ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.6), blurRadius: 18)],
       ),
       child: Center(
         child: FittedBox(
@@ -1205,11 +1395,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Text(
               isBlank ? '? $text' : text,
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
-                color: (isBlank && hc) ? Colors.black : contrast,
-              ),
+              style: Playful.display(30, color: fg),
             ),
           ),
         ),
@@ -1218,23 +1404,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   }
 
   Widget _seqArrowButton(IconData icon, String label, int delta, bool hc) {
-    return Semantics(
-      label: label,
-      button: true,
-      child: SizedBox(
-        width: 76,
-        height: 76,
-        child: ElevatedButton(
-          onPressed: _inputLocked ? null : () => _seqChange(delta),
-          style: ElevatedButton.styleFrom(
-            padding: EdgeInsets.zero,
-            backgroundColor: hc ? const Color(0xFFFFFF00) : _moduleAccent,
-            foregroundColor: hc ? Colors.black : Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          ),
-          child: Icon(icon, size: 52),
-        ),
-      ),
+    return _tapCard(
+      semanticsLabel: label,
+      onTap: _inputLocked ? null : () => _seqChange(delta),
+      dimmed: _inputLocked,
+      width: 76,
+      height: 76,
+      radius: 22,
+      color: hc ? const Color(0xFFFFFF00) : Playful.sun,
+      glow: Playful.sun,
+      borderColor: Colors.white,
+      child: Center(child: Icon(icon, size: 52, color: hc ? Colors.black : Playful.ink)),
     );
   }
 
@@ -1263,6 +1443,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _buildSortBody(Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
     return LayoutBuilder(
       builder: (context, c) {
         final n = _sortItems.length;
@@ -1275,7 +1456,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('▲ ${'number_extra.sort_smallest'.tr()}', style: GameTypography.body(context, contrast, 15)),
+                child: Text('▲ ${'number_extra.sort_smallest'.tr()}', style: Playful.title(15, color: fg)),
               ),
             ),
             Expanded(
@@ -1284,6 +1465,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                 buildDefaultDragHandles: false,
                 itemCount: n,
                 onReorder: _sortReorder,
+                // Без бел правоаголник зад картичката што се влече.
+                proxyDecorator: (child, index, animation) => Material(color: Colors.transparent, child: child),
                 itemBuilder: (context, i) {
                   final v = _sortItems[i];
                   return ReorderableDragStartListener(
@@ -1307,7 +1490,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text('▼ ${'number_extra.sort_largest'.tr()}', style: GameTypography.body(context, contrast, 15)),
+                child: Text('▼ ${'number_extra.sort_largest'.tr()}', style: Playful.title(15, color: fg)),
               ),
             ),
             Padding(
@@ -1325,17 +1508,21 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       height: h,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AccessibilityUtils.getCardBackgroundColor(context),
+        color: hc ? Colors.black : Colors.white,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 4),
+        border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 4 : 3.5),
+        boxShadow: hc ? null : [BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 14, offset: const Offset(0, 4))],
       ),
       child: Row(
         children: [
           Expanded(
             child: Center(
-              child: Text(
-                v.toString(),
-                style: TextStyle(fontSize: h * 0.62, fontWeight: FontWeight.bold, color: contrast),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  v.toString(),
+                  style: Playful.display(h * 0.56, color: hc ? contrast : Playful.ink),
+                ),
               ),
             ),
           ),
@@ -1360,6 +1547,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       voiceCommand: _view != _View.modeSelect,
       voiceOptions: _modeVoiceOptions(),
       onVoiceBack: _backToModeSelect,
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🔢', '➕', '➖', '🧮', '⭐', '🎲'],
+        tint: _moduleAccent,
+      ),
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -1482,93 +1673,144 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   // --- Избор на режим ---
 
   Widget _buildModeSelect(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        const SizedBox(height: 16),
-        Text(
-          'number_games.choose_difficulty'.tr(),
-          textAlign: TextAlign.center,
-          style: GameTypography.heading(context, contrast, 18),
-        ),
-        const SizedBox(height: 10),
-        Row(
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
+    final modes = [
+      (_GameMode.recognize, Icons.pin_rounded, 'number_games.counting'.tr(), const Color(0xFF047857)),
+      (_GameMode.biggerSmaller, Icons.compare_arrows_rounded, 'number_games.bigger_smaller'.tr(), const Color(0xFF6D28D9)),
+      (_GameMode.operations, Icons.calculate_rounded, 'number_games.addition'.tr(), const Color(0xFFC2410C)),
+      (_GameMode.countObjects, Icons.category_rounded, 'number_games.objects'.tr(), const Color(0xFFBE185D)),
+      (_GameMode.tally, Icons.touch_app_rounded, 'number_extra.title_tally'.tr(), const Color(0xFF0E7490)),
+      (_GameMode.grid, Icons.grid_on_rounded, 'number_extra.title_grid'.tr(), const Color(0xFF1D4ED8)),
+      (_GameMode.sequence, Icons.linear_scale_rounded, 'number_extra.title_sequence'.tr(), const Color(0xFFB45309)),
+      (_GameMode.sort, Icons.swap_horiz_rounded, 'number_extra.title_sort'.tr(), const Color(0xFF4338CA)),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 12, side, 28),
           children: [
-            Expanded(child: _difficultyChip(context, _Difficulty.easy, 'number_games.difficulty_easy'.tr())),
-            const SizedBox(width: 8),
-            Expanded(child: _difficultyChip(context, _Difficulty.medium, 'number_games.difficulty_medium'.tr())),
-            const SizedBox(width: 8),
-            Expanded(child: _difficultyChip(context, _Difficulty.hard, 'number_games.difficulty_hard'.tr())),
+            // Тежина - во проѕирна табла.
+            PopIn(
+              index: 0,
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 16),
+                decoration: BoxDecoration(
+                  color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.3), width: hc ? 2 : 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'number_games.choose_difficulty'.tr(),
+                      textAlign: TextAlign.center,
+                      style: Playful.title(20, color: fg),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(child: _difficultyChip(context, _Difficulty.easy, 'number_games.difficulty_easy'.tr())),
+                        const SizedBox(width: 8),
+                        Expanded(child: _difficultyChip(context, _Difficulty.medium, 'number_games.difficulty_medium'.tr())),
+                        const SizedBox(width: 8),
+                        Expanded(child: _difficultyChip(context, _Difficulty.hard, 'number_games.difficulty_hard'.tr())),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 22),
+            PopIn(
+              index: 1,
+              child: Text(
+                'number_games.choose_mode'.tr(),
+                textAlign: TextAlign.center,
+                style: Playful.display(24, color: fg),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Center(
+              child: CategoryVoiceCommandButton(
+                background: hc ? null : Playful.sun,
+                foreground: hc ? null : Playful.ink,
+                onBack: () => Navigator.of(context).pop(),
+                options: _modeVoiceOptions(),
+              ),
+            ),
+            const SizedBox(height: 18),
+            for (var i = 0; i < modes.length; i++) ...[
+              PopIn(
+                index: 2 + i,
+                child: _modeCard(context, modes[i].$1, modes[i].$2, modes[i].$3, number: i + 1, color: modes[i].$4),
+              ),
+              const SizedBox(height: 16),
+            ],
           ],
-        ),
-        const SizedBox(height: 22),
-        Text(
-          'number_games.choose_mode'.tr(),
-          textAlign: TextAlign.center,
-          style: GameTypography.heading(context, contrast, 18),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: CategoryVoiceCommandButton(
-            background: _moduleAccent,
-            onBack: () => Navigator.of(context).pop(),
-            options: _modeVoiceOptions(),
-          ),
-        ),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.recognize, Icons.pin_rounded, 'number_games.counting'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.biggerSmaller, Icons.compare_arrows_rounded, 'number_games.bigger_smaller'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.operations, Icons.calculate_rounded, 'number_games.addition'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.countObjects, Icons.category_rounded, 'number_games.objects'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.tally, Icons.touch_app_rounded, 'number_extra.title_tally'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.grid, Icons.grid_on_rounded, 'number_extra.title_grid'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.sequence, Icons.linear_scale_rounded, 'number_extra.title_sequence'.tr()),
-        const SizedBox(height: 14),
-        _modeCard(context, _GameMode.sort, Icons.swap_horiz_rounded, 'number_extra.title_sort'.tr()),
-        const SizedBox(height: 20),
-      ],
+        );
+      },
     );
   }
 
   Widget _difficultyChip(BuildContext context, _Difficulty d, String label) {
     final active = _difficulty == d;
     final hc = AccessibilityUtils.isHighContrast(context);
+    final Color bg;
+    final Color fg;
+    if (hc) {
+      bg = active ? const Color(0xFFFFFF00) : Colors.black;
+      fg = active ? Colors.black : AccessibilityUtils.getContrastColor(context);
+    } else {
+      bg = active ? Playful.sun : Colors.white.withValues(alpha: 0.10);
+      fg = active ? Playful.ink : Colors.white;
+    }
     return Semantics(
       label: label,
       button: true,
       selected: active,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: () => _setDifficulty(d),
+      onTap: () => _setDifficulty(d),
+      child: ExcludeSemantics(
+        child: PressableScale(
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 14),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: active
-                  ? (hc ? const Color(0xFFFFFF00) : _moduleAccent)
-                  : AccessibilityUtils.getDisabledColor(context).withOpacity(0.25),
-              border: Border.all(
-                color: active ? (hc ? Colors.white : _moduleAccent) : Colors.transparent,
-                width: 2,
-              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: hc || !active ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.55), blurRadius: 18)],
             ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 15,
-                color: active ? (hc ? Colors.black : Colors.white) : AccessibilityUtils.getContrastColor(context),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _setDifficulty(d),
+                child: Ink(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: hc || active ? Colors.white : Colors.white.withValues(alpha: 0.5),
+                      width: active ? 3 : 2,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (active) ...[
+                        Icon(Icons.check_circle_rounded, size: 20, color: fg),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(label, style: Playful.title(16, color: fg)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1577,47 +1819,100 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     );
   }
 
-  Widget _modeCard(BuildContext context, _GameMode mode, IconData icon, String label) {
+  /// Картичка за игра: градиент во бојата на играта, бел раб, сјај, икона во
+  /// бел круг со златен реден број, име и стрелка.
+  Widget _modeCard(BuildContext context, _GameMode mode, IconData icon, String label, {required int number, required Color color}) {
     final hc = AccessibilityUtils.isHighContrast(context);
+    final deep = Color.lerp(color, Colors.black, 0.35)!;
     return Semantics(
       label: label,
       button: true,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: () => _startRound(mode),
-          child: Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              color: hc ? Colors.black : _moduleAccent.withOpacity(0.1),
-              border: Border.all(color: hc ? Colors.white : _moduleAccent, width: hc ? 2 : 1.5),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: hc ? const Color(0xFFFFFF00) : _moduleAccent,
-                  ),
-                  child: Icon(icon, color: hc ? Colors.black : Colors.white, size: 30),
+      onTap: () => _startRound(mode),
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(26),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(26),
+              onTap: () => _startRound(mode),
+              child: Ink(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(26),
+                  gradient: hc ? null : LinearGradient(colors: [color, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                  color: hc ? Colors.black : null,
+                  border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
+                  boxShadow: hc ? null : [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 22, offset: const Offset(0, 8))],
                 ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AccessibilityUtils.getContrastColor(context),
-                    ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Stack(
+                    children: [
+                      if (!hc)
+                        Positioned(
+                          right: -16,
+                          bottom: -24,
+                          child: Icon(icon, size: 120, color: Colors.white.withValues(alpha: 0.10)),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 14, 16),
+                        child: Row(
+                          children: [
+                            Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Container(
+                                  width: 64,
+                                  height: 64,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: hc ? Colors.black : Colors.white,
+                                    border: hc ? Border.all(color: Colors.white, width: 2) : null,
+                                  ),
+                                  child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : deep, size: 34),
+                                ),
+                                Positioned(
+                                  left: -6,
+                                  top: -6,
+                                  child: Container(
+                                    width: 30,
+                                    height: 30,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: hc ? const Color(0xFFFFFF00) : Playful.sun,
+                                      border: Border.all(color: hc ? Colors.black : Colors.white, width: 2),
+                                    ),
+                                    child: Text(
+                                      '$number',
+                                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Playful.ink),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Text(label, style: Playful.display(21, color: Colors.white)),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: hc ? 0.1 : 0.22),
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 26),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                Icon(Icons.arrow_forward_ios_rounded, color: hc ? Colors.white : _moduleAccent, size: 20),
-              ],
+              ),
             ),
           ),
         ),
@@ -1629,51 +1924,93 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _buildPlaying(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-          child: Row(
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 900) / 2).clamp(0.0, double.infinity);
+        return Padding(
+          padding: EdgeInsets.symmetric(horizontal: side),
+          child: Column(
             children: [
-              Semantics(
-                label: 'number_games.back'.tr(),
-                button: true,
-                child: IconButton(
-                  icon: Icon(Icons.arrow_back_rounded, color: contrast),
-                  onPressed: _backToModeSelect,
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 16, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      label: 'number_games.back'.tr(),
+                      button: true,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hc ? Colors.black : Colors.white.withValues(alpha: 0.12),
+                          border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.7), width: 2),
+                        ),
+                        child: IconButton(
+                          icon: Icon(Icons.arrow_back_rounded, color: fg),
+                          onPressed: _backToModeSelect,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: RoundProgress(
+                        label: 'number_games.progress'.tr(args: [(_asked + 1).clamp(1, _questionsPerRound).toString(), _questionsPerRound.toString()]),
+                        current: _asked.clamp(0, _questionsPerRound - 1).toInt(),
+                        total: _questionsPerRound,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Expanded(
-                child: Text(
-                  'number_games.progress'.tr(args: [(_asked + 1).clamp(1, _questionsPerRound).toString(), _questionsPerRound.toString()]),
-                  textAlign: TextAlign.center,
-                  style: GameTypography.heading(context, contrast, 18),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    _statPill('⭐ ${'number_games.score'.tr(args: [_score.toString()])}', hc, gold: true),
+                    if (_streak >= 2) _statPill('🔥 ${'number_games.streak'.tr(args: [_streak.toString()])}', hc),
+                  ],
                 ),
               ),
-              const SizedBox(width: 48),
+              if (_lastAnswerCorrect != null) _buildFeedbackBanner(context),
+              Expanded(child: _buildMainContent(context, contrast)),
+              if (!_isExtraMode && _mode != _GameMode.biggerSmaller) ...[
+                _buildNumberPad(context),
+                _buildInputRow(context, contrast),
+              ],
             ],
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('number_games.score'.tr(args: [_score.toString()]), style: GameTypography.body(context, contrast, 15)),
-              const SizedBox(width: 18),
-              if (_streak >= 2)
-                Text('🔥 ${'number_games.streak'.tr(args: [_streak.toString()])}',
-                    style: GameTypography.body(context, contrast, 15)),
-            ],
-          ),
-        ),
-        if (_lastAnswerCorrect != null) _buildFeedbackBanner(context),
-        Expanded(child: _buildMainContent(context, contrast)),
-        if (!_isExtraMode && _mode != _GameMode.biggerSmaller) ...[
-          _buildNumberPad(context),
-          _buildInputRow(context, contrast),
-        ],
-      ],
+        );
+      },
+    );
+  }
+
+  /// Мала пилула (резултат, серија) - златна или проѕирна.
+  Widget _statPill(String text, bool hc, {bool gold = false}) {
+    final Color bg;
+    final Color fg;
+    if (hc) {
+      bg = Colors.black;
+      fg = AccessibilityUtils.getContrastColor(context);
+    } else if (gold) {
+      bg = Playful.sun;
+      fg = Playful.ink;
+    } else {
+      bg = Colors.white.withValues(alpha: 0.14);
+      fg = Colors.white;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: gold ? 1.0 : 0.5), width: hc ? 1.5 : 2),
+      ),
+      child: Text(text, style: Playful.title(15.5, color: fg)),
     );
   }
 
@@ -1681,42 +2018,64 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   Widget _buildFeedbackBanner(BuildContext context) {
     final correct = _lastAnswerCorrect!;
     final hc = AccessibilityUtils.isHighContrast(context);
-    final bg = correct ? (hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A)) : (hc ? Colors.black : const Color(0xFFDC2626));
+    final base = correct ? _green : _red;
+    final bg = correct ? (hc ? const Color(0xFFFFFF00) : _green) : (hc ? Colors.black : _red);
     final fg = hc && correct ? Colors.black : Colors.white;
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: hc ? Border.all(color: Colors.white, width: 2) : null,
-      ),
-      child: Column(
-        children: [
-          Text(
-            correct ? '✓ ${'number_games.correct_banner'.tr()}' : '✗ ${'number_games.incorrect_banner'.tr()}',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: fg, fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          if (_feedbackDetail != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _feedbackDetail!,
-                textAlign: TextAlign.center,
-                style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w600),
+    return PopIn(
+      startMs: 0,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        decoration: BoxDecoration(
+          color: hc ? bg : null,
+          gradient: hc ? null : _vivid(base),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: hc && correct ? Colors.black : Colors.white, width: 3),
+          boxShadow: hc ? null : [BoxShadow(color: base.withValues(alpha: 0.55), blurRadius: 22)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hc ? bg : Colors.white,
+                border: hc ? Border.all(color: fg, width: 2) : null,
+              ),
+              child: Icon(correct ? Icons.check_rounded : Icons.close_rounded, size: 30, color: hc ? fg : base),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    correct ? '✓ ${'number_games.correct_banner'.tr()}' : '✗ ${'number_games.incorrect_banner'.tr()}',
+                    style: Playful.display(22, color: fg),
+                  ),
+                  if (_feedbackDetail != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _feedbackDetail!,
+                        style: Playful.body(15.5, color: fg),
+                      ),
+                    ),
+                  if (!correct && _lastCorrectValue != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'number_games.correct_answer'.tr(args: [_lastCorrectValue.toString()]),
+                        style: Playful.title(16, color: fg),
+                      ),
+                    ),
+                ],
               ),
             ),
-          if (!correct && _lastCorrectValue != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                'number_games.correct_answer'.tr(args: [_lastCorrectValue.toString()]),
-                textAlign: TextAlign.center,
-                style: TextStyle(color: fg, fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1742,25 +2101,44 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     }
   }
 
-  Widget _buildRecognizeView(BuildContext context, Color contrast) {
-    final size = MediaQuery.of(context).size;
-    final numberSize = (size.height * 0.24).clamp(90.0, 200.0);
+  /// Бела картичка со златен раб и сјај - за бројот / задачата. Текстот се
+  /// смалува ако нема доволно место (без прелевање).
+  Widget _questionCard(bool hc, Widget child) {
     return Center(
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        decoration: BoxDecoration(
-          color: AccessibilityUtils.getCardBackgroundColor(context),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: contrast, width: 4),
-        ),
-        child: Center(
-          child: Text(
-            _displayNumber.toString(),
-            style: TextStyle(fontSize: numberSize, fontWeight: FontWeight.bold, color: contrast),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+          decoration: BoxDecoration(
+            color: hc ? Colors.black : Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 4 : 5),
+            boxShadow: hc
+                ? null
+                : [
+                    BoxShadow(color: Playful.sun.withValues(alpha: 0.45), blurRadius: 28),
+                    BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 40, offset: const Offset(0, 12)),
+                  ],
+          ),
+          child: Align(
+            heightFactor: 1.0,
+            child: FittedBox(fit: BoxFit.scaleDown, child: child),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRecognizeView(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final size = MediaQuery.of(context).size;
+    final numberSize = (size.height * 0.24).clamp(90.0, 200.0).toDouble();
+    return _questionCard(
+      hc,
+      Text(
+        _displayNumber.toString(),
+        style: Playful.display(numberSize, color: hc ? contrast : Playful.ink),
       ),
     );
   }
@@ -1773,13 +2151,13 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(prompt, textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
+          Text(prompt, textAlign: TextAlign.center, style: Playful.display(24, color: _fgOn(hc))),
           const SizedBox(height: 20),
           Row(
             children: [
-              Expanded(child: _bigNumberButton(context, _numA, hc)),
+              Expanded(child: PopIn(index: 0, child: _bigNumberButton(context, _numA, hc, _tileColors[0]))),
               const SizedBox(width: 16),
-              Expanded(child: _bigNumberButton(context, _numB, hc)),
+              Expanded(child: PopIn(index: 1, child: _bigNumberButton(context, _numB, hc, _tileColors[1]))),
             ],
           ),
         ],
@@ -1787,28 +2165,30 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     );
   }
 
-  Widget _bigNumberButton(BuildContext context, int value, bool hc) {
-    return Semantics(
-      label: value.toString(),
-      button: true,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: _inputLocked ? null : () => _answerBiggerSmaller(value),
-          child: Container(
-            height: 150,
-            decoration: BoxDecoration(
-              color: AccessibilityUtils.getCardBackgroundColor(context),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: hc ? Colors.white : _moduleAccent, width: 4),
-            ),
-            child: Center(
-              child: Text(
-                value.toString(),
-                style: TextStyle(fontSize: 56, fontWeight: FontWeight.bold, color: AccessibilityUtils.getContrastColor(context)),
-              ),
+  Widget _bigNumberButton(BuildContext context, int value, bool hc, Color color) {
+    // По одговорот: точниот број позеленува, другиот се повлекува.
+    final answered = _inputLocked && _lastAnswerCorrect != null;
+    final isCorrectValue = answered && value == _lastCorrectValue;
+    final c = isCorrectValue ? _green : color;
+    return _tapCard(
+      semanticsLabel: value.toString(),
+      onTap: _inputLocked ? null : () => _answerBiggerSmaller(value),
+      dimmed: answered && !isCorrectValue,
+      height: 150,
+      radius: 24,
+      color: hc ? (isCorrectValue ? const Color(0xFFFFFF00) : Colors.black) : c,
+      gradient: _vivid(c),
+      glow: c,
+      borderColor: Colors.white,
+      borderWidth: isCorrectValue ? 4 : 3,
+      child: Center(
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text(
+              value.toString(),
+              style: Playful.display(60, color: hc ? (isCorrectValue ? Colors.black : AccessibilityUtils.getContrastColor(context)) : Colors.white),
             ),
           ),
         ),
@@ -1817,23 +2197,13 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   }
 
   Widget _buildOperationsView(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
     final opText = _isAddition ? '$_opA + $_opB = ?' : '$_opA − $_opB = ?';
     final size = MediaQuery.of(context).size;
-    final textSize = (size.height * 0.1).clamp(44.0, 100.0);
-    return Center(
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(horizontal: 24),
-        padding: const EdgeInsets.symmetric(vertical: 28),
-        decoration: BoxDecoration(
-          color: AccessibilityUtils.getCardBackgroundColor(context),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: contrast, width: 4),
-        ),
-        child: Center(
-          child: Text(opText, style: TextStyle(fontSize: textSize, fontWeight: FontWeight.bold, color: contrast)),
-        ),
-      ),
+    final textSize = (size.height * 0.1).clamp(44.0, 100.0).toDouble();
+    return _questionCard(
+      hc,
+      Text(opText, style: Playful.display(textSize, color: hc ? contrast : Playful.ink)),
     );
   }
 
@@ -1905,6 +2275,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _buildCountObjectsView(BuildContext context, Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
+    final shapeColor = hc ? contrast : Colors.white;
     return Column(
       children: [
         Expanded(
@@ -1919,18 +2290,14 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                   onPointerDown: (e) => _countPointer(e.localPosition, lay),
                   onPointerMove: (e) => _countPointer(e.localPosition, lay),
                   child: Container(
-                    decoration: BoxDecoration(
-                      color: AccessibilityUtils.getCardBackgroundColor(context),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: contrast, width: 4),
-                    ),
+                    decoration: _boardDecoration(hc),
                     child: Stack(
                       children: [
                         for (var i = 0; i < lay.centers.length; i++)
                           Positioned(
                             left: lay.centers[i].dx - lay.size / 2,
                             top: lay.centers[i].dy - lay.size / 2,
-                            child: IgnorePointer(child: _countShape(i, lay.size, contrast, hc)),
+                            child: IgnorePointer(child: _countShape(i, lay.size, shapeColor, hc)),
                           ),
                       ],
                     ),
@@ -1940,13 +2307,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             ),
           ),
         ),
-        Semantics(
-          label: 'number_extra.replay'.tr(),
-          button: true,
-          child: TextButton.icon(
-            onPressed: _inputLocked ? null : _startCountDemo,
-            icon: const Icon(Icons.replay_rounded),
-            label: Text('number_extra.replay'.tr()),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 4),
+          child: PlayfulGhostButton(
+            icon: Icons.replay_rounded,
+            label: 'number_extra.replay'.tr(),
+            onTap: _inputLocked ? null : _startCountDemo,
           ),
         ),
       ],
@@ -1955,7 +2321,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _countShape(int i, double size, Color contrast, bool hc) {
     final flash = _countFlash == i;
-    final glow = hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B);
+    final glow = hc ? const Color(0xFFFFFF00) : Playful.sun;
     return AnimatedScale(
       scale: flash ? 1.3 : 1.0,
       duration: const Duration(milliseconds: 120),
@@ -1964,7 +2330,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          boxShadow: flash ? [BoxShadow(color: glow.withOpacity(0.85), blurRadius: 26, spreadRadius: 6)] : const [],
+          boxShadow: flash ? [BoxShadow(color: glow.withValues(alpha: 0.85), blurRadius: 26, spreadRadius: 6)] : const [],
         ),
         child: Center(child: _buildShape(size, flash ? glow : contrast)),
       ),
@@ -1978,7 +2344,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: color.withOpacity(0.3),
+          color: color.withValues(alpha: 0.3),
           border: Border.all(color: color, width: 4),
           borderRadius: BorderRadius.circular(8),
         ),
@@ -1989,7 +2355,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       child = Container(
         width: size,
         height: size,
-        decoration: BoxDecoration(color: color.withOpacity(0.3), shape: BoxShape.circle, border: Border.all(color: color, width: 4)),
+        decoration: BoxDecoration(color: color.withValues(alpha: 0.3), shape: BoxShape.circle, border: Border.all(color: color, width: 4)),
       );
     }
     return child;
@@ -2009,26 +2375,29 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   }
 
   Widget _digitButton(BuildContext context, String digit) {
-    return Semantics(
-      label: digit,
-      button: true,
-      child: SizedBox(
-        width: 60,
-        height: 52,
-        child: ElevatedButton(
-          onPressed: _inputLocked ? null : () => _appendDigit(digit),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AccessibilityUtils.getPrimaryButtonBackground(context),
-            foregroundColor: Colors.white,
-            textStyle: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          child: Text(digit, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-        ),
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return _tapCard(
+      semanticsLabel: digit,
+      onTap: _inputLocked ? null : () => _appendDigit(digit),
+      dimmed: _inputLocked,
+      width: 60,
+      height: 52,
+      radius: 16,
+      color: hc ? Colors.black : Colors.white,
+      glow: _moduleAccent,
+      borderColor: hc ? Colors.white : Playful.sun,
+      borderWidth: hc ? 2 : 2.5,
+      child: Center(
+        child: Text(digit, style: Playful.display(24, color: hc ? AccessibilityUtils.getContrastColor(context) : Playful.ink)),
       ),
     );
   }
 
   Widget _buildInputRow(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fieldFg = hc ? contrast : Playful.ink;
+    final clearLabel = 'number_games.clear'.tr();
+    final submitLabel = 'number_games.submit'.tr();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       child: Row(
@@ -2044,45 +2413,72 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 maxLength: 3,
                 onSubmitted: (_) => _submitTypedAnswer(),
-                style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: contrast),
+                textAlign: TextAlign.center,
+                style: Playful.display(26, color: fieldFg),
                 decoration: InputDecoration(
                   hintText: '0',
+                  hintStyle: Playful.display(26, color: fieldFg.withValues(alpha: 0.25)),
                   counterText: '',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: contrast, width: 3)),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   filled: true,
-                  fillColor: AccessibilityUtils.getCardBackgroundColor(context),
+                  fillColor: hc ? Colors.black : Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: hc ? contrast : Playful.sun, width: 3),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: hc ? contrast : Playful.sun, width: 3),
+                  ),
+                  disabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: hc ? Colors.white54 : Playful.sun.withValues(alpha: 0.6), width: 2),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: hc ? const Color(0xFFFFFF00) : _moduleAccent, width: 4),
+                  ),
                 ),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          Semantics(
-            label: 'number_games.clear'.tr(),
-            button: true,
-            child: SizedBox(
-              width: 88,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _inputLocked ? null : _clearInput,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AccessibilityUtils.getDisabledColor(context),
-                  foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-                ),
-                child: FittedBox(fit: BoxFit.scaleDown, child: Text('number_games.clear'.tr())),
+          _tapCard(
+            semanticsLabel: clearLabel,
+            onTap: _inputLocked ? null : _clearInput,
+            dimmed: _inputLocked,
+            width: 88,
+            height: 52,
+            radius: 16,
+            color: hc ? Colors.black : Colors.white.withValues(alpha: 0.12),
+            borderColor: hc ? Colors.white : Colors.white.withValues(alpha: 0.7),
+            borderWidth: 2,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(clearLabel, style: Playful.title(17, color: hc ? contrast : Colors.white)),
               ),
             ),
           ),
           const SizedBox(width: 10),
-          Semantics(
-            label: 'number_games.submit'.tr(),
-            button: true,
-            child: SizedBox(
-              width: 88,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _inputLocked ? null : _submitTypedAnswer,
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
-                child: FittedBox(fit: BoxFit.scaleDown, child: Text('number_games.submit'.tr())),
+          _tapCard(
+            semanticsLabel: submitLabel,
+            onTap: _inputLocked ? null : _submitTypedAnswer,
+            dimmed: _inputLocked,
+            width: 88,
+            height: 52,
+            radius: 16,
+            color: hc ? const Color(0xFFFFFF00) : _green,
+            gradient: _vivid(_green),
+            glow: _green,
+            borderColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(submitLabel, style: Playful.title(17, color: hc ? Colors.black : Colors.white)),
               ),
             ),
           ),
@@ -2094,65 +2490,63 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   // --- Резултати ---
 
   Widget _buildResults(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
     final accuracy = _questionsPerRound == 0 ? 0 : ((_score / _questionsPerRound) * 100).round();
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text(
-              'number_games.results_title'.tr(),
-              style: GameTypography.heading(context, contrast, 24),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'number_games.results_score'.tr(args: [_score.toString(), _questionsPerRound.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'number_games.results_accuracy'.tr(args: [accuracy.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 16),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'number_games.results_streak'.tr(args: [_bestStreak.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 16),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: () => _startRound(_mode),
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('number_games.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            Flexible(
+              child: SingleChildScrollView(
+                primary: false,
+                padding: EdgeInsets.fromLTRB(side, 16, side, 0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'number_games.results_title'.tr(),
+                      textAlign: TextAlign.center,
+                      style: Playful.display(26, color: fg),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [
+                        _statPill('🎯 ${'number_games.results_accuracy'.tr(args: [accuracy.toString()])}', hc),
+                        _statPill('🔥 ${'number_games.results_streak'.tr(args: [_bestStreak.toString()])}', hc),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _backToModeSelect,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text('number_games.change_mode'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AccessibilityUtils.getDisabledColor(context),
-                foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            Expanded(
+              child: PlayfulResult(
+                text: 'number_games.results_score'.tr(args: [_score.toString(), _questionsPerRound.toString()]),
+                buttonLabel: 'number_games.play_again'.tr(),
+                onAgain: () => _startRound(_mode),
+                stars: _score,
+                total: _questionsPerRound,
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(side, 0, side, 20),
+              child: Center(
+                child: PlayfulGhostButton(
+                  icon: Icons.grid_view_rounded,
+                  label: 'number_games.change_mode'.tr(),
+                  onTap: _backToModeSelect,
+                ),
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
@@ -2184,7 +2578,7 @@ class _StarPainter extends CustomPainter {
 
     path.close();
     final paint = Paint()
-      ..color = color.withOpacity(0.5)
+      ..color = color.withValues(alpha: 0.5)
       ..style = PaintingStyle.fill;
 
     final borderPaint = Paint()

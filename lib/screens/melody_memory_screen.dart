@@ -5,10 +5,10 @@ import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 /// Мемorија на звуци: детето слуша НИЗА звуци по ред (пр. мачка, мачка,
 /// куче, автомобил) - никогаш автоматски, само по притискање на Почни да
@@ -187,6 +187,8 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
 
   Future<void> _onTapIcon(String id) async {
     if (_isPlaying || !_revealed || _gameOver) return;
+    // Низата е веќе погодена (се чека следната рунда) - вишок допир.
+    if (_userIndex >= _sequence.length) return;
 
     setState(() => _flashingId = id);
     await _playSoundEffect(id);
@@ -253,288 +255,175 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
 
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'features.melody_memory'.tr(),
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🎹', '🎵', '🎶', '🐱', '🐶', '🌧️'],
+        tint: _moduleAccent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            _buildExplanationButton(contrast),
-            if (_explanationOpen) _buildExplanationPanel(contrast),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                _gameOver
-                    ? 'melody.game_over_title'.tr()
-                    : 'melody.rounds_progress'.tr(args: [
-                        (_round + 1).toString(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final header = <Widget>[
+              PlayfulExplainButton(
+                open: _explanationOpen,
+                label: _explanationOpen
+                    ? 'melody.explanation_toggle_close'.tr()
+                    : 'melody.explanation_toggle_open'.tr(),
+                onTap: _toggleExplanation,
+              ),
+              if (_explanationOpen)
+                PlayfulExplainPanel(
+                  icon: Icons.volume_up_rounded,
+                  title: 'melody.explanation_title'.tr(),
+                  text: 'melody.explanation_text'.tr(),
+                  accent: _moduleAccent,
+                ),
+              const SizedBox(height: 16),
+            ];
+
+            if (_gameOver) {
+              final misses = _totalRounds - _hits;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ...header,
+                          Text(
+                            'melody.game_over_title'.tr(),
+                            textAlign: TextAlign.center,
+                            style: Playful.display(26, color: fg),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: PlayfulResult(
+                      text: 'melody.final_summary'.tr(args: [
+                        _hits.toString(),
+                        misses.toString(),
                         _totalRounds.toString(),
                       ]),
-                style: GameTypography.heading(context, contrast, 20),
-              ),
-            ),
-            Expanded(
-              child: _gameOver ? _buildEndScreen(contrast) : _buildRound(contrast, hc),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+                      buttonLabel: 'melody.play_again'.tr(),
+                      onAgain: _restart,
+                      stars: _hits,
+                      total: _totalRounds,
+                    ),
+                  ),
+                ],
+              );
+            }
 
-  Widget _buildExplanationButton(Color contrast) {
-    final label = _explanationOpen
-        ? 'melody.explanation_toggle_close'.tr()
-        : 'melody.explanation_toggle_open'.tr();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _toggleExplanation,
-            icon: Icon(
-              _explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
-              size: 26,
-            ),
-            label: Text(
-              label,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _explanationOpen
-                  ? AccessibilityUtils.getDisabledColor(context)
-                  : _moduleAccent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExplanationPanel(Color contrast) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _moduleAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _moduleAccent.withOpacity(0.35), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.volume_up_rounded, color: _moduleAccent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'melody.explanation_title'.tr(),
-                  style: GameTypography.heading(context, contrast, 17),
+            return ListView(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 28),
+              children: [
+                ...header,
+                RoundProgress(
+                  label: 'melody.rounds_progress'.tr(args: [
+                    (_round + 1).toString(),
+                    _totalRounds.toString(),
+                  ]),
+                  current: _round,
+                  total: _totalRounds,
+                  extra: 'melody.score'.tr(args: [_hits.toString()]),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'melody.explanation_text'.tr(),
-            style: GameTypography.body(context, contrast, 15),
-          ),
-        ],
+                const SizedBox(height: 20),
+                _buildSequenceNotes(hc),
+                const SizedBox(height: 18),
+                if (!_revealed)
+                  Center(
+                    child: SoundOrb(
+                      icon: Icons.play_arrow_rounded,
+                      label: 'melody.start_listening'.tr(),
+                      onTap: _playSequence,
+                      active: _isPlaying,
+                    ),
+                  )
+                else ...[
+                  PlayfulHint('melody.choose_prompt'.tr()),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: PlayfulGhostButton(
+                      icon: Icons.replay_rounded,
+                      label: 'melody.listen_again'.tr(),
+                      onTap: _isPlaying ? null : _playSequence,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+                _buildIconGrid(constraints.maxWidth - side * 2),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildRound(Color contrast, bool hc) {
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        Text(
-          'melody.score'.tr(args: [_hits.toString()]),
-          style: GameTypography.body(context, contrast, 16),
-        ),
-        const SizedBox(height: 12),
-        if (!_revealed)
-          _buildStartButton(contrast, hc)
-        else ...[
-          Text(
-            'melody.choose_prompt'.tr(),
-            textAlign: TextAlign.center,
-            style: GameTypography.body(context, contrast, 16),
-          ),
-          const SizedBox(height: 6),
-          TextButton.icon(
-            onPressed: _isPlaying ? null : _playSequence,
-            icon: const Icon(Icons.replay_rounded),
-            label: Text('melody.listen_again'.tr()),
-          ),
-        ],
-        const SizedBox(height: 8),
-        Expanded(child: _buildIconGrid(hc)),
-      ],
-    );
-  }
-
-  Widget _buildStartButton(Color contrast, bool hc) {
-    return Semantics(
-      label: 'melody.start_listening'.tr(),
-      button: true,
-      child: GestureDetector(
-        onTap: _playSequence,
-        child: Column(
-          children: [
-            Container(
-              width: 110,
-              height: 110,
+  /// Ноти за низата: колку звуци има во рундата и колку се веќе погодени
+  /// (злато). Додека низата свири, тековната нота пулсира.
+  Widget _buildSequenceNotes(bool hc) {
+    final done = hc ? const Color(0xFFFFFF00) : Playful.sun;
+    final idle = hc ? Colors.white38 : Colors.white.withValues(alpha: 0.35);
+    return ExcludeSemantics(
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 10,
+        runSpacing: 8,
+        children: [
+          for (var i = 0; i < _sequence.length; i++)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutBack,
+              width: 44,
+              height: 44,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: hc
-                    ? null
-                    : const LinearGradient(
-                        colors: [Color(0xFF9333EA), Color(0xFFC084FC)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                color: hc ? _moduleAccent : null,
-                border: Border.all(color: contrast, width: hc ? 3 : 0),
-                boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
+                color: i < _userIndex ? done : (hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.85)),
+                border: Border.all(color: i < _userIndex ? Colors.white : idle, width: 2),
+                boxShadow: i < _userIndex && !hc ? [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 12)] : null,
               ),
-              child: const Icon(Icons.play_arrow_rounded, size: 52, color: Colors.white),
+              child: Icon(
+                Icons.music_note_rounded,
+                size: 24,
+                color: i < _userIndex ? (hc ? Colors.black : Playful.ink) : (hc ? Colors.white : Colors.white.withValues(alpha: 0.7)),
+              ),
             ),
-            const SizedBox(height: 8),
-            Text('melody.start_listening'.tr(), style: GameTypography.heading(context, contrast, 16)),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildIconGrid(bool hc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: GridView.count(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1.15,
-        children: _soundIds.map((id) => _iconCard(id, hc)).toList(),
-      ),
-    );
-  }
-
-  Widget _iconCard(String id, bool hc) {
-    final baseColor = _soundColors[id]!;
-    final label = _soundLabelKeys[id]!.tr();
-    final contrast = AccessibilityUtils.getContrastColor(context);
-    final isFlashing = _flashingId == id;
+  Widget _buildIconGrid(double width) {
     final interactive = _revealed && !_isPlaying && !_gameOver;
-
-    return Semantics(
-      label: label,
-      button: interactive,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(22),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: interactive ? () => _onTapIcon(id) : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              gradient: hc
-                  ? null
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isFlashing
-                          ? [Colors.white, Color.lerp(baseColor, Colors.white, 0.5)!]
-                          : [baseColor, Color.lerp(baseColor, Colors.white, 0.25)!],
-                    ),
-              color: hc ? baseColor.withOpacity(isFlashing ? 0.5 : 0.9) : null,
-              border: Border.all(
-                color: isFlashing ? Colors.white : (hc ? contrast : Colors.transparent),
-                width: isFlashing ? 4 : 2,
-              ),
-              boxShadow: hc
-                  ? const <BoxShadow>[]
-                  : [
-                      BoxShadow(
-                        color: baseColor.withOpacity(isFlashing ? 0.6 : 0.25),
-                        blurRadius: isFlashing ? 24 : 8,
-                        spreadRadius: isFlashing ? 3 : 0,
-                      ),
-                    ],
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Иста големина како кај Идентификација на звук - иконата
-                // зафаќа барем 70% од пократката страна на картичката.
-                final iconSize = min(constraints.maxWidth, constraints.maxHeight) * 0.7;
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(_soundIcons[id], size: iconSize, color: Colors.white),
-                    const SizedBox(height: 10),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                    ),
-                  ],
-                );
-              },
+    return PlayfulGrid(
+      columns: 2,
+      aspectRatio: width < 420 ? 1.0 : 1.4,
+      children: [
+        for (var i = 0; i < _soundIds.length; i++)
+          PopIn(
+            index: i,
+            child: SoundTile(
+              icon: _soundIcons[_soundIds[i]]!,
+              label: _soundLabelKeys[_soundIds[i]]!.tr(),
+              color: _soundColors[_soundIds[i]]!,
+              onTap: interactive ? () => _onTapIcon(_soundIds[i]) : null,
+              enabled: interactive,
+              flash: _flashingId == _soundIds[i],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEndScreen(Color contrast) {
-    final misses = _totalRounds - _hits;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text(
-              'melody.final_summary'.tr(args: [
-                _hits.toString(),
-                misses.toString(),
-                _totalRounds.toString(),
-              ]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _restart,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('melody.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

@@ -5,6 +5,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
+import 'package:hear_and_see_safe/utils/voice_level.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
@@ -131,8 +133,26 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   bool _agentLocked = false;
   bool? _agentPickedRefuse;
 
+  // --- Објаснување на почетокот на секоја игра ---
+  /// Клучот на објаснувањето за тековната игра ('cyber.intro_...').
+  String? _introKey;
+  /// Ја поставува играта: објаснувањето (само текст на екранот) и
+  /// првото прашање / порака.
+  void _beginGame(String introKey, Future<void> Function()? announce) {
+    setState(() => _introKey = introKey);
+    if (announce != null) announce();
+  }
+
+  /// Прекинува сè што се изговара (пред одговор или гласовна команда).
+  void _stopNarration() {
+    _narrationToken++;
+    _voicePlayer.stop();
+    VoiceLevel.speaking.value = false;
+  }
+
   @override
   void dispose() {
+    VoiceLevel.speaking.value = false;
     _voicePlayer.dispose();
     _effectsPlayer.dispose();
     super.dispose();
@@ -185,9 +205,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   }
 
   void _backToModeSelect() {
-    _narrationToken++;
-    _voicePlayer.stop();
-    setState(() => _view = _View.modeSelect);
+    _stopNarration();
+    setState(() {
+      _view = _View.modeSelect;
+      _introKey = null;
+    });
   }
 
   // =====================================================================
@@ -206,7 +228,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _phishingPickedCorrect = null;
       _view = _View.phishing;
     });
-    _announcePhishingMessage();
+    _beginGame('cyber.intro_phishing', _announcePhishingMessage);
   }
 
   Future<void> _announcePhishingMessage() async {
@@ -219,6 +241,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
 
   Future<void> _answerPhishing(bool pickedSafe) async {
     if (_phishingLocked) return;
+    _stopNarration();
     final msg = _phishingRoundList[_phishingIndex];
     final correct = pickedSafe == msg.isSafe;
     setState(() {
@@ -234,6 +257,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         await VibrationUtils.vibrate(pattern: const [0, 120, 100, 120]);
       }
     }
+    if (!mounted || _view != _View.phishing) return;
     if (correct) {
       setState(() => _phishingScore++);
       await _playPongEffect('hit.mp3');
@@ -242,7 +266,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     }
 
     await Future.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
+    // Детето можеби веќе отишло во друга игра.
+    if (!mounted || _view != _View.phishing) return;
 
     final next = _phishingIndex + 1;
     if (next >= _phishingRoundList.length) {
@@ -272,6 +297,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _castleMessageKey = null;
       _view = _View.password;
     });
+    _beginGame('cyber.intro_castle', null);
     _speak(_audioKey('cyber.castle_intro'));
   }
 
@@ -286,6 +312,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 60);
     }
+    if (!mounted) return;
     setState(() {
       _castleLength++;
       _castleCategories.add(category);
@@ -298,6 +325,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           await VibrationUtils.vibrate(pattern: const [0, 150, 100, 150, 100, 250]);
         }
         await _playPongEffect('hit.mp3');
+        if (!mounted) return;
         setState(() => _castleMessageKey = 'cyber.castle_strong_msg');
         await _speak(_audioKey('cyber.castle_strong_msg'));
       } else if (newLevel == 1) {
@@ -332,7 +360,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _agentPickedRefuse = null;
       _view = _View.agent;
     });
-    _announceAgentQuestion();
+    _beginGame('cyber.intro_agent', _announceAgentQuestion);
   }
 
   Future<void> _announceAgentQuestion() async {
@@ -344,6 +372,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
 
   Future<void> _answerAgent(bool refused) async {
     if (_agentLocked) return;
+    _stopNarration();
     // Точниот одговор е секогаш да се одбие - никогаш не се дели лична
     // информација со непознат.
     final correct = refused;
@@ -359,6 +388,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         await VibrationUtils.vibrate(pattern: const [0, 120, 100, 120]);
       }
     }
+    if (!mounted || _view != _View.agent) return;
     if (correct) {
       setState(() => _agentScore++);
       await _playPongEffect('hit.mp3');
@@ -367,7 +397,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     }
 
     await Future.delayed(const Duration(milliseconds: 1100));
-    if (!mounted) return;
+    if (!mounted || _view != _View.agent) return;
 
     final next = _agentIndex + 1;
     if (next >= _agentRoundList.length) {
@@ -398,7 +428,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       _quizShowingExplanation = false;
       _view = _View.quiz;
     });
-    _announceQuizQuestion();
+    _beginGame('cyber.intro_quiz', _announceQuizQuestion);
   }
 
   /// Прво се отклучува и чита прашањето, па опциите една по една - секоја
@@ -433,8 +463,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     _announceQuizQuestion();
   }
 
-  Future<void> _selectQuizAnswer(int index) async {
-    if (_quizPicked != null || index + 2 > _quizUnlocked) return;
+  Future<void> _selectQuizAnswer(int index, {bool fromVoice = false}) async {
+    if (_quizPicked != null || (!fromVoice && index + 2 > _quizUnlocked)) return;
     // Прекини го читањето штом е избран одговор.
     _narrationToken++;
     _voicePlayer.stop();
@@ -449,6 +479,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         await VibrationUtils.vibrate(pattern: const [0, 120, 100, 120]);
       }
     }
+    if (!mounted || _view != _View.quiz) return;
     if (correct) {
       setState(() => _quizScore++);
       await _playPongEffect('hit.mp3');
@@ -457,7 +488,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     }
 
     await Future.delayed(const Duration(milliseconds: 700));
-    if (!mounted) return;
+    if (!mounted || _view != _View.quiz) return;
     setState(() => _quizShowingExplanation = true);
     // Објаснувањето што се прикажува се и изговара (explanationN.mp3).
     _narrationToken++;
@@ -493,11 +524,14 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       accent: _moduleAccent,
       title: 'features.cyber_safety'.tr(),
       titleFontSize: 26,
-      // Во менито со режими веќе има копче; во режимите - горе десно:
-      // „назад“ (во менито), имињата на другите режими и игри.
-      voiceCommand: _view != _View.modeSelect,
-      voiceOptions: _modeVoiceOptions(ordinals: false),
-      onVoiceBack: _backToModeSelect,
+      // Секој поглед има свое (жолто) копче за глас - со одговорите на
+      // играта, имињата на другите режими и „назад“.
+      voiceCommand: false,
+      // Ноќна позадина со штитови, катанци и клучеви што лебдат.
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🛡️', '🔒', '🔑', '✉️', '🏰', '🕵️'],
+        tint: Color(0xFF0891B2),
+      ),
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -526,92 +560,100 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   }
 
   // --- Избор на режим ---
+  //
+  // Изглед: ноќната позадина на апликацијата + неонски „терминален“ белег
+  // на кибер-играта (моноспејс наслови, тиркизен сјај). Картичките се во
+  // бојата на играта, со реден број (може да се каже „прва“, „втора“...) и
+  // кусото објаснување на играта.
+
+  static const Color _neon = Color(0xFF22D3EE);
+  static const Color _gold = Color(0xFFFFC93C);
+
+  Color _fg(bool hc, Color contrast) => hc ? contrast : Colors.white;
+
+  /// Целата ширина (лизгачот скроз десно), содржината во средина до 860.
+  Widget _page(List<Widget> Function(double side) children) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final side = ((constraints.maxWidth - 860) / 2).clamp(20.0, double.infinity);
+        return ListView(
+          padding: EdgeInsets.fromLTRB(side, 12, side, 32),
+          children: children(side),
+        );
+      },
+    );
+  }
+
+  /// Неонски „терминален“ наслов.
+  Widget _terminalTitle(String text, IconData icon, bool hc) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: BoxDecoration(
+        color: hc ? Colors.black : const Color(0xFF0B0F19).withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: hc ? Colors.white : _neon, width: 2),
+        boxShadow: hc ? null : [BoxShadow(color: _neon.withValues(alpha: 0.4), blurRadius: 20, spreadRadius: 1)],
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: hc ? Colors.white : _neon, size: 32),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              '> $text',
+              style: TextStyle(fontFamily: 'monospace', fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 0.6, color: hc ? Colors.white : _neon),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildModeSelect(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        // "Терминален" наслов - асоцира на cyber/хакерска естетика.
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          decoration: BoxDecoration(
-            color: hc ? Colors.black : const Color(0xFF0B0F19),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: hc ? Colors.white : const Color(0xFF22D3EE), width: hc ? 2 : 1.5),
-            boxShadow: hc
-                ? null
-                : [BoxShadow(color: const Color(0xFF22D3EE).withOpacity(0.35), blurRadius: 18, spreadRadius: 1)],
+    final modes = [
+      (Icons.mail_lock_rounded, 'cyber.mode_phishing', 'cyber.intro_phishing', _startPhishing, const Color(0xFFC2410C)),
+      (Icons.quiz_rounded, 'cyber.mode_quiz', 'cyber.intro_quiz', _startQuiz, const Color(0xFF6D28D9)),
+      (Icons.castle_rounded, 'cyber.mode_password', 'cyber.intro_castle', _startCastle, const Color(0xFF047857)),
+      (Icons.theater_comedy_rounded, 'cyber.mode_agent', 'cyber.intro_agent', _startAgent, const Color(0xFFBE185D)),
+    ];
+    return _page((side) => [
+          PopIn(index: 0, child: _terminalTitle('cyber.choose_mode'.tr(), Icons.security_rounded, hc)),
+          const SizedBox(height: 18),
+          Center(
+            child: CategoryVoiceCommandButton(
+              options: _modeVoiceOptions(),
+              onBack: () => Navigator.of(context).pop(),
+              background: hc ? null : _gold,
+              foreground: hc ? null : Playful.ink,
+            ),
           ),
-          child: Row(
-            children: [
-              Icon(Icons.security_rounded, color: hc ? Colors.white : const Color(0xFF22D3EE), size: 30),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'cyber.choose_mode'.tr(),
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                    color: hc ? Colors.white : const Color(0xFF22D3EE),
-                  ),
-                ),
+          const SizedBox(height: 18),
+          for (var i = 0; i < modes.length; i++) ...[
+            PopIn(
+              index: 1 + i,
+              child: _modeCard(
+                context,
+                number: i + 1,
+                icon: modes[i].$1,
+                label: modes[i].$2.tr(),
+                desc: modes[i].$3.tr(),
+                onTap: modes[i].$4,
+                accent: modes[i].$5,
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Center(
-          child: CategoryVoiceCommandButton(
-            options: _modeVoiceOptions(),
-            onBack: () => Navigator.of(context).pop(),
-          ),
-        ),
-        const SizedBox(height: 16),
-        _modeCard(
-          context,
-          icon: Icons.mail_lock_rounded,
-          label: 'cyber.mode_phishing'.tr(),
-          onTap: _startPhishing,
-          accent: const Color(0xFFF97316),
-        ),
-        const SizedBox(height: 16),
-        _modeCard(
-          context,
-          icon: Icons.quiz_rounded,
-          label: 'cyber.mode_quiz'.tr(),
-          onTap: _startQuiz,
-          accent: const Color(0xFF8B5CF6),
-        ),
-        const SizedBox(height: 16),
-        _modeCard(
-          context,
-          icon: Icons.castle_rounded,
-          label: 'cyber.mode_password'.tr(),
-          onTap: _startCastle,
-          accent: const Color(0xFF10B981),
-        ),
-        const SizedBox(height: 16),
-        _modeCard(
-          context,
-          icon: Icons.theater_comedy_rounded,
-          label: 'cyber.mode_agent'.tr(),
-          onTap: _startAgent,
-          accent: const Color(0xFFEC4899),
-        ),
-      ],
-    );
+            ),
+            const SizedBox(height: 18),
+          ],
+        ]);
   }
 
   /// Редни броеви (mk/en/sq) за картичките во менито - се бара цел збор, за
   /// „два“ да не се фати во друг збор.
   static const List<List<String>> _ordinalWords = [
-    ['прва', 'прво', 'први', 'првата', '1', 'еден', 'една', 'first', 'one', 'parë', 'pare', 'një', 'nje'],
-    ['втора', 'второ', 'втори', 'втората', '2', 'два', 'две', 'second', 'two', 'dytë', 'dyte', 'dy'],
-    ['трета', 'трето', 'трети', 'третата', '3', 'три', 'third', 'three', 'tretë', 'trete', 'tre'],
+    ['прва', 'прво', 'први', 'прв', 'првата', 'првиот', 'pari', 'para', '1', 'еден', 'една', 'first', 'one', 'parë', 'pare', 'një', 'nje'],
+    ['втора', 'второ', 'втори', 'втор', 'втората', 'вториот', 'dyti', 'dyta', '2', 'два', 'две', 'second', 'two', 'dytë', 'dyte', 'dy'],
+    ['трета', 'трето', 'трети', 'трет', 'третата', 'третиот', 'treti', 'treta', '3', 'три', 'third', 'three', 'tretë', 'trete', 'tre'],
     ['четврта', 'четврто', 'четврти', 'четвртата', '4', 'четири', 'fourth', 'four', 'katërt', 'katert', 'katër', 'kater'],
   ];
 
@@ -662,93 +704,227 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       ),
     ];
 
+  // --- Гласовни одговори во играта ---
+
+  /// Дали транскриптот содржи некој од зборовите (цел збор или почеток на
+  /// збор, за облици како „безбедна“, „одбивам“).
+  static bool _saysAny(String t, List<String> words) {
+    final clean = t.toLowerCase().replaceAll(RegExp(r'[.,!?„“"]'), ' ');
+    for (final w in words) {
+      if (w.contains(' ')) {
+        if (clean.contains(w)) return true;
+      } else if (clean.split(RegExp(r'\s+')).any((x) => x.startsWith(w))) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static const List<String> _kwUnsafe = [
+    'небезбед', 'не е безбед', 'не безбед', 'опасн', 'unsafe', 'not safe', "isn't safe", 'danger',
+    'pasigurt', 'nuk është i sigurt', 'nuk eshte i sigurt', 'jo i sigurt', 'rrezik',
+  ];
+  static const List<String> _kwSafe = ['безбед', 'сигурн', 'safe', 'sigurt'];
+  static const List<String> _kwRefuse = [
+    'одбиј', 'одбив', 'одбие', 'не одговар', 'нема да одговор', 'не одговор',
+    'refuse', 'decline', 'reject', "don't answer", 'not answer', "won't answer", 'no answer',
+    'refuzo', 'refuzoj', 'nuk përgjigj', 'nuk pergjigj', 'mos përgjigj',
+  ];
+  static const List<String> _kwAnswer = ['одговор', 'одговар', 'answer', 'reply', 'përgjigj', 'pergjigj'];
+  static const List<String> _kwRepeat = ['повтори', 'пак', 'слушни', 'repeat', 'again', 'listen', 'përsërit', 'perserit', 'dëgjo', 'degjo'];
+
+  /// Опциите за копчето за глас во тековниот поглед: одговорите на играта,
+  /// па имињата на другите режими.
+  List<VoiceCategoryOption> _gameVoiceOptions() {
+    final opts = <VoiceCategoryOption>[];
+    switch (_view) {
+      case _View.phishing:
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwRepeat), onSelected: () {
+          if (!_phishingLocked) _announcePhishingMessage();
+        }));
+        // „Небезбедно“ го содржи „безбедно“ - затоа прво се проверува опасно.
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwUnsafe), onSelected: () => _answerPhishing(false)));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwSafe), onSelected: () => _answerPhishing(true)));
+        break;
+      case _View.agent:
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwRepeat), onSelected: () {
+          if (!_agentLocked) _announceAgentQuestion();
+        }));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwRefuse), onSelected: () => _answerAgent(true)));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, _kwAnswer), onSelected: () => _answerAgent(false)));
+        break;
+      case _View.quiz:
+        opts.add(VoiceCategoryOption(
+          keywords: const [],
+          matches: (t) => _quizShowingExplanation && _saysAny(t, const ['продолж', 'следн', 'continue', 'next', 'vazhdo', 'tjetr']),
+          onSelected: _quizContinue,
+        ));
+        opts.add(VoiceCategoryOption(
+          keywords: const [],
+          matches: (t) => _saysAny(t, const ['повтори', 'пак', 'repeat', 'again', 'përsërit', 'perserit']),
+          onSelected: _repeatQuizQuestion,
+        ));
+        // Прво редните броеви за сите три (за „a third one“ да не се фати
+        // како „a“), па буквите.
+        for (var i = 0; i < 3; i++) {
+          final index = i;
+          opts.add(VoiceCategoryOption(
+            keywords: const [],
+            matches: (t) => _saysOrdinal(t, index),
+            onSelected: () => _selectQuizAnswer(index, fromVoice: true),
+          ));
+        }
+        for (var i = 0; i < 3; i++) {
+          final index = i;
+          opts.add(VoiceCategoryOption(
+            keywords: const [],
+            matches: (t) => _saysWord(t, _quizLetterWords[index]),
+            onSelected: () => _selectQuizAnswer(index, fromVoice: true),
+          ));
+        }
+        break;
+      case _View.password:
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, const ['почни', 'одново', 'start over', 'reset', 'fillo']), onSelected: _resetCastle));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, const ['мали', 'lowercase', 'lower', 'small', 'vogla']), onSelected: () => _addIngredient('lower')));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, const ['големи', 'uppercase', 'upper', 'capital', 'big', 'mëdha', 'medha']), onSelected: () => _addIngredient('upper')));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, const ['брое', 'бројк', 'цифр', 'number', 'digit', 'numra', 'shifra']), onSelected: () => _addIngredient('digit')));
+        opts.add(VoiceCategoryOption(keywords: const [], matches: (t) => _saysAny(t, const ['симбол', 'знац', 'знак', 'symbol', 'simbol', 'shenj']), onSelected: () => _addIngredient('symbol')));
+        break;
+      case _View.phishingResult:
+      case _View.quizResult:
+      case _View.agentResult:
+        opts.add(VoiceCategoryOption(
+          keywords: const [],
+          matches: (t) => _saysAny(t, const ['повторно', 'играј пак', 'play again', 'again', 'përsëri', 'perseri']),
+          onSelected: _view == _View.phishingResult ? _startPhishing : (_view == _View.quizResult ? _startQuiz : _startAgent),
+        ));
+        break;
+      case _View.modeSelect:
+        break;
+    }
+    return [...opts, ..._modeVoiceOptions(ordinals: false)];
+  }
+
+  /// „а / б / в“ и „a / b / c“ за одговорите во квизот - само како
+  /// посебен збор (не почеток на друг збор).
+  static const List<List<String>> _quizLetterWords = [
+    ['а', 'a'],
+    ['б', 'b'],
+    ['в', 'c'],
+  ];
+
+  static bool _saysWord(String t, List<String> words) {
+    final parts = t.toLowerCase().replaceAll(RegExp(r'[.,!?„“"]'), ' ').split(RegExp(r'\s+'));
+    return words.any(parts.contains);
+  }
+
+  /// Штом почне гласовната команда: запри го говорот; во квизот отклучи ги
+  /// сите одговори (детето сака да одговори со глас).
+  void _onGameVoiceStart() {
+    _stopNarration();
+    if (_view == _View.quiz && _quizPicked == null && mounted) {
+      setState(() {
+        _quizUnlocked = 4;
+        _quizReadingOption = null;
+      });
+    }
+  }
+
   static bool _saysOrdinal(String t, int index) {
     final words = t.replaceAll(RegExp(r'[.,!?]'), ' ').split(RegExp(r'\s+'));
     return _ordinalWords[index].any(words.contains);
   }
 
-  /// Категорија на почетниот екран - поголема, со "cyber"/хакерска естетика
-  /// (темна "терминална" картичка, неонски акцент-раб со блесок, поголема
-  /// моноспејс буква).
+  /// Картичка за игра: градиент во бојата на играта, бел раб, сјај, реден
+  /// број во златно копче, име и кусо објаснување.
   Widget _modeCard(
     BuildContext context, {
+    required int number,
     required IconData icon,
     required String label,
-    required VoidCallback? onTap,
-    Color accent = _moduleAccent,
+    required String desc,
+    required VoidCallback onTap,
+    required Color accent,
   }) {
     final hc = AccessibilityUtils.isHighContrast(context);
-    final enabled = onTap != null;
-    return Opacity(
-      opacity: enabled ? 1.0 : 0.5,
-      child: Semantics(
-        label: enabled ? label : '$label. ${'cyber.coming_soon'.tr()}',
-        button: enabled,
+    final deep = Color.lerp(accent, Colors.black, 0.35)!;
+    final fg = hc ? Colors.white : Colors.white;
+    return Semantics(
+      label: '$number. $label. $desc',
+      button: true,
+      child: PressableScale(
         child: Material(
           color: Colors.transparent,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(28),
           child: InkWell(
-            borderRadius: BorderRadius.circular(24),
+            borderRadius: BorderRadius.circular(28),
             onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(20),
+            child: Ink(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                gradient: hc
-                    ? null
-                    : LinearGradient(
-                        colors: [const Color(0xFF0B0F19), Color.lerp(const Color(0xFF0B0F19), accent, 0.16)!],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
+                borderRadius: BorderRadius.circular(28),
+                gradient: hc ? null : LinearGradient(colors: [accent, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
                 color: hc ? Colors.black : null,
-                border: Border.all(color: hc ? Colors.white : accent, width: hc ? 2 : 1.8),
-                boxShadow: hc
-                    ? null
-                    : [
-                        BoxShadow(color: accent.withOpacity(0.4), blurRadius: 16, spreadRadius: 0.5),
-                        BoxShadow(color: Colors.black.withOpacity(0.35), offset: const Offset(0, 6), blurRadius: 12),
-                      ],
+                border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
+                boxShadow: hc ? null : [BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 24, offset: const Offset(0, 10))],
               ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: hc ? const Color(0xFFFFFF00) : accent,
-                      boxShadow: hc ? null : [BoxShadow(color: accent.withOpacity(0.6), blurRadius: 14, spreadRadius: 1)],
-                    ),
-                    child: Icon(icon, color: hc ? Colors.black : Colors.white, size: 38),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          label,
-                          style: TextStyle(
-                            fontFamily: 'monospace',
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                            height: 1.15,
-                            color: hc ? Colors.white : Colors.white.withOpacity(0.96),
-                          ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(26),
+                child: Stack(
+                  children: [
+                    if (!hc)
+                      Positioned(
+                        right: -18,
+                        bottom: -26,
+                        child: ExcludeSemantics(child: Icon(icon, size: 140, color: Colors.white.withValues(alpha: 0.10))),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: ExcludeSemantics(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Column(
+                              children: [
+                                Container(
+                                  width: 76,
+                                  height: 76,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white, border: hc ? Border.all(color: Colors.white, width: 2) : null),
+                                  child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : deep, size: 42),
+                                ),
+                                const SizedBox(height: 10),
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? const Color(0xFFFFFF00) : _gold, border: Border.all(color: Colors.white, width: 2)),
+                                  child: Text('$number', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Playful.ink)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 18),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(label, style: Playful.display(26, color: fg)),
+                                  const SizedBox(height: 8),
+                                  Text(desc, style: Playful.body(16.5, color: fg.withValues(alpha: 0.95))),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: hc ? 0.1 : 0.22), border: Border.all(color: Colors.white, width: 2)),
+                              child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 28),
+                            ),
+                          ],
                         ),
-                        if (!enabled) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'cyber.coming_soon'.tr(),
-                            style: TextStyle(fontSize: 14, color: hc ? Colors.white70 : Colors.white60),
-                          ),
-                        ],
-                      ],
+                      ),
                     ),
-                  ),
-                  if (enabled) Icon(Icons.chevron_right_rounded, color: hc ? Colors.white : accent, size: 30),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -757,33 +933,88 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     );
   }
 
-  // --- Заеднички елементи за екраните "порака + два одговора"
-  //     (Волк во овча кожа / Таен агент) - редизајнирано по мокап: пилула
-  //     со ниво/прогрес, крупен наслов-прашање, картичка-порака во стил на
-  //     инбокс (икона + подател + линија + текст), па два големи копчиња
-  //     со контура наместо целосно обоени.
+  // --- Заеднички елементи за игрите ---
 
+  /// Златна пилула со бројот на пораката / прашањето.
   Widget _buildLevelBadge(String text, Color contrast, bool hc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: hc ? Colors.black : AccessibilityUtils.getDisabledColor(context),
-            borderRadius: BorderRadius.circular(24),
-            border: hc ? Border.all(color: Colors.white, width: 1.5) : null,
-          ),
-          child: Text(
-            text,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: hc ? Colors.white : contrast.withOpacity(0.8)),
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : _gold,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: Colors.white, width: hc ? 1.5 : 2),
+        ),
+        child: Text(text, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
+      ),
+    );
+  }
+
+  /// „Како се игра“ - кусото објаснување за играта (само текст).
+  Widget _briefing(bool hc) {
+    final key = _introKey;
+    if (key == null) return const SizedBox.shrink();
+    return Semantics(
+      label: '${'cyber.how_to_play'.tr()}. ${key.tr()}',
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : const Color(0xFF0B0F19).withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: hc ? Colors.white : _neon.withValues(alpha: 0.7), width: 2),
+        ),
+        child: ExcludeSemantics(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.terminal_rounded, color: hc ? Colors.white : _neon, size: 24),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '> ${'cyber.how_to_play'.tr()}',
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.white : _neon),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(key.tr(), style: Playful.body(17, color: Colors.white)),
+            ],
           ),
         ),
       ),
     );
   }
 
+  /// Жолто копче за глас (одговорите на играта + режими + „назад“) и кус
+  /// потсетник што може да се каже.
+  Widget _voiceRow(String? hintKey, bool hc) {
+    return Column(
+      children: [
+        Center(
+          child: CategoryVoiceCommandButton(
+            options: _gameVoiceOptions(),
+            onBack: _backToModeSelect,
+            onListenStart: _onGameVoiceStart,
+            respondToHotkey: true,
+            compact: true,
+            background: hc ? null : _gold,
+            foreground: hc ? null : Playful.ink,
+          ),
+        ),
+        if (hintKey != null) ...[
+          const SizedBox(height: 8),
+          Text(hintKey.tr(), textAlign: TextAlign.center, style: Playful.body(15, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85))),
+        ],
+      ],
+    );
+  }
+
+  /// Порака во стил на инбокс: бела (темен текст) со златен раб; по
+  /// одговорот - зелена / црвена.
   Widget _buildMessageCard(
     BuildContext context, {
     required IconData headerIcon,
@@ -792,25 +1023,18 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     required String bodyText,
     Color? cardColor,
   }) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
     final answered = cardColor != null;
+    final ink = answered ? Colors.white : (hc ? Colors.white : Playful.ink);
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: answered ? cardColor : (hc ? Colors.black : Colors.white),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(
-          color: answered
-              ? (hc ? Colors.white : Colors.white.withOpacity(0.55))
-              : (hc ? Colors.white : const Color(0xFFF59E0B)),
-          width: hc ? 2.5 : 2.2,
-        ),
-        boxShadow: hc
-            ? const []
-            : [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 22, offset: const Offset(0, 10))],
+        border: Border.all(color: answered ? Colors.white : (hc ? Colors.white : _gold), width: 3),
+        boxShadow: hc ? const [] : [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 24, offset: const Offset(0, 12))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -819,62 +1043,166 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           Row(
             children: [
               Container(
-                width: 54,
-                height: 54,
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
-                  color: answered
-                      ? Colors.white.withOpacity(0.25)
-                      : (hc ? Colors.white : headerIconColor.withOpacity(0.15)),
-                  borderRadius: BorderRadius.circular(16),
+                  color: answered ? Colors.white.withValues(alpha: 0.25) : (hc ? Colors.white : headerIconColor),
+                  borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(
-                  headerIcon,
-                  size: 30,
-                  color: answered ? Colors.white : (hc ? Colors.black : headerIconColor),
-                ),
+                child: Icon(headerIcon, size: 32, color: answered ? Colors.white : (hc ? Colors.black : Colors.white)),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      senderText,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
-                        color: answered ? Colors.white : (hc ? Colors.white : contrast),
-                      ),
-                    ),
+                    Text(senderText, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: ink)),
                     const SizedBox(height: 2),
-                    Text(
-                      'cyber.new_message_label'.tr(),
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: answered ? Colors.white70 : (hc ? Colors.white70 : contrast.withOpacity(0.55)),
-                      ),
-                    ),
+                    Text('cyber.new_message_label'.tr(), style: TextStyle(fontSize: 14, color: ink.withValues(alpha: 0.75))),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Divider(
-            color: answered ? Colors.white.withOpacity(0.4) : (hc ? Colors.white24 : contrast.withOpacity(0.12)),
-            height: 1,
-          ),
+          Divider(color: ink.withValues(alpha: 0.25), height: 1),
           const SizedBox(height: 16),
-          Text(
-            bodyText,
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w600,
-              height: 1.35,
-              color: answered ? Colors.white : (hc ? Colors.white : contrast),
+          Text(bodyText, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, height: 1.4, color: ink)),
+        ],
+      ),
+    );
+  }
+
+  /// Големо копче за одговор во полна боја (бел текст), со бел раб.
+  Widget _phishingChoiceButton(BuildContext context, {required String label, required IconData icon, required Color color, required VoidCallback onTap, required bool locked, bool picked = false}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Semantics(
+      button: !locked,
+      label: label,
+      child: AbsorbPointer(
+        absorbing: locked,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutBack,
+          scale: picked ? 1.06 : 1.0,
+          child: PressableScale(
+            child: Material(
+              color: hc ? Colors.black : color,
+              borderRadius: BorderRadius.circular(24),
+              elevation: hc ? 0 : 8,
+              shadowColor: color.withValues(alpha: 0.6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: onTap,
+                child: Container(
+                  height: 134,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: hc ? color : Colors.white, width: picked ? 5 : 3),
+                  ),
+                  child: ExcludeSemantics(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: Colors.white, size: 48),
+                        const SizedBox(height: 8),
+                        Text(label, textAlign: TextAlign.center, style: Playful.title(21)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  /// Трофеј, резултат, „Играј повторно“ и „Смени игра“.
+  Widget _resultView({required String titleKey, required int score, required int total, required VoidCallback onAgain}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(hc, AccessibilityUtils.getContrastColor(context));
+    return _page((side) => [
+          const SizedBox(height: 24),
+          PopIn(
+            child: Center(
+              child: RippleRings(
+                color: hc ? Colors.white : _gold,
+                spread: 24,
+                child: Container(
+                  width: 130,
+                  height: 130,
+                  decoration: BoxDecoration(
+                    color: hc ? Colors.black : Playful.night,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: hc ? Colors.white : _gold, width: 5),
+                  ),
+                  child: Icon(Icons.emoji_events_rounded, size: 76, color: hc ? const Color(0xFFFFFF00) : _gold),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 26),
+          PopIn(index: 1, child: Text(titleKey.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26))),
+          const SizedBox(height: 14),
+          // По еден штит за секој точен одговор.
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              for (var i = 0; i < total; i++)
+                PopIn(
+                  index: 2 + i,
+                  stepMs: 90,
+                  child: Icon(
+                    i < score ? Icons.shield_rounded : Icons.shield_outlined,
+                    size: 42,
+                    color: i < score ? (hc ? const Color(0xFFFFFF00) : _gold) : contrast.withValues(alpha: 0.4),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text('cyber.score'.tr(args: [score.toString(), total.toString()]), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 20)),
+          const SizedBox(height: 28),
+          _bigButton(icon: Icons.refresh_rounded, label: 'cyber.play_again'.tr(), onTap: onAgain, primary: true),
+          const SizedBox(height: 12),
+          _bigButton(icon: Icons.grid_view_rounded, label: 'cyber.change_mode'.tr(), onTap: _backToModeSelect, primary: false),
+          const SizedBox(height: 22),
+          _voiceRow(null, hc),
+        ]);
+  }
+
+  Widget _bigButton({required IconData icon, required String label, required VoidCallback onTap, required bool primary}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final bg = hc ? Colors.black : (primary ? _gold : Colors.white.withValues(alpha: 0.1));
+    final fg = hc ? Colors.white : (primary ? Playful.ink : Colors.white);
+    return PressableScale(
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: primary && !hc ? 0 : 0.8), width: 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: fg, size: 28),
+                const SizedBox(width: 10),
+                Flexible(child: Text(label, style: Playful.title(20, color: fg))),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -882,453 +1210,381 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   // --- Волк во овча кожа ---
 
   Widget _buildPhishing(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(hc, AccessibilityUtils.getContrastColor(context));
     final msg = _phishingRoundList[_phishingIndex];
 
     Color? cardColor;
     if (_phishingPickedCorrect != null) {
       cardColor = _phishingPickedCorrect!
-          ? (hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A))
+          ? (hc ? const Color(0xFF14532D) : const Color(0xFF16A34A))
           : (hc ? const Color(0xFF3A3A3A) : const Color(0xFFDC2626));
     }
 
-    return Column(
-      children: [
-        _buildBackRow(contrast, onBack: _backToModeSelect),
-        _buildLevelBadge(
-          'cyber.phishing_progress'.tr(args: [(_phishingIndex + 1).toString(), _phishingRoundList.length.toString()]),
-          contrast,
-          hc,
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.phishing_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 23)),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              child: _buildMessageCard(
-                context,
-                headerIcon: Icons.mail_rounded,
-                headerIconColor: const Color(0xFFF59E0B),
-                senderText: msg.senderKey.tr(),
-                bodyText: msg.textKey.tr(),
-                cardColor: cardColor,
-              ),
-            ),
+    return _page((side) => [
+          _buildBackRow(contrast, onBack: _backToModeSelect),
+          const SizedBox(height: 6),
+          _buildLevelBadge('cyber.phishing_progress'.tr(args: [(_phishingIndex + 1).toString(), _phishingRoundList.length.toString()]), contrast, hc),
+          const SizedBox(height: 14),
+          _briefing(hc),
+          const SizedBox(height: 16),
+          Text('cyber.phishing_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26)),
+          const SizedBox(height: 16),
+          _buildMessageCard(
+            context,
+            headerIcon: Icons.mail_rounded,
+            headerIconColor: const Color(0xFFC2410C),
+            senderText: msg.senderKey.tr(),
+            bodyText: msg.textKey.tr(),
+            cardColor: cardColor,
           ),
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.choose_feeling'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 17)),
-        ),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Row(
+          const SizedBox(height: 18),
+          Text('cyber.choose_feeling'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19)),
+          const SizedBox(height: 14),
+          Row(
             children: [
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.danger'.tr(), icon: Icons.warning_rounded, color: const Color(0xFFDC2626), onTap: () => _answerPhishing(false), locked: _phishingLocked)),
+              Expanded(child: _phishingChoiceButton(context, label: 'cyber.danger'.tr(), icon: Icons.warning_rounded, color: const Color(0xFFDC2626), onTap: () => _answerPhishing(false), locked: _phishingLocked, picked: _phishingPickedSafe == false)),
               const SizedBox(width: 16),
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.safe'.tr(), icon: Icons.verified_user_rounded, color: const Color(0xFF16A34A), onTap: () => _answerPhishing(true), locked: _phishingLocked)),
+              Expanded(child: _phishingChoiceButton(context, label: 'cyber.safe'.tr(), icon: Icons.verified_user_rounded, color: const Color(0xFF15803D), onTap: () => _answerPhishing(true), locked: _phishingLocked, picked: _phishingPickedSafe == true)),
             ],
           ),
-        ),
-      ],
-    );
+          const SizedBox(height: 18),
+          _voiceRow('cyber.voice_hint_phishing', hc),
+        ]);
   }
 
-  /// Копче за одговор - контура во боја на позадина бела/црна (наместо
-  /// целосно обоена позадина), со голема икона над текстот, по мокапот.
-  Widget _phishingChoiceButton(BuildContext context, {required String label, required IconData icon, required Color color, required VoidCallback onTap, required bool locked}) {
-    final hc = AccessibilityUtils.isHighContrast(context);
-    return AbsorbPointer(
-      absorbing: locked,
-      child: Material(
-        color: hc ? Colors.black : Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        elevation: hc ? 0 : 5,
-        shadowColor: Colors.black.withOpacity(0.25),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(22),
-          onTap: onTap,
-          child: Container(
-            height: 122,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: color, width: hc ? 2.5 : 2.4),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(icon, color: hc ? Colors.white : color, size: 42),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: hc ? Colors.white : color),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPhishingResult(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text('cyber.phishing_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
-            const SizedBox(height: 12),
-            Text(
-              'cyber.score'.tr(args: [_phishingScore.toString(), _phishingRoundList.length.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _startPhishing,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('cyber.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _backToModeSelect,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text('cyber.change_mode'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AccessibilityUtils.getDisabledColor(context),
-                foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget _buildPhishingResult(BuildContext context) => _resultView(
+        titleKey: 'cyber.phishing_done',
+        score: _phishingScore,
+        total: _phishingRoundList.length,
+        onAgain: _startPhishing,
+      );
 
   // --- Квиз ---
 
   Widget _buildQuiz(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(hc, AccessibilityUtils.getContrastColor(context));
     final q = _questions[_quizIndex];
 
-    return Column(
-      children: [
-        _buildBackRow(contrast, onBack: _backToModeSelect),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'cyber.progress'.tr(args: [(_quizIndex + 1).toString(), _questions.length.toString()]),
-            style: GameTypography.heading(context, contrast, 20),
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 250),
-                  opacity: _quizUnlocked >= 1 ? 1.0 : 0.3,
-                  child: Container(
-                    padding: const EdgeInsets.all(18),
-                    decoration: BoxDecoration(
-                      color: _moduleAccent.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: _moduleAccent.withOpacity(0.3), width: 1.5),
-                    ),
-                    child: Text(q.question, textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 19)),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (_quizPicked == null)
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _repeatQuizQuestion,
-                      icon: const Icon(Icons.replay_rounded),
-                      label: Text('cyber.repeat_question'.tr(), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                const SizedBox(height: 12),
-                ...q.options.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final option = entry.value;
-                  final picked = _quizPicked == index;
-                  final unlocked = index + 2 <= _quizUnlocked;
-                  final reading = _quizReadingOption == index;
-                  Color bg = AccessibilityUtils.getPrimaryButtonBackground(context);
-                  Color fg = AccessibilityUtils.getPrimaryButtonForeground(context);
-                  if (picked) {
-                    final correct = index == q.correctAnswer;
-                    bg = correct ? (hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A)) : (hc ? const Color(0xFF3A3A3A) : const Color(0xFF6B7280));
-                    fg = correct && hc ? Colors.black : Colors.white;
-                  } else if (_quizShowingExplanation && index == q.correctAnswer) {
-                    bg = hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A);
-                    fg = hc ? Colors.black : Colors.white;
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: AbsorbPointer(
-                      absorbing: _quizPicked != null || !unlocked,
-                      child: AnimatedOpacity(
-                        duration: const Duration(milliseconds: 250),
-                        opacity: (unlocked || reading || _quizPicked != null) ? 1.0 : 0.3,
-                        child: Semantics(
-                        label: '${index + 1}. $option',
-                        button: unlocked,
-                        child: SizedBox(
-                          width: double.infinity,
-                          height: 76,
-                          child: ElevatedButton(
-                            onPressed: () => _selectQuizAnswer(index),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: bg,
-                              foregroundColor: fg,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18),
-                                side: reading
-                                    ? BorderSide(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B), width: 4)
-                                    : BorderSide.none,
-                              ),
-                              elevation: hc ? 0 : 4,
-                            ),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8),
-                                child: Text(option, textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-                              ),
-                            ),
-                          ),
-                        ),
-                        ),
-                      ),
-                    ),
-                  );
-                }),
-                if (_quizShowingExplanation) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AccessibilityUtils.getCardBackgroundColor(context),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: hc ? Colors.white : contrast.withOpacity(0.2), width: hc ? 2 : 1),
-                    ),
-                    child: Text(q.explanation, style: GameTypography.body(context, contrast, 16)),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton.icon(
-                      onPressed: _quizContinue,
-                      icon: const Icon(Icons.arrow_forward_rounded),
-                      label: Text('cyber.continue_button'.tr(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _moduleAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                    ),
-                  ),
+    return _page((side) => [
+          _buildBackRow(contrast, onBack: _backToModeSelect),
+          const SizedBox(height: 6),
+          _buildLevelBadge('cyber.progress'.tr(args: [(_quizIndex + 1).toString(), _questions.length.toString()]), contrast, hc),
+          const SizedBox(height: 14),
+          _briefing(hc),
+          const SizedBox(height: 16),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: _quizUnlocked >= 1 ? 1.0 : 0.35,
+            child: Container(
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                color: hc ? Colors.black : Colors.white,
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(color: hc ? Colors.white : _gold, width: 3),
+                boxShadow: hc ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.4), blurRadius: 22, offset: const Offset(0, 10))],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.help_rounded, color: hc ? Colors.white : const Color(0xFF6D28D9), size: 34),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(q.question, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.35, color: hc ? Colors.white : Playful.ink))),
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-      ],
-    );
+          const SizedBox(height: 10),
+          if (_quizPicked == null)
+            Center(
+              child: OutlinedButton.icon(
+                onPressed: _repeatQuizQuestion,
+                icon: Icon(Icons.replay_rounded, color: hc ? null : _gold),
+                label: Text('cyber.repeat_question'.tr(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.75), width: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                ),
+              ),
+            ),
+          const SizedBox(height: 14),
+          for (var index = 0; index < q.options.length; index++) ...[
+            _quizOptionRow(q, index, hc),
+            const SizedBox(height: 14),
+          ],
+          if (_quizShowingExplanation) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: hc ? Colors.black : const Color(0xFF0B0F19).withValues(alpha: 0.9),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: hc ? Colors.white : _neon, width: 2),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.lightbulb_rounded, color: hc ? Colors.white : _gold, size: 30),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(q.explanation, style: Playful.body(18))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            _bigButton(icon: Icons.arrow_forward_rounded, label: 'cyber.continue_button'.tr(), onTap: _quizContinue, primary: true),
+            const SizedBox(height: 8),
+          ],
+          const SizedBox(height: 10),
+          _voiceRow('cyber.voice_hint_quiz', hc),
+        ]);
   }
 
-  Widget _buildQuizResult(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text('cyber.quiz_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
-            const SizedBox(height: 12),
-            Text(
-              'cyber.score'.tr(args: [_quizScore.toString(), _questions.length.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _startQuiz,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('cyber.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  /// Одговор во квизот: бел ред со бројот; се чита - злато; точно -
+  /// зелено; погрешно - сиво. Додека не се прочита - бледо.
+  Widget _quizOptionRow(CyberSafetyQuestion q, int index, bool hc) {
+    final option = q.options[index];
+    final picked = _quizPicked == index;
+    final unlocked = index + 2 <= _quizUnlocked;
+    final reading = _quizReadingOption == index;
+    final showCorrect = (picked || _quizShowingExplanation) && index == q.correctAnswer;
+    Color bg = hc ? AccessibilityUtils.getPrimaryButtonBackground(context) : Colors.white;
+    Color fg = hc ? Colors.white : Playful.ink;
+    if (showCorrect) {
+      bg = hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A);
+      fg = hc ? Colors.black : Colors.white;
+    } else if (picked) {
+      bg = hc ? const Color(0xFF3A3A3A) : const Color(0xFFDC2626);
+      fg = Colors.white;
+    } else if (reading && !hc) {
+      bg = _gold;
+    }
+    return AbsorbPointer(
+      absorbing: _quizPicked != null || !unlocked,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 250),
+        opacity: (unlocked || reading || _quizPicked != null) ? 1.0 : 0.35,
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutBack,
+          scale: reading || picked ? 1.03 : 1.0,
+          child: Semantics(
+            label: '${index + 1}. $option',
+            button: unlocked,
+            child: Material(
+              color: bg,
+              borderRadius: BorderRadius.circular(22),
+              elevation: hc ? 0 : (reading ? 14 : 6),
+              shadowColor: reading ? _gold : Colors.black.withValues(alpha: 0.5),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: () => _selectQuizAnswer(index),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 18, 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(22),
+                    border: reading || hc ? Border.all(color: hc ? Colors.white : Colors.white, width: reading ? 4 : 2) : null,
+                  ),
+                  child: ExcludeSemantics(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 46,
+                          height: 46,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : const Color(0xFF6D28D9), border: Border.all(color: Colors.white, width: 2)),
+                          child: showCorrect
+                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 28)
+                              : (picked
+                                  ? const Icon(Icons.close_rounded, color: Colors.white, size: 28)
+                                  : Text('${index + 1}', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: Colors.white))),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: Text(option, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, height: 1.3, color: fg))),
+                        if (reading && !hc) const SoundWave(color: Playful.ink, bars: 5, height: 26, barWidth: 4),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _backToModeSelect,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text('cyber.change_mode'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AccessibilityUtils.getDisabledColor(context),
-                foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
 
+  Widget _buildQuizResult(BuildContext context) => _resultView(
+        titleKey: 'cyber.quiz_done',
+        score: _quizScore,
+        total: _questions.length,
+        onAgain: _startQuiz,
+      );
+
   // --- Изгради го замокот ---
 
   Widget _buildCastle(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(hc, AccessibilityUtils.getContrastColor(context));
     final level = _castleLevel < 0 ? 0 : _castleLevel;
     const emojis = ['🏚️', '🏠', '🏰'];
     const levelColors = [Color(0xFFDC2626), Color(0xFFD97706), Color(0xFF16A34A)];
     final levelLabels = ['cyber.castle_weak'.tr(), 'cyber.castle_medium'.tr(), 'cyber.castle_strong'.tr()];
+    final color = levelColors[level];
 
-    return Column(
-      children: [
-        _buildBackRow(contrast, onBack: _backToModeSelect),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.castle_intro'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16)),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24),
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: levelColors[level].withOpacity(0.12),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: hc ? Colors.white : levelColors[level], width: hc ? 2 : 2),
-          ),
-          child: Column(
-            children: [
-              Text(emojis[level], style: const TextStyle(fontSize: 88)),
-              const SizedBox(height: 10),
-              Text(levelLabels[level], style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: hc ? Colors.white : levelColors[level])),
-              if (_castleMessageKey != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _castleMessageKey!.tr(),
-                  textAlign: TextAlign.center,
-                  style: GameTypography.body(context, contrast, 16),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.castle_add_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 15)),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: GridView.count(
-              crossAxisCount: 2,
-              mainAxisSpacing: 14,
-              crossAxisSpacing: 14,
-              childAspectRatio: 1.15,
+    return _page((side) => [
+          _buildBackRow(contrast, onBack: _backToModeSelect),
+          const SizedBox(height: 6),
+          _briefing(hc),
+          const SizedBox(height: 16),
+          // Замокот: расте со лозинката; под него „тули“ - по една за
+          // секој додаден знак, во бојата на неговиот вид.
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 400),
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: hc ? Colors.black : null,
+              gradient: hc ? null : LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color.lerp(color, Playful.night, 0.35)!, Color.lerp(color, Playful.night, 0.7)!]),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.85), width: 3),
+              boxShadow: hc ? null : [BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 28, spreadRadius: 2)],
+            ),
+            child: Column(
               children: [
-                _ingredientButton(context, label: 'cyber.ingredient_lower'.tr(), icon: Icons.text_fields_rounded, color: const Color(0xFF2563EB), onTap: () => _addIngredient('lower')),
-                _ingredientButton(context, label: 'cyber.ingredient_upper'.tr(), icon: Icons.font_download_rounded, color: const Color(0xFF9333EA), onTap: () => _addIngredient('upper')),
-                _ingredientButton(context, label: 'cyber.ingredient_digit'.tr(), icon: Icons.pin_rounded, color: const Color(0xFF0D9488), onTap: () => _addIngredient('digit')),
-                _ingredientButton(context, label: 'cyber.ingredient_symbol'.tr(), icon: Icons.tag_rounded, color: const Color(0xFFD97706), onTap: () => _addIngredient('symbol')),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 400),
+                  transitionBuilder: (child, anim) => ScaleTransition(scale: CurvedAnimation(parent: anim, curve: Curves.easeOutBack), child: child),
+                  child: Text(emojis[level], key: ValueKey(level), style: const TextStyle(fontSize: 96)),
+                ),
+                const SizedBox(height: 8),
+                Text(levelLabels[level], style: Playful.display(28, color: Colors.white)),
+                const SizedBox(height: 14),
+                // Метар на сила: три дела.
+                Row(
+                  children: [
+                    for (var i = 0; i < 3; i++)
+                      Expanded(
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 350),
+                          height: 14,
+                          margin: EdgeInsets.only(right: i < 2 ? 6 : 0),
+                          decoration: BoxDecoration(
+                            color: _castleLevel >= i ? levelColors[i] : Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(7),
+                            border: Border.all(color: Colors.white.withValues(alpha: 0.7), width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // Тулите (знаците во лозинката).
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: [
+                    for (var i = 0; i < _castleLength.clamp(0, 24); i++)
+                      PopIn(
+                        startMs: 0,
+                        stepMs: 0,
+                        child: Container(
+                          width: 26,
+                          height: 16,
+                          decoration: BoxDecoration(
+                            color: _gold,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: Playful.ink.withValues(alpha: 0.5), width: 1.5),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                if (_castleMessageKey != null) ...[
+                  const SizedBox(height: 12),
+                  Text(_castleMessageKey!.tr(), textAlign: TextAlign.center, style: Playful.body(18)),
+                ],
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: ElevatedButton.icon(
-            onPressed: _resetCastle,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text('cyber.castle_reset'.tr()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AccessibilityUtils.getDisabledColor(context),
-              foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            ),
+          const SizedBox(height: 20),
+          Text('cyber.castle_add_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 18)),
+          const SizedBox(height: 14),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cols = constraints.maxWidth >= 640 ? 4 : 2;
+              const gap = 14.0;
+              final w = (constraints.maxWidth - gap * (cols - 1)) / cols - 0.5;
+              final tiles = [
+                ('cyber.ingredient_lower', Icons.text_fields_rounded, const Color(0xFF1D4ED8), 'lower', 'abc'),
+                ('cyber.ingredient_upper', Icons.font_download_rounded, const Color(0xFF7E22CE), 'upper', 'ABC'),
+                ('cyber.ingredient_digit', Icons.pin_rounded, const Color(0xFF0F766E), 'digit', '123'),
+                ('cyber.ingredient_symbol', Icons.tag_rounded, const Color(0xFFB45309), 'symbol', '#@!'),
+              ];
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final t in tiles)
+                    SizedBox(
+                      width: w,
+                      height: 150,
+                      child: _ingredientButton(context, label: t.$1.tr(), icon: t.$2, color: t.$3, sample: t.$5, onTap: () => _addIngredient(t.$4)),
+                    ),
+                ],
+              );
+            },
           ),
-        ),
-      ],
-    );
+          const SizedBox(height: 16),
+          _bigButton(icon: Icons.refresh_rounded, label: 'cyber.castle_reset'.tr(), onTap: _resetCastle, primary: false),
+          const SizedBox(height: 18),
+          _voiceRow('cyber.voice_hint_castle', hc),
+        ]);
   }
 
-  /// Копче-состојка за замокот - иконата сега е МНОГУ поголема (сразмерна
-  /// на висината на копчето, не фиксна мала големина), за подобра видливост.
-  Widget _ingredientButton(BuildContext context, {required String label, required IconData icon, required Color color, required VoidCallback onTap}) {
+  /// Копче-состојка за замокот: во полна боја, со бел раб, примерок од
+  /// знаците (abc / ABC / 123 / #@!) и иконата.
+  Widget _ingredientButton(BuildContext context, {required String label, required IconData icon, required Color color, required String sample, required VoidCallback onTap}) {
     final hc = AccessibilityUtils.isHighContrast(context);
     return Semantics(
       label: label,
       button: true,
-      child: Material(
-        color: hc ? Colors.black : color,
-        borderRadius: BorderRadius.circular(20),
-        elevation: hc ? 0 : 6,
-        shadowColor: Colors.black.withOpacity(0.4),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: hc ? color : Colors.white.withOpacity(0.35), width: hc ? 2 : 1),
-              gradient: hc ? null : LinearGradient(colors: [Color.lerp(color, Colors.white, 0.2)!, color], begin: Alignment.topCenter, end: Alignment.bottomCenter),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Иконата зафаќа над половина од висината на копчето -
-                // многу поголема отколку претходната фиксна големина 34.
-                final iconSize = (constraints.maxHeight * 0.5).clamp(48.0, 96.0);
-                return Column(
+      child: PressableScale(
+        child: Material(
+          color: hc ? Colors.black : color,
+          borderRadius: BorderRadius.circular(24),
+          elevation: hc ? 0 : 8,
+          shadowColor: color.withValues(alpha: 0.6),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: onTap,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: hc ? color : Colors.white, width: 3),
+              ),
+              child: ExcludeSemantics(
+                child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon, color: Colors.white, size: iconSize),
-                    const SizedBox(height: 8),
-                    Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(icon, color: Colors.white, size: 40),
+                        const SizedBox(width: 8),
+                        Text(sample, style: const TextStyle(fontFamily: 'monospace', fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: Playful.title(19))),
+                    ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
           ),
         ),
@@ -1339,123 +1595,72 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   // --- Таен агент ---
 
   Widget _buildAgent(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(hc, AccessibilityUtils.getContrastColor(context));
     final questionText = _agentRoundList[_agentIndex].tr();
 
     Color? cardColor;
     if (_agentPickedRefuse != null) {
       final correct = _agentPickedRefuse!;
-      cardColor = correct ? (hc ? const Color(0xFFFFFF00) : const Color(0xFF16A34A)) : (hc ? const Color(0xFF3A3A3A) : const Color(0xFFDC2626));
+      cardColor = correct ? (hc ? const Color(0xFF14532D) : const Color(0xFF16A34A)) : (hc ? const Color(0xFF3A3A3A) : const Color(0xFFDC2626));
     }
 
-    return Column(
-      children: [
-        _buildBackRow(contrast, onBack: _backToModeSelect),
-        _buildLevelBadge(
-          'cyber.phishing_progress'.tr(args: [(_agentIndex + 1).toString(), _agentRoundList.length.toString()]),
-          contrast,
-          hc,
-        ),
-        const SizedBox(height: 12),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.agent_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 23)),
-        ),
-        const SizedBox(height: 16),
-        Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              child: _buildMessageCard(
-                context,
-                headerIcon: Icons.person_rounded,
-                headerIconColor: const Color(0xFFEC4899),
-                senderText: 'cyber.agent_sender_label'.tr(),
-                bodyText: questionText,
-                cardColor: cardColor,
-              ),
-            ),
+    return _page((side) => [
+          _buildBackRow(contrast, onBack: _backToModeSelect),
+          const SizedBox(height: 6),
+          _buildLevelBadge('cyber.phishing_progress'.tr(args: [(_agentIndex + 1).toString(), _agentRoundList.length.toString()]), contrast, hc),
+          const SizedBox(height: 14),
+          _briefing(hc),
+          const SizedBox(height: 16),
+          Text('cyber.agent_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26)),
+          const SizedBox(height: 16),
+          _buildMessageCard(
+            context,
+            headerIcon: Icons.person_search_rounded,
+            headerIconColor: const Color(0xFFBE185D),
+            senderText: 'cyber.agent_sender_label'.tr(),
+            bodyText: questionText,
+            cardColor: cardColor,
           ),
-        ),
-        const SizedBox(height: 4),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('cyber.agent_choose_label'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 17)),
-        ),
-        const SizedBox(height: 14),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-          child: Row(
+          const SizedBox(height: 18),
+          Text('cyber.agent_choose_label'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19)),
+          const SizedBox(height: 14),
+          Row(
             children: [
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_answer'.tr(), icon: Icons.chat_bubble_rounded, color: const Color(0xFFDC2626), onTap: () => _answerAgent(false), locked: _agentLocked)),
+              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_answer'.tr(), icon: Icons.chat_bubble_rounded, color: const Color(0xFFDC2626), onTap: () => _answerAgent(false), locked: _agentLocked, picked: _agentPickedRefuse == false)),
               const SizedBox(width: 16),
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_refuse'.tr(), icon: Icons.shield_rounded, color: const Color(0xFF16A34A), onTap: () => _answerAgent(true), locked: _agentLocked)),
+              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_refuse'.tr(), icon: Icons.shield_rounded, color: const Color(0xFF15803D), onTap: () => _answerAgent(true), locked: _agentLocked, picked: _agentPickedRefuse == true)),
             ],
+          ),
+          const SizedBox(height: 18),
+          _voiceRow('cyber.voice_hint_agent', hc),
+        ]);
+  }
+
+  Widget _buildAgentResult(BuildContext context) => _resultView(
+        titleKey: 'cyber.agent_done',
+        score: _agentScore,
+        total: _agentRoundList.length,
+        onAgain: _startAgent,
+      );
+
+  Widget _buildBackRow(Color contrast, {required VoidCallback onBack}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Row(
+      children: [
+        Semantics(
+          label: 'cyber.change_mode'.tr(),
+          button: true,
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_rounded, color: contrast, size: 30),
+            style: IconButton.styleFrom(
+              backgroundColor: hc ? null : Colors.white.withValues(alpha: 0.15),
+              side: hc ? null : BorderSide(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
+            ),
+            onPressed: onBack,
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildAgentResult(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text('cyber.agent_done'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 22)),
-            const SizedBox(height: 12),
-            Text(
-              'cyber.score'.tr(args: [_agentScore.toString(), _agentRoundList.length.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _startAgent,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('cyber.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              onPressed: _backToModeSelect,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text('cyber.change_mode'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AccessibilityUtils.getDisabledColor(context),
-                foregroundColor: AccessibilityUtils.getPrimaryButtonForeground(context),
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBackRow(Color contrast, {required VoidCallback onBack}) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Row(
-        children: [
-          Semantics(
-            label: 'cyber.change_mode'.tr(),
-            button: true,
-            child: IconButton(icon: Icon(Icons.arrow_back_rounded, color: contrast), onPressed: onBack),
-          ),
-        ],
-      ),
     );
   }
 }

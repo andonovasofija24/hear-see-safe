@@ -68,7 +68,12 @@ class CategoryVoiceCommandButton extends StatefulWidget {
     this.iconOnly = false,
     this.respondToHotkey,
     this.hotkeyPriority = 1,
+    this.onListenStart,
   });
+
+  /// По избор: се повикува штом почне слушањето (пр. да се запре говорот
+  /// на екранот, за микрофонот да не го слуша).
+  final VoidCallback? onListenStart;
 
   /// Само кружна икона-микрофон (за горниот десен агол на екранот).
   final bool iconOnly;
@@ -177,6 +182,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
 
   Future<void> _startListening() async {
     if (_isListening) return;
+    widget.onListenStart?.call();
     setState(() => _isListening = true);
 
     final langCode = context.locale.languageCode;

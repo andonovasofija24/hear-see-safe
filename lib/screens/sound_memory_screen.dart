@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 /// Меморија на звуци: 12 картички (6 пара исти звуци), сите почетно
 /// затворени. При старт, системот ги отвора сите картички една по една
@@ -57,8 +58,8 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
     'heels': Icons.directions_walk_rounded,
     'wind': Icons.air_rounded,
     'bird': Icons.flutter_dash_rounded,
-    'water': Icons.water_rounded,
-    'glass': Icons.local_bar_rounded,
+    'water': Icons.local_drink_rounded,
+    'glass': Icons.window_rounded,
   };
   static const Map<String, Color> _soundColors = {
     'dog': Color(0xFFD97706),
@@ -333,262 +334,244 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
 
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'features.sound_memory'.tr(),
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['🧠', '🃏', '🎵', '🔔', '🐶', '🐦'],
+        tint: _moduleAccent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            _buildExplanationButton(contrast),
-            if (_explanationOpen) _buildExplanationPanel(contrast),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              child: Text(
-                _gameOver
-                    ? 'sound_memory.game_over_title'.tr()
-                    : 'sound_memory.rounds_progress'.tr(args: [
-                        (_round + 1).toString(),
-                        _totalRounds.toString(),
-                      ]),
-                style: GameTypography.heading(context, contrast, 20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = ((constraints.maxWidth - 760) / 2).clamp(16.0, double.infinity);
+            final header = <Widget>[
+              PlayfulExplainButton(
+                open: _explanationOpen,
+                label: _explanationOpen
+                    ? 'sound_memory.explanation_toggle_close'.tr()
+                    : 'sound_memory.explanation_toggle_open'.tr(),
+                onTap: _toggleExplanation,
               ),
-            ),
-            if (!_gameOver)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Text(
-                  'sound_memory.moves'.tr(args: [_moves.toString()]),
-                  style: GameTypography.body(context, contrast, 15),
+              if (_explanationOpen)
+                PlayfulExplainPanel(
+                  icon: Icons.psychology_rounded,
+                  title: 'sound_memory.explanation_title'.tr(),
+                  text: 'sound_memory.explanation_text'.tr(),
+                  accent: _moduleAccent,
                 ),
-              ),
-            Expanded(
-              child: _gameOver ? _buildEndScreen(contrast) : _buildBoard(contrast, hc),
-            ),
-          ],
+              const SizedBox(height: 16),
+            ];
+
+            if (_gameOver) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Flexible(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          ...header,
+                          Text(
+                            'sound_memory.game_over_title'.tr(),
+                            textAlign: TextAlign.center,
+                            style: Playful.display(26, color: fg),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: PlayfulResult(
+                      text: 'sound_memory.win'.tr(args: [_moves.toString()]),
+                      buttonLabel: 'sound_memory.play_again'.tr(),
+                      onAgain: _restartGame,
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            final matchedPairs = _cardMatched.where((m) => m).length ~/ 2;
+            return ListView(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 28),
+              children: [
+                ...header,
+                RoundProgress(
+                  label: 'sound_memory.rounds_progress'.tr(args: [
+                    (_round + 1).toString(),
+                    _totalRounds.toString(),
+                  ]),
+                  current: _round,
+                  total: _totalRounds,
+                  extra: 'sound_memory.moves'.tr(args: [_moves.toString()]),
+                ),
+                const SizedBox(height: 14),
+                _buildPairDots(matchedPairs, hc),
+                const SizedBox(height: 18),
+                // Картичките се СЕКОГАШ видливи (затворени, затемнети,
+                // недостапни за допир) - копчето старт стои над нив.
+                Center(
+                  child: SoundOrb(
+                    icon: Icons.grid_view_rounded,
+                    label: 'sound_memory.start_button'.tr(),
+                    onTap: _demoPlaying ? null : _startDemo,
+                    active: _demoPlaying,
+                    size: 112,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildBoard(constraints.maxWidth - side * 2),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildExplanationButton(Color contrast) {
-    final label = _explanationOpen
-        ? 'sound_memory.explanation_toggle_close'.tr()
-        : 'sound_memory.explanation_toggle_open'.tr();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _toggleExplanation,
-            icon: Icon(
-              _explanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded,
-              size: 26,
-            ),
-            label: Text(
-              label,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _explanationOpen
-                  ? AccessibilityUtils.getDisabledColor(context)
-                  : _moduleAccent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExplanationPanel(Color contrast) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _moduleAccent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _moduleAccent.withOpacity(0.35), width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+  /// Колку парови се пронајдени во рундата (срца што се палат).
+  Widget _buildPairDots(int matched, bool hc) {
+    return ExcludeSemantics(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Icon(Icons.psychology_rounded, color: _moduleAccent),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'sound_memory.explanation_title'.tr(),
-                  style: GameTypography.heading(context, contrast, 17),
+          for (var i = 0; i < _pairCount; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutBack,
+                scale: i < matched ? 1.15 : 1.0,
+                child: Icon(
+                  i < matched ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  size: 32,
+                  color: i < matched
+                      ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
+                      : (hc ? Colors.white : Colors.white.withValues(alpha: 0.5)),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'sound_memory.explanation_text'.tr(),
-            style: GameTypography.body(context, contrast, 15),
-          ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildBoard(Color contrast, bool hc) {
-    // Картичките се СЕКОГАШ видливи (затворени, затемнети, недостапни за
-    // допир) - копчето старт стои над нив, исто како кај Идентификација на
-    // звук, за просторот да не изгледа празен пред почеток.
-    return Column(
+  Widget _buildBoard(double width) {
+    return PlayfulGrid(
+      columns: 3,
+      spacing: 14,
+      aspectRatio: width < 420 ? 0.85 : 1.1,
       children: [
-        const SizedBox(height: 8),
-        _buildStartCircle(contrast, hc),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: GridView.builder(
-              itemCount: _cardSound.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.85,
-              ),
-              itemBuilder: (context, index) => _cardWidget(index, contrast, hc),
-            ),
-          ),
-        ),
+        for (var i = 0; i < _cardSound.length; i++) PopIn(index: i, child: _cardWidget(i)),
       ],
     );
   }
 
-  Widget _buildStartCircle(Color contrast, bool hc) {
-    return Semantics(
-      label: 'sound_memory.start_button'.tr(),
-      button: true,
-      child: GestureDetector(
-        onTap: _startDemo,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: hc
-                    ? null
-                    : LinearGradient(
-                        colors: [_moduleAccent, Color.lerp(_moduleAccent, Colors.white, 0.4)!],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                color: hc ? _moduleAccent : null,
-                border: Border.all(color: contrast, width: hc ? 3 : 0),
-                boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
-              ),
-              child: const Icon(Icons.grid_view_rounded, size: 48, color: Colors.white),
-            ),
-            const SizedBox(height: 10),
-            Text('sound_memory.start_button'.tr(), style: GameTypography.heading(context, contrast, 16)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _cardWidget(int index, Color contrast, bool hc) {
+  Widget _cardWidget(int index) {
     final revealed = _cardRevealed[index] || _cardMatched[index];
     final soundId = _cardSound[index];
-    final baseColor = _soundColors[soundId] ?? _moduleAccent;
     final interactive = _started && !_demoPlaying && !_gameOver && !_inputLocked;
-    // Пред почеток (сè уште не е притиснато старт), картичките стојат
-    // видливи но затемнети и недостапни - исто како кај Идентификација на
-    // звук пред "Пушти звук".
+    // Пред почеток картичките стојат видливи но затемнети и недостапни.
     final gameActive = _started || _demoPlaying;
+    final reduceMotion = Playful.reduceMotion(context);
 
-    return Opacity(
+    final face = revealed
+        ? SoundTile(
+            key: const ValueKey('open'),
+            icon: _soundIcons[soundId]!,
+            label: 'sound.name_$soundId'.tr(),
+            color: _soundColors[soundId] ?? _moduleAccent,
+            onTap: null,
+            enabled: false,
+            showLabel: false,
+            flash: _demoPlaying,
+            state: _cardMatched[index] ? true : null,
+          )
+        : _closedCard(index, interactive, key: const ValueKey('closed'));
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 250),
       opacity: gameActive ? 1.0 : 0.35,
-      child: Semantics(
-        label: revealed ? 'sound.name_$soundId'.tr() : 'sound_memory.card_closed'.tr(),
-        button: interactive,
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: interactive ? () => _onCardTap(index) : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: revealed && !hc
-                    ? LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [baseColor, Color.lerp(baseColor, Colors.white, 0.25)!],
-                      )
-                    : null,
-                color: revealed
-                    ? (hc ? baseColor.withOpacity(0.9) : null)
-                    : (hc ? const Color(0xFF1A1A1A) : _moduleAccent.withOpacity(0.18)),
-                border: Border.all(color: contrast, width: 2),
+      child: reduceMotion
+          ? face
+          : AnimatedSwitcher(
+              duration: const Duration(milliseconds: 360),
+              layoutBuilder: (current, previous) => Stack(
+                fit: StackFit.expand,
+                children: [...previous, if (current != null) current],
               ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  // Иста големина како кај Идентификација на звук - иконата
-                  // зафаќа барем 70% од пократката страна на картичката.
-                  final iconSize = min(constraints.maxWidth, constraints.maxHeight) * 0.7;
-                  return Center(
-                    child: revealed
-                        ? Icon(_soundIcons[soundId], color: Colors.white, size: iconSize)
-                        : Icon(Icons.music_note_rounded, color: contrast.withOpacity(0.4), size: iconSize),
+              // Превртување на картичката: старата страна се врти до 90°,
+              // па новата се враќа од 90° до 0°.
+              transitionBuilder: (child, animation) => AnimatedBuilder(
+                animation: animation,
+                child: child,
+                builder: (context, child) {
+                  final angle = (1 - animation.value) * math.pi;
+                  if (angle > math.pi / 2) return const SizedBox.shrink();
+                  return Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.0012)
+                      ..rotateY(angle),
+                    child: child,
                   );
                 },
               ),
+              child: face,
             ),
-          ),
-        ),
-      ),
     );
   }
 
-  Widget _buildEndScreen(Color contrast) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.emoji_events_rounded, size: 72, color: _moduleAccent),
-            const SizedBox(height: 16),
-            Text(
-              'sound_memory.win'.tr(args: [_moves.toString()]),
-              textAlign: TextAlign.center,
-              style: GameTypography.body(context, contrast, 18),
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton.icon(
-              onPressed: _restartGame,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text('sound_memory.play_again'.tr()),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _moduleAccent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+  Widget _closedCard(int index, bool interactive, {Key? key}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Semantics(
+      key: key,
+      label: 'sound_memory.card_closed'.tr(),
+      button: interactive,
+      child: PressableScale(
+        enabled: interactive,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(22),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: interactive ? () => _onCardTap(index) : null,
+            child: Ink(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                color: hc ? const Color(0xFF1A1A1A) : null,
+                gradient: hc
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Playful.nightRaised, Color.lerp(Playful.night, _moduleAccent, 0.25)!],
+                      ),
+                border: Border.all(color: hc ? Colors.white : Playful.sun.withValues(alpha: 0.85), width: 3),
+                boxShadow: hc ? null : [BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 14)],
+              ),
+              child: ExcludeSemantics(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final iconSize = math.min(constraints.maxWidth, constraints.maxHeight) * 0.5;
+                    return Center(
+                      child: Icon(
+                        Icons.music_note_rounded,
+                        size: iconSize,
+                        color: hc ? Colors.white54 : Playful.sun.withValues(alpha: 0.9),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
