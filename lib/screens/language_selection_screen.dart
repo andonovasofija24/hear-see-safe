@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +12,7 @@ import '../providers/accessibility_provider.dart';
 import '../services/voice_assistant_service.dart';
 import '../voice_system/application/language_manager.dart';
 import '../voice_system/application/voice_command_orchestrator.dart';
+import '../voice_system/data/repositories/heuristic_voice_intent_repository.dart';
 import '../utils/accessibility_utils.dart';
 import '../theme/app_style.dart';
 import '../widgets/ambient_background.dart';
@@ -24,18 +27,93 @@ class LanguageSelectionScreen extends StatefulWidget {
 class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
   bool _listening = false;
 
+  /// Веб прелистувачите (Chrome итн.) НЕ дозволуваат звук ниту микрофон пред
+  /// корисникот прво да допре нешто на страницата („autoplay“ правило). Затоа
+  /// на веб, при прво отворање, се чека еден допир / копче - тој допир го
+  /// „отклучува“ звукот, па веднаш се пушта воведот. На телефон ова не е
+  /// потребно и воведот почнува сам.
+  static bool _webAudioUnlocked = false;
+  late bool _awaitingFirstTap = kIsWeb && !_webAudioUnlocked;
+  final FocusNode _unlockFocus = FocusNode();
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _playExplanation());
+    if (!_awaitingFirstTap) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _playExplanation());
+    }
+  }
+
+  @override
+  void dispose() {
+    _unlockFocus.dispose();
+    super.dispose();
+  }
+
+  void _unlockAndStart() {
+    if (!_awaitingFirstTap) return;
+    _webAudioUnlocked = true;
+    setState(() => _awaitingFirstTap = false);
+    _playExplanation(delay: Duration.zero);
+  }
+
+  /// Цел екран „допри било каде“ - само на веб, пред првиот допир.
+  Widget _buildUnlockOverlay() {
+    const text = 'Допри било каде за да започнеш\nTap anywhere to start\nPrek kudo për të filluar';
+    return Positioned.fill(
+      child: Material(
+        type: MaterialType.transparency,
+        child: Focus(
+        focusNode: _unlockFocus,
+        autofocus: true,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            _unlockAndStart();
+            return KeyEventResult.handled;
+          }
+          return KeyEventResult.ignored;
+        },
+        child: Semantics(
+          button: true,
+          label: text,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _unlockAndStart,
+            child: Container(
+              color: Colors.black.withValues(alpha: 0.82),
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.touch_app_rounded, color: Colors.white, size: 120),
+                  const SizedBox(height: 28),
+                  Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.lexend(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w700,
+                      height: 1.6,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      ),
+    );
   }
 
   /// Тројазичното објаснување - при отворање на екранот, и достапно за
   /// повторување со допир на текстот на картичката. Копчето-микрофон
   /// НИКОГАШ не го повикува ова - тоа служи исклучиво за слушање.
-  Future<void> _playExplanation() async {
+  Future<void> _playExplanation({Duration delay = const Duration(milliseconds: 400)}) async {
     final voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
-    await Future.delayed(const Duration(milliseconds: 400));
+    if (delay > Duration.zero) await Future.delayed(delay);
     if (!mounted) return;
     await AccessibilityUtils.provideFeedback(
       context: context,
@@ -47,6 +125,18 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final content = _buildContent(context);
+    if (!_awaitingFirstTap) return content;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        content,
+        _buildUnlockOverlay(),
+      ],
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     final voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     final hc = Provider.of<AccessibilityProvider>(context).highContrastMode;
 
@@ -239,13 +329,9 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
 
   /// Ги препознава клучните зборови за трите јазици (независно од UI-јазик,
   /// бидејќи сè уште не е избран).
-  String? _matchLanguage(String transcript) {
-    final t = transcript.toLowerCase();
-    if (t.contains('македон') || t.contains('makedon')) return 'mk';
-    if (t.contains('english') || t.contains('англиск') || t.contains('anglisht') || t.contains('англ')) return 'en';
-    if (t.contains('shqip') || t.contains('шкип') || t.contains('albanian') || t.contains('албан')) return 'sq';
-    return null;
-  }
+  String? _matchLanguage(String transcript) =>
+      HeuristicVoiceIntentRepository.namedLanguage(transcript.toLowerCase());
+
 
   static const Map<String, (String, Locale)> _langData = {
     'mk': ('Македонски', Locale('mk', 'MK')),
@@ -296,6 +382,25 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
         await _selectLanguage(context, matched, voiceAssistant);
         return; // веќе навигиравме - не враќај _listening на false на стар екран
       }
+      // Не е препознаен јазик - кажи го тоа (порано екранот молчеше) и
+      // покажи што е чуено, за да се знае што да се повтори.
+      final heard = (transcript ?? '').trim();
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 5),
+          content: Text(
+            heard.isEmpty
+                ? 'Не те слушнав - обиди се повторно / I didn\'t hear you - try again / Nuk të dëgjova - provo përsëri'
+                : 'Чув / I heard / Dëgjova: „$heard“',
+            style: const TextStyle(fontSize: 16),
+          ),
+        ),
+      );
+      await AccessibilityUtils.provideFeedback(
+        context: context,
+        vibrate: true,
+        clipAssetPath: 'audio/voice/mk/not_recognized.mp3',
+      );
     } finally {
       if (mounted) setState(() => _listening = false);
     }
