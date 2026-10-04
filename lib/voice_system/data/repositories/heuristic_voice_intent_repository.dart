@@ -65,10 +65,32 @@ import '../../domain/entities/voice_intent.dart';
 
 /// Offline keyword routing (MK / EN / SQ) when OpenAI is unavailable.
 class HeuristicVoiceIntentRepository {
+  /// Кој јазик е спомнат по име (mk / en / sq), или null.
+  static String? namedLanguage(String t) {
+    bool has(List<String> keys) => keys.any((k) => t.contains(k));
+    // Вклучени се и облиците што ги враќа препознавањето на говор кога
+    // името е кажано на друг јазик (пр. „инглиш“, „шќип“).
+    if (has(['македон', 'makedon', 'macedonian', 'maqedon'])) return 'mk';
+    if (has(['англ', 'anglisk', 'english', 'anglisht', 'инглиш', 'ингли', 'енглес'])) return 'en';
+    if (has(['албан', 'albansk', 'albanian', 'shqip', 'шкип', 'шќип', 'шчип'])) return 'sq';
+    return null;
+  }
+
   VoiceIntent resolve(String transcript) {
     final t = transcript.toLowerCase().trim();
 
     bool has(List<String> keys) => keys.any((k) => t.contains(k));
+
+    // Јазик: ако е спомнат конкретен јазик („англиски“, „смени на албански“)
+    // - директно се менува; ако е речено само „јазик“ / „промени јазик“ - се
+    // отвора екранот за избор на јазик.
+    final lang = namedLanguage(t);
+    if (lang != null) {
+      return VoiceIntent(action: 'set_language', params: {'lang': lang});
+    }
+    if (has(['јазик', 'јазикот', 'јазици', 'language', 'gjuh', 'jezik'])) {
+      return const VoiceIntent(action: 'change_language');
+    }
 
     if (has(['wifi', 'wi-fi', 'вифи', 'вай-фај', 'wireless'])) {
       return const VoiceIntent(

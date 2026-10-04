@@ -1,5 +1,10 @@
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/app_state_provider.dart';
+import '../../screens/language_selection_screen.dart';
+import '../application/language_manager.dart';
 
 import '../../screens/braille_learning_screen.dart';
 import '../../screens/camera_recognition_screen.dart';
@@ -60,6 +65,42 @@ Future<void> dispatchVoiceIntent({
   }
 
   switch (intent.action) {
+    case 'change_language':
+      voiceAssistant.stop();
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const LanguageSelectionScreen()),
+      );
+      return;
+
+    case 'set_language':
+      const locales = {
+        'mk': ('Македонски', Locale('mk', 'MK')),
+        'en': ('English', Locale('en', 'US')),
+        'sq': ('Shqip', Locale('sq', 'AL')),
+      };
+      final code = intent.params['lang'] as String?;
+      final data = locales[code];
+      if (code == null || data == null) {
+        // Непознат јазик - отвори го екранот за избор.
+        voiceAssistant.stop();
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute<void>(builder: (_) => const LanguageSelectionScreen()),
+        );
+        return;
+      }
+      await context.setLocale(data.$2);
+      if (!context.mounted) return;
+      Provider.of<AppStateProvider>(context, listen: false).setLanguage(code);
+      Provider.of<LanguageManager>(context, listen: false).setUserUiLanguageCode(code);
+      // Потврда: името на јазикот со снимката од екранот за избор на јазик.
+      await AccessibilityUtils.provideFeedback(
+        context: context,
+        audioFeedback: data.$1,
+        voiceAssistant: voiceAssistant,
+        clipAssetPath: 'audio/language/$code/name.mp3',
+      );
+      return;
+
     case 'system_wifi':
       await AccessibilityUtils.provideFeedback(
         context: context,

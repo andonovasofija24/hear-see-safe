@@ -39,6 +39,8 @@ Rules:
 
 Valid action_id values:
 - open_settings
+- change_language  (open the language selection screen, e.g. "промени јазик", "change language", "ndrysho gjuhën")
+- set_language  (params: lang = mk | en | sq; when a specific language is named, e.g. "англиски", "switch to Albanian")
 - navigate_braille
 - navigate_picture_book
 - navigate_number_games
