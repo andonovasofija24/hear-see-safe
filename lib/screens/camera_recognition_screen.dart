@@ -7,9 +7,9 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:hear_and_see_safe/models/recognition_result.dart';
 import 'package:hear_and_see_safe/services/image_recognition_service.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
-import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
+import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 
 class CameraRecognitionScreen extends StatefulWidget {
@@ -207,12 +207,38 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
     }
   }
 
+  static const Color _accent = Color(0xFFEA580C);
+
+  /// Икона и боја за секој режим.
+  static const Map<String, IconData> _modeIcons = {
+    'object': Icons.category_rounded,
+    'color': Icons.palette_rounded,
+    'clothing': Icons.checkroom_rounded,
+  };
+  static const Map<String, Color> _modeColors = {
+    'object': Color(0xFF2563EB),
+    'color': Color(0xFFDB2777),
+    'clothing': Color(0xFF9333EA),
+  };
+
   Widget _buildCameraPreview() {
     if (_cameraController != null &&
         _cameraController!.value.isInitialized) {
-      return CameraPreview(_cameraController!);
+      // Во средина, со својот однос на страни (без развлекување).
+      return Center(child: CameraPreview(_cameraController!));
     }
-    return const Center(child: CircularProgressIndicator());
+    return _loading();
+  }
+
+  Widget _loading() {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Center(
+      child: SizedBox(
+        width: 54,
+        height: 54,
+        child: CircularProgressIndicator(strokeWidth: 5, color: hc ? Colors.white : Playful.sun),
+      ),
+    );
   }
 
   @override
@@ -225,7 +251,6 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final contrastColor = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
 
     final modeLabels = {
@@ -235,62 +260,143 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
     };
 
     return GameScreenChrome(
-      accent: const Color(0xFFEA580C),
+      accent: _accent,
       title: 'features.camera_recognition'.tr(),
+      bodyBackground: const EmojiBackdrop(
+        emojis: ['📷', '🎨', '👕', '🔍', '✨', '🧸'],
+        tint: _accent,
+      ),
       child: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final shortScreen = constraints.maxHeight < 620;
+            return Padding(
+              padding: EdgeInsets.fromLTRB(side, 12, side, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final mode in _modes)
-                    _modeButton(context, mode, modeLabels[mode]!, contrastColor),
+                  Row(
+                    children: [
+                      for (var i = 0; i < _modes.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 10),
+                        Expanded(
+                          child: PopIn(
+                            index: i,
+                            child: _modeButton(_modes[i], modeLabels[_modes[i]]!, hc),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  // Визир: камерата во рамка со златни агли; при анализа -
+                  // златна линија што скенира.
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: hc ? Colors.black : Playful.nightDeep,
+                        borderRadius: BorderRadius.circular(26),
+                        border: Border.all(color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white, width: hc ? 4 : 3),
+                        boxShadow: hc ? null : [BoxShadow(color: _accent.withValues(alpha: 0.45), blurRadius: 26)],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            _cameraErrorKey != null
+                                ? _buildErrorState(hc)
+                                : (_isInitialized ? _buildCameraPreview() : _loading()),
+                            if (_cameraErrorKey == null)
+                              IgnorePointer(
+                                child: CustomPaint(painter: _ViewfinderPainter(highContrast: hc)),
+                              ),
+                            if (_isProcessing && !hc && !Playful.reduceMotion(context))
+                              const IgnorePointer(child: _ScanLine()),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  if (_lastResult != null || _isProcessing) ...[
+                    _buildResultPanel(hc, compact: shortScreen),
+                    const SizedBox(height: 12),
+                  ],
+                  Center(
+                    child: SoundOrb(
+                      icon: Icons.camera_alt_rounded,
+                      label: _isProcessing ? 'camera.analyzing'.tr() : 'camera.capture'.tr(),
+                      onTap: _isProcessing ? null : _captureAndRecognize,
+                      active: _isProcessing,
+                      size: shortScreen ? 76 : 96,
+                    ),
+                  ),
                 ],
               ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(bool hc) {
+    return Container(
+      color: hc ? Colors.black : Playful.nightRaised,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(24),
+      child: SingleChildScrollView(
+        primary: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 84,
+              height: 84,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hc ? Colors.black : const Color(0xFFDC2626),
+                border: Border.all(color: Colors.white, width: 3),
+              ),
+              child: const Icon(Icons.videocam_off_rounded, color: Colors.white, size: 44),
             ),
-            const SizedBox(height: 12),
-            Expanded(
-              flex: 5,
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
+            const SizedBox(height: 16),
+            Text(
+              _cameraErrorKey!.tr(),
+              textAlign: TextAlign.center,
+              style: Playful.title(19, color: Colors.white),
+            ),
+            const SizedBox(height: 18),
+            PressableScale(
+              child: Material(
+                color: hc ? Colors.black : Playful.sun,
+                borderRadius: BorderRadius.circular(20),
+                child: InkWell(
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: contrastColor, width: 4),
-                  boxShadow: hc ? const <BoxShadow>[] : AppStyle.cardShadow(false),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: _cameraErrorKey != null
-                      ? _buildErrorState(contrastColor)
-                      : (_isInitialized
-                          ? _buildCameraPreview()
-                          : const Center(child: CircularProgressIndicator())),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            if (_lastResult != null || _isProcessing)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _buildResultPanel(contrastColor, hc),
-              ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-              child: SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: _isProcessing ? null : _captureAndRecognize,
-                  icon: _isProcessing
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.white),
-                        )
-                      : const Icon(Icons.camera_alt, size: 28),
-                  label: Text(_isProcessing ? 'camera.analyzing'.tr() : 'camera.capture'.tr()),
+                  onTap: _initializeCamera,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: hc ? 2 : 3),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.refresh_rounded, color: hc ? Colors.white : Playful.ink),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            'camera.retry'.tr(),
+                            textAlign: TextAlign.center,
+                            style: Playful.title(18, color: hc ? Colors.white : Playful.ink),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -300,109 +406,221 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
     );
   }
 
-  Widget _buildErrorState(Color contrastColor) {
-    return Container(
-      color: Colors.black87,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.videocam_off_rounded, color: Colors.white, size: 56),
-          const SizedBox(height: 14),
-          Text(
-            _cameraErrorKey!.tr(),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 18),
-          ElevatedButton.icon(
-            onPressed: _initializeCamera,
-            icon: const Icon(Icons.refresh_rounded),
-            label: Text('camera.retry'.tr()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEA580C),
-              foregroundColor: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// "Жив" резултат-панел - го покажува вистинскиот резултат (или дека сè
-  /// уште анализираме), не мок/пример.
-  Widget _buildResultPanel(Color contrastColor, bool hc) {
+  /// „Жив“ резултат - бела картичка со златен раб: додека се анализира
+  /// бранови, потоа зелена ✓ (пронајдено) или портокалово ? (несигурно).
+  Widget _buildResultPanel(bool hc, {bool compact = false}) {
     final result = _lastResult;
     final uncertain = result != null &&
         (result.confidence < ImageRecognitionService.defaultConfidenceThreshold ||
             result.labelKey == 'camera.uncertain');
-    final borderColor = _isProcessing
-        ? contrastColor.withOpacity(0.4)
+    final stateColor = _isProcessing
+        ? Playful.sun
         : (uncertain ? const Color(0xFFD97706) : const Color(0xFF16A34A));
+    final ink = hc ? Colors.white : Playful.ink;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AccessibilityUtils.getCardBackgroundColor(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: hc ? Colors.white : borderColor, width: hc ? 2 : 1.6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('camera.result_label'.tr(), style: GameTypography.body(context, contrastColor, 14)),
-          const SizedBox(height: 4),
-          if (_isProcessing)
-            Text('camera.analyzing'.tr(), style: GameTypography.heading(context, contrastColor, 22))
-          else if (result != null)
-            Text(
-              uncertain ? 'camera.uncertain'.tr() : result.labelKey.tr(),
-              style: GameTypography.heading(context, contrastColor, 26),
+    return PopIn(
+      key: ValueKey(_isProcessing ? 'processing' : 'result_${result?.labelKey}'),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: hc ? Colors.white : stateColor, width: 3),
+          boxShadow: hc ? null : [BoxShadow(color: stateColor.withValues(alpha: 0.45), blurRadius: 18)],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: hc ? Colors.black : (_isProcessing ? Playful.night : stateColor),
+                border: Border.all(color: hc ? Colors.white : stateColor, width: 2),
+              ),
+              child: Center(
+                child: _isProcessing
+                    ? (hc
+                        ? const Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 30)
+                        : const SoundWave(color: Playful.sun, bars: 5, height: 24, barWidth: 4))
+                    : Icon(
+                        uncertain ? Icons.help_outline_rounded : Icons.check_rounded,
+                        color: Colors.white,
+                        size: 34,
+                      ),
+              ),
             ),
-          if (!_isProcessing && result != null && !uncertain && result.secondaryLabelKey != null) ...[
-            const SizedBox(height: 4),
-            Text(result.secondaryLabelKey!.tr(), style: GameTypography.body(context, contrastColor, 17)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Semantics(
+                liveRegion: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('camera.result_label'.tr(), style: Playful.body(14, color: ink.withValues(alpha: 0.7))),
+                    const SizedBox(height: 2),
+                    if (_isProcessing)
+                      Text(
+                        'camera.analyzing'.tr(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Playful.display(compact ? 20 : 22, color: ink),
+                      )
+                    else if (result != null)
+                      // maxLines: на 360x640 со голем текст (до 1.6x) долгите
+                      // MK/SQ пораки инаку го туркаат визирот под 0 и Column-от
+                      // прелева. Целиот текст е и понатаму во семантиката/говорот.
+                      Text(
+                        uncertain ? 'camera.uncertain'.tr() : result.labelKey.tr(),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Playful.display(compact ? 22 : 26, color: ink),
+                      ),
+                    if (!_isProcessing && result != null && !uncertain && result.secondaryLabelKey != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        result.secondaryLabelKey!.tr(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Playful.body(17, color: ink),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _modeButton(
-    BuildContext context,
-    String mode,
-    String label,
-    Color contrastColor,
-  ) {
+  /// Плочка за режим - во својата боја; избраната е златна со бел раб.
+  Widget _modeButton(String mode, String label, bool hc) {
     final isActive = _recognitionMode == mode;
+    final color = _modeColors[mode] ?? _accent;
+    final fg = isActive ? (hc ? Colors.black : Playful.ink) : Colors.white;
 
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Semantics(
-          label: label,
-          button: true,
-          selected: isActive,
-          child: ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _recognitionMode = mode;
-                _lastResult = null;
-              });
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-              backgroundColor: isActive
-                  ? AccessibilityUtils.getAccentColor(context)
-                  : AccessibilityUtils.getDisabledColor(context),
+    return Semantics(
+      label: label,
+      button: true,
+      selected: isActive,
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () {
+                setState(() {
+                  _recognitionMode = mode;
+                  _lastResult = null;
+                });
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  color: hc ? (isActive ? const Color(0xFFFFFF00) : Colors.black) : (isActive ? Playful.sun : null),
+                  gradient: hc || isActive
+                      ? null
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color.lerp(color, Colors.white, 0.05)!, Color.lerp(color, Colors.black, 0.35)!],
+                        ),
+                  border: Border.all(color: Colors.white, width: isActive ? 3 : 2),
+                  boxShadow: hc
+                      ? null
+                      : [BoxShadow(color: (isActive ? Playful.sun : color).withValues(alpha: isActive ? 0.6 : 0.35), blurRadius: isActive ? 20 : 12)],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_modeIcons[mode], size: 28, color: fg),
+                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(label, textAlign: TextAlign.center, style: Playful.title(15, color: fg)),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(label, textAlign: TextAlign.center),
-            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Златни агли на визирот (како кај камера).
+class _ViewfinderPainter extends CustomPainter {
+  _ViewfinderPainter({required this.highContrast});
+
+  final bool highContrast;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = highContrast ? Colors.white : Playful.sun
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    const inset = 18.0;
+    final len = (size.shortestSide * 0.14).clamp(18.0, 48.0);
+    final l = inset, t = inset, r = size.width - inset, b = size.height - inset;
+    // горе-лево
+    canvas.drawLine(Offset(l, t), Offset(l + len, t), paint);
+    canvas.drawLine(Offset(l, t), Offset(l, t + len), paint);
+    // горе-десно
+    canvas.drawLine(Offset(r, t), Offset(r - len, t), paint);
+    canvas.drawLine(Offset(r, t), Offset(r, t + len), paint);
+    // долу-лево
+    canvas.drawLine(Offset(l, b), Offset(l + len, b), paint);
+    canvas.drawLine(Offset(l, b), Offset(l, b - len), paint);
+    // долу-десно
+    canvas.drawLine(Offset(r, b), Offset(r - len, b), paint);
+    canvas.drawLine(Offset(r, b), Offset(r, b - len), paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ViewfinderPainter old) => old.highContrast != highContrast;
+}
+
+/// Златна линија што оди горе-долу низ визирот додека се анализира.
+class _ScanLine extends StatefulWidget {
+  const _ScanLine();
+
+  @override
+  State<_ScanLine> createState() => _ScanLineState();
+}
+
+class _ScanLineState extends State<_ScanLine> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+    ..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (context, _) => Align(
+        alignment: Alignment(0, -0.9 + 1.8 * Curves.easeInOut.transform(_c.value)),
+        child: Container(
+          height: 4,
+          margin: const EdgeInsets.symmetric(horizontal: 22),
+          decoration: BoxDecoration(
+            color: Playful.sun,
+            borderRadius: BorderRadius.circular(2),
+            boxShadow: [BoxShadow(color: Playful.sun.withValues(alpha: 0.8), blurRadius: 16, spreadRadius: 3)],
           ),
         ),
       ),
