@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../braille/braille_data.dart';
 import '../utils/accessibility_utils.dart';
+import '../utils/voice_hotkey.dart';
 import '../utils/voice_level.dart';
 
 /// Заеднички изглед за почетниот екран и екранот за јазик: темна „ноќна“
@@ -1148,17 +1149,22 @@ class _EmojiBackdropPainter extends CustomPainter {
 
 /// Копче „Прикажи / Скриј објаснување“ - проѕирно со бел раб.
 class PlayfulExplainButton extends StatelessWidget {
-  const PlayfulExplainButton({super.key, required this.open, required this.label, required this.onTap});
+  const PlayfulExplainButton({super.key, required this.open, required this.label, required this.onTap, this.compact = false});
 
   final bool open;
   final String label;
   final VoidCallback onTap;
 
+  /// Понизок изглед - за екрани каде играта треба повеќе место.
+  final bool compact;
+
   @override
   Widget build(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final fg = hc ? AccessibilityUtils.getPrimaryButtonForeground(context) : Colors.white;
-    return Semantics(
+    return ExplainHotkeyListener(
+      onTrigger: onTap,
+      child: Semantics(
       label: label,
       button: true,
       child: PressableScale(
@@ -1169,7 +1175,7 @@ class PlayfulExplainButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             onTap: onTap,
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 18),
+              padding: EdgeInsets.symmetric(vertical: compact ? 8 : 15, horizontal: compact ? 14 : 18),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white.withValues(alpha: 0.6), width: 2),
@@ -1178,9 +1184,9 @@ class PlayfulExplainButton extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(open ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: 28, color: hc ? fg : Playful.sun),
-                    const SizedBox(width: 10),
-                    Flexible(child: Text(label, style: Playful.title(19, color: fg))),
+                    Icon(open ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: compact ? 22 : 28, color: hc ? fg : Playful.sun),
+                    SizedBox(width: compact ? 8 : 10),
+                    Flexible(child: Text(label, style: Playful.title(compact ? 16 : 19, color: fg))),
                   ],
                 ),
               ),
@@ -1188,6 +1194,7 @@ class PlayfulExplainButton extends StatelessWidget {
           ),
         ),
       ),
+    ),
     );
   }
 }
@@ -1234,28 +1241,32 @@ class PlayfulExplainPanel extends StatelessWidget {
 /// Наслов на рундата + лента од сегменти (поминати - злато, тековна -
 /// поголема).
 class RoundProgress extends StatelessWidget {
-  const RoundProgress({super.key, required this.label, required this.current, required this.total, this.extra});
+  const RoundProgress({super.key, required this.label, required this.current, required this.total, this.extra, this.trailing});
 
   final String label;
   final int current; // 0-базирано
   final int total;
   final String? extra;
 
+  /// По избор: копче на крајот од насловниот ред (пр. гласовна команда).
+  final Widget? trailing;
+
   @override
   Widget build(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
     return Semantics(
+      container: true,
       label: extra == null ? label : '$label. $extra',
-      child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(child: Text(label, style: Playful.display(24, color: fg))),
-                if (extra != null)
-                  Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(child: ExcludeSemantics(child: Text(label, style: Playful.display(24, color: fg)))),
+              if (extra != null)
+                ExcludeSemantics(
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
                       color: hc ? Colors.black : Playful.sun,
@@ -1264,10 +1275,18 @@ class RoundProgress extends StatelessWidget {
                     ),
                     child: Text(extra!, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
                   ),
+                ),
+              // Копчето (пр. гласовна команда) останува посебно копче за
+              // читачот на екран.
+              if (trailing != null) ...[
+                const SizedBox(width: 8),
+                trailing!,
               ],
-            ),
-            const SizedBox(height: 10),
-            Row(
+            ],
+          ),
+          const SizedBox(height: 10),
+          ExcludeSemantics(
+            child: Row(
               children: [
                 for (var i = 0; i < total; i++)
                   Expanded(
@@ -1285,8 +1304,8 @@ class RoundProgress extends StatelessWidget {
                   ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

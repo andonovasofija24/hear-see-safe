@@ -59,6 +59,13 @@ class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
       if (!typing) VoiceHotkey.pressed.value++;
       return false;
     }
+    // Е (физичкото E) - објаснување во играта што е отворена.
+    if (event.physicalKey == PhysicalKeyboardKey.keyE) {
+      final focusCtx = FocusManager.instance.primaryFocus?.context;
+      final typing = focusCtx != null && focusCtx.findAncestorWidgetOfExactType<EditableText>() != null;
+      if (!typing) ExplainHotkey.pressed.value++;
+      return false;
+    }
     if (event.logicalKey != LogicalKeyboardKey.escape) return false;
     final nav = rootNavigatorKey.currentState;
     if (nav == null) return false;

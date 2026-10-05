@@ -525,6 +525,9 @@ class _HomeScreenState extends State<HomeScreen> {
       (null, Icons.sports_esports_rounded, 'home.guide_games'.tr()),
       ('< >', Icons.menu_book_rounded, 'home.guide_books'.tr(args: ['features.braille'.tr(), 'features.picture_book'.tr()])),
       ('↑ ↓', Icons.swap_vert_rounded, 'home.guide_scroll'.tr()),
+      (context.locale.languageCode == 'mk' ? 'Е' : 'E', Icons.menu_book_rounded, 'home.guide_e'.tr()),
+      ('8 4 6 2', Icons.dialpad_rounded, 'home.guide_numpad'.tr()),
+      ('← →', Icons.grid_3x3_rounded, 'home.guide_sudoku'.tr()),
     ];
     final title = 'home.guide_title'.tr();
 

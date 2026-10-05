@@ -2045,6 +2045,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -2261,6 +2262,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     super.initState();
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
+    HardwareKeyboard.instance.addHandler(_onNumberKey);
     _prepareSimonRound();
     _prepareCompassAltRound();
     // Лавиринтот се прикажува (засенчен) уште на почеток - со означен старт и крај.
@@ -2269,6 +2271,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onNumberKey);
     // Го запира говорот/звукот веднаш штом се напушта екранот - без разлика
     // дали објаснувањето било отворено или не.
     _voiceAssistant.stop();
@@ -2976,6 +2979,97 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   /// Текст врз темната позадина: бел (во висок контраст - бојата за контраст).
   Color _fg(bool hc) => hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
 
+  // ===================================================================
+  // Бројки на тастатурата (нумеричкиот дел десно, или горниот ред):
+  //   7 8 9      7 = заврти лево, 8 = горе,  9 = заврти десно
+  //   4 5 6      4 = лево,        5 = стој,  6 = десно
+  //   1 2 3                       2 = долу
+  // Компас: сите; Симон - насоки: 8, 4, 6, 2.
+  // ===================================================================
+
+  static const Map<int, String> _compassKeyMoves = {
+    7: 'rotate_left', 8: 'up', 9: 'rotate_right',
+    4: 'left', 5: 'stay', 6: 'right',
+    2: 'down',
+  };
+  static const Map<int, String> _simonKeyDirs = {8: 'up', 4: 'left', 6: 'right', 2: 'down'};
+
+  /// Бројката на копчето за компас / Симон (за ознаката на плочката).
+  static String? _keyFor(String move) {
+    for (final e in _compassKeyMoves.entries) {
+      if (e.value == move) return e.key.toString();
+    }
+    return null;
+  }
+
+  static final Map<PhysicalKeyboardKey, int> _numpadPhysical = {
+    PhysicalKeyboardKey.numpad1: 1, PhysicalKeyboardKey.numpad2: 2, PhysicalKeyboardKey.numpad3: 3,
+    PhysicalKeyboardKey.numpad4: 4, PhysicalKeyboardKey.numpad5: 5, PhysicalKeyboardKey.numpad6: 6,
+    PhysicalKeyboardKey.numpad7: 7, PhysicalKeyboardKey.numpad8: 8, PhysicalKeyboardKey.numpad9: 9,
+  };
+  static final Map<LogicalKeyboardKey, int> _digitLogical = {
+    LogicalKeyboardKey.digit1: 1, LogicalKeyboardKey.digit2: 2, LogicalKeyboardKey.digit3: 3,
+    LogicalKeyboardKey.digit4: 4, LogicalKeyboardKey.digit5: 5, LogicalKeyboardKey.digit6: 6,
+    LogicalKeyboardKey.digit7: 7, LogicalKeyboardKey.digit8: 8, LogicalKeyboardKey.digit9: 9,
+    LogicalKeyboardKey.numpad1: 1, LogicalKeyboardKey.numpad2: 2, LogicalKeyboardKey.numpad3: 3,
+    LogicalKeyboardKey.numpad4: 4, LogicalKeyboardKey.numpad5: 5, LogicalKeyboardKey.numpad6: 6,
+    LogicalKeyboardKey.numpad7: 7, LogicalKeyboardKey.numpad8: 8, LogicalKeyboardKey.numpad9: 9,
+  };
+
+  bool _onNumberKey(KeyEvent event) {
+    if (!mounted || event is! KeyDownEvent) return false;
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return false;
+    // Нумеричкиот дел работи и со исклучен Num Lock (тогаш логички е
+    // стрелка, но физички е истото копче).
+    final n = _numpadPhysical[event.physicalKey] ?? _digitLogical[event.logicalKey];
+    if (n == null) return false;
+
+    if (_tab == _SpatialTab.compass && _useCompassAlt) {
+      final move = _compassKeyMoves[n];
+      if (move == null || _compassAltGameOver) return false;
+      _onCompassAltMovePressed(move);
+      return true;
+    }
+    if (_tab == _SpatialTab.simon) {
+      final dir = _simonKeyDirs[n];
+      if (dir == null || _simonGameOver) return false;
+      _onTapDirection(dir);
+      return true;
+    }
+    return false;
+  }
+
+  /// Мала ознака со бројката од тастатурата во аголот на плочката.
+  Widget _withKeyBadge(Widget tile, String? key, bool hc) {
+    if (key == null) return tile;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: tile),
+        Positioned(
+          top: 6,
+          left: 6,
+          child: IgnorePointer(
+            child: ExcludeSemantics(
+              child: Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hc ? Colors.black : Playful.sun,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(key, style: Playful.title(15, color: hc ? Colors.white : Playful.ink)),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
@@ -2984,7 +3078,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'spatial.title'.tr(),
-      // Копчето за гласовна команда е во лентата со јазичиња.
+      // Копчето за гласовна команда е во редот со рундите (_voiceButton).
       voiceCommand: false,
       bodyBackground: const EmojiBackdrop(
         emojis: ['🧭', '⬆️', '➡️', '🗺️', '📡', '⭐'],
@@ -3065,36 +3159,6 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: CategoryVoiceCommandButton(
-                compact: true,
-                background: hc ? null : Playful.sun,
-                foreground: hc ? null : Playful.ink,
-                onBack: () => Navigator.of(context).pop(),
-                options: [
-                  VoiceCategoryOption(
-                    keywords: const ['simon', 'симон', 'насоки', 'directions', 'drejtimet'],
-                    onSelected: () => _switchTab(_SpatialTab.simon),
-                  ),
-                  VoiceCategoryOption(
-                    keywords: const ['maze', 'лавиринт', 'labirint'],
-                    onSelected: () => _switchTab(_SpatialTab.maze),
-                  ),
-                  VoiceCategoryOption(
-                    keywords: const ['radar', 'радар'],
-                    onSelected: () => _switchTab(_SpatialTab.radar),
-                  ),
-                  VoiceCategoryOption(
-                    keywords: const ['compass', 'компас', 'kompas'],
-                    onSelected: () => _switchTab(_SpatialTab.compass),
-                  ),
-                ],
-              ),
-            ),
-          ),
           IntrinsicHeight(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3108,6 +3172,37 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Гласовна команда (префрлање меѓу игрите со глас) - во истиот ред со
+  /// бројот на рунди и погодоци. На тесен екран - само икона.
+  Widget _voiceButton(bool hc) {
+    final narrow = MediaQuery.sizeOf(context).width < 560;
+    return CategoryVoiceCommandButton(
+      compact: true,
+      iconOnly: narrow,
+      background: hc ? null : Playful.sun,
+      foreground: hc ? null : (narrow ? Playful.sun : Playful.ink),
+      onBack: () => Navigator.of(context).pop(),
+      options: [
+        VoiceCategoryOption(
+          keywords: const ['simon', 'симон', 'насоки', 'directions', 'drejtimet'],
+          onSelected: () => _switchTab(_SpatialTab.simon),
+        ),
+        VoiceCategoryOption(
+          keywords: const ['maze', 'лавиринт', 'labirint'],
+          onSelected: () => _switchTab(_SpatialTab.maze),
+        ),
+        VoiceCategoryOption(
+          keywords: const ['radar', 'радар'],
+          onSelected: () => _switchTab(_SpatialTab.radar),
+        ),
+        VoiceCategoryOption(
+          keywords: const ['compass', 'компас', 'kompas'],
+          onSelected: () => _switchTab(_SpatialTab.compass),
+        ),
+      ],
     );
   }
 
@@ -3276,12 +3371,24 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   // --- Заеднички резиме-екран ---
   Widget _buildSummaryScreen(Color contrast, String text, VoidCallback onPlayAgain, {int? stars, int? total}) {
-    return PlayfulResult(
-      text: text,
-      buttonLabel: 'spatial.play_again'.tr(),
-      onAgain: onPlayAgain,
-      stars: stars,
-      total: total,
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: Align(alignment: Alignment.centerRight, child: _voiceButton(hc)),
+        ),
+        Expanded(
+          child: PlayfulResult(
+            text: text,
+            buttonLabel: 'spatial.play_again'.tr(),
+            onAgain: onPlayAgain,
+            stars: stars,
+            total: total,
+          ),
+        ),
+      ],
     );
   }
 
@@ -3355,6 +3462,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           current: _simonRound,
           total: _simonTotalRounds,
           extra: 'spatial.score'.tr(args: [_simonHits.toString()]),
+          trailing: _voiceButton(hc),
         ),
         const SizedBox(height: 10),
         Expanded(
@@ -3467,14 +3575,18 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   Widget _dirZone(String dir, Color contrast, bool hc, bool interactive) {
     final isFlashing = _simonFlashingDir == dir;
     final label = _directionLabelKeys[dir]!.tr();
-    return SoundTile(
-      icon: _directionIcons[dir]!,
-      label: label,
-      color: _moveColors[dir]!,
-      onTap: interactive ? () => _onTapDirection(dir) : null,
-      enabled: interactive,
-      flash: isFlashing,
-      showLabel: false,
+    return _withKeyBadge(
+      SoundTile(
+        icon: _directionIcons[dir]!,
+        label: label,
+        color: _moveColors[dir]!,
+        onTap: interactive ? () => _onTapDirection(dir) : null,
+        enabled: interactive,
+        flash: isFlashing,
+        showLabel: false,
+      ),
+      _keyFor(dir),
+      hc,
     );
   }
 
@@ -3515,6 +3627,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           current: _mazeRound,
           total: _mazeTotalRounds,
           extra: 'spatial.maze_mistakes'.tr(args: [_mazeMistakesThisMaze.toString()]),
+          trailing: _voiceButton(hc),
         ),
         const SizedBox(height: 8),
         Text(
@@ -3649,6 +3762,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           current: _radarRound,
           total: _radarTotalRounds,
           extra: 'spatial.score'.tr(args: [_radarHits.toString()]),
+          trailing: _voiceButton(hc),
         ),
         const SizedBox(height: 8),
         Text(
@@ -3848,7 +3962,14 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
-          child: PlayfulHint('spatial.compass_permission_denied'.tr()),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _voiceButton(hc),
+              const SizedBox(height: 16),
+              PlayfulHint('spatial.compass_permission_denied'.tr()),
+            ],
+          ),
         ),
       );
     }
@@ -3858,72 +3979,81 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     final headingText = _compassHeading != null ? _compassHeading!.round().toString() : '--';
     final arrowColor = hc ? const Color(0xFFFFFF00) : Playful.sun;
 
-    return _lockedStage(
-      locked: !_compassStarted,
-      contrast: contrast,
-      hc: hc,
-      startLabel: 'spatial.compass_start'.tr(),
-      startIcon: Icons.explore_rounded,
-      onStart: _startCompass,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 4),
-          RoundProgress(
-            label: 'spatial.compass_progress'.tr(args: [(_compassRound + 1).toString(), _compassTotalRounds.toString()]),
-            current: _compassRound,
-            total: _compassTotalRounds,
-            extra: 'spatial.score'.tr(args: [_compassHits.toString()]),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'spatial.compass_target'.tr(args: [targetLabel]),
-            textAlign: TextAlign.center,
-            style: Playful.display(22, color: hc ? fg : Playful.sun),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'spatial.compass_current'.tr(args: [headingText]),
-            textAlign: TextAlign.center,
-            style: Playful.body(15, color: fg),
-          ),
-          Expanded(
-            child: Container(
-              margin: const EdgeInsets.fromLTRB(0, 10, 0, 16),
-              decoration: _sceneDecoration(hc),
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned.fill(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(17),
-                      child: CustomPaint(
-                        painter: _RingsScenePainter(
-                          color: hc ? Colors.white.withValues(alpha: 0.4) : Playful.mist.withValues(alpha: 0.22),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+      const SizedBox(height: 4),
+      RoundProgress(
+        label: 'spatial.compass_progress'.tr(args: [(_compassRound + 1).toString(), _compassTotalRounds.toString()]),
+        current: _compassRound,
+        total: _compassTotalRounds,
+        extra: 'spatial.score'.tr(args: [_compassHits.toString()]),
+        trailing: _voiceButton(hc),
+      ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: _lockedStage(
+          locked: !_compassStarted,
+          contrast: contrast,
+          hc: hc,
+          startLabel: 'spatial.compass_start'.tr(),
+          startIcon: Icons.explore_rounded,
+          onStart: _startCompass,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 10),
+              Text(
+                'spatial.compass_target'.tr(args: [targetLabel]),
+                textAlign: TextAlign.center,
+                style: Playful.display(22, color: hc ? fg : Playful.sun),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'spatial.compass_current'.tr(args: [headingText]),
+                textAlign: TextAlign.center,
+                style: Playful.body(15, color: fg),
+              ),
+              Expanded(
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(0, 10, 0, 16),
+                  decoration: _sceneDecoration(hc),
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(17),
+                          child: CustomPaint(
+                            painter: _RingsScenePainter(
+                              color: hc ? Colors.white.withValues(alpha: 0.4) : Playful.mist.withValues(alpha: 0.22),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                      SizedBox(
+                        width: 180,
+                        height: 180,
+                        child: CircularProgressIndicator(
+                          value: _compassLockProgress,
+                          strokeWidth: 10,
+                          backgroundColor: Colors.white.withValues(alpha: 0.15),
+                          valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
+                        ),
+                      ),
+                      Transform.rotate(
+                        angle: ((_compassHeading ?? 0) * (pi / 180)),
+                        child: Icon(Icons.navigation_rounded, size: 90, color: arrowColor),
+                      ),
+                    ],
                   ),
-                  SizedBox(
-                    width: 180,
-                    height: 180,
-                    child: CircularProgressIndicator(
-                      value: _compassLockProgress,
-                      strokeWidth: 10,
-                      backgroundColor: Colors.white.withValues(alpha: 0.15),
-                      valueColor: const AlwaysStoppedAnimation(Color(0xFF22C55E)),
-                    ),
-                  ),
-                  Transform.rotate(
-                    angle: ((_compassHeading ?? 0) * (pi / 180)),
-                    child: Icon(Icons.navigation_rounded, size: 90, color: arrowColor),
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
-      ),
+        ),
+        ),
+      ],
     );
   }
 
@@ -3956,93 +4086,103 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   Widget _buildCompassAltRound(Color contrast, bool hc) {
     final fg = _fg(hc);
-    return _lockedStage(
-      locked: !_compassAltRevealed,
-      contrast: contrast,
-      hc: hc,
-      startLabel: 'spatial.compass_alt_start'.tr(),
-      startIcon: Icons.explore_rounded,
-      onStart: _playCompassAltDemo,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const SizedBox(height: 4),
-          RoundProgress(
-            label: 'spatial.compass_alt_progress'
-                .tr(args: [(_compassAltRound + 1).toString(), _compassAltTotalRounds.toString()]),
-            current: _compassAltRound,
-            total: _compassAltTotalRounds,
-            extra: 'spatial.score'.tr(args: [_compassAltHits.toString()]),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _compassAltDemoPlaying
-                ? 'spatial.compass_alt_prompt'.tr()
-                : 'spatial.compass_alt_choose_prompt'.tr(),
-            textAlign: TextAlign.center,
-            style: Playful.body(14.5, color: fg),
-          ),
-          if (!_compassAltDemoPlaying) ...[
-            const SizedBox(height: 6),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 10,
-              runSpacing: 6,
-              children: [
-                _miniGhostButton(
-                  icon: Icons.replay_rounded,
-                  label: 'spatial.compass_alt_replay'.tr(),
-                  onTap: _playCompassAltDemo,
-                  hc: hc,
-                ),
-                _miniGhostButton(
-                  icon: Icons.lightbulb_outline_rounded,
-                  label: 'spatial.compass_alt_hint'.tr(),
-                  onTap: () => setState(() => _compassAltHintRevealed = true),
-                  hc: hc,
-                ),
-              ],
-            ),
-            if (_compassAltHintRevealed &&
-                _compassAltUserIndex < _compassAltSequence.length)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: hc ? Colors.black : Playful.sun,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white, width: 2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+      const SizedBox(height: 4),
+      RoundProgress(
+        label: 'spatial.compass_alt_progress'
+            .tr(args: [(_compassAltRound + 1).toString(), _compassAltTotalRounds.toString()]),
+        current: _compassAltRound,
+        total: _compassAltTotalRounds,
+        extra: 'spatial.score'.tr(args: [_compassAltHits.toString()]),
+        trailing: _voiceButton(hc),
+      ),
+        const SizedBox(height: 4),
+        Expanded(
+          child: _lockedStage(
+          locked: !_compassAltRevealed,
+          contrast: contrast,
+          hc: hc,
+          startLabel: 'spatial.compass_alt_start'.tr(),
+          startIcon: Icons.explore_rounded,
+          onStart: _playCompassAltDemo,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 8),
+              Text(
+                _compassAltDemoPlaying
+                    ? 'spatial.compass_alt_prompt'.tr()
+                    : 'spatial.compass_alt_choose_prompt'.tr(),
+                textAlign: TextAlign.center,
+                style: Playful.body(14.5, color: fg),
+              ),
+              if (!_compassAltDemoPlaying) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 6,
+                  children: [
+                    _miniGhostButton(
+                      icon: Icons.replay_rounded,
+                      label: 'spatial.compass_alt_replay'.tr(),
+                      onTap: _playCompassAltDemo,
+                      hc: hc,
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _compassMoveIcons[_compassAltSequence[_compassAltUserIndex]],
-                          color: hc ? Colors.white : Playful.ink,
-                          size: 22,
+                    _miniGhostButton(
+                      icon: Icons.lightbulb_outline_rounded,
+                      label: 'spatial.compass_alt_hint'.tr(),
+                      onTap: () => setState(() => _compassAltHintRevealed = true),
+                      hc: hc,
+                    ),
+                  ],
+                ),
+                if (_compassAltHintRevealed &&
+                    _compassAltUserIndex < _compassAltSequence.length)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: hc ? Colors.black : Playful.sun,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: Colors.white, width: 2),
                         ),
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: Text(
-                            'spatial.compass_alt_hint_label'.tr(args: [
-                              _compassMoveLabelKeys[_compassAltSequence[_compassAltUserIndex]]!.tr(),
-                            ]),
-                            style: Playful.title(15, color: hc ? Colors.white : Playful.ink),
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              _compassMoveIcons[_compassAltSequence[_compassAltUserIndex]],
+                              color: hc ? Colors.white : Playful.ink,
+                              size: 22,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'spatial.compass_alt_hint_label'.tr(args: [
+                                  _compassMoveLabelKeys[_compassAltSequence[_compassAltUserIndex]]!.tr(),
+                                ]),
+                                style: Playful.title(15, color: hc ? Colors.white : Playful.ink),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-          ],
-          Expanded(flex: 4, child: _buildCompassAltScene(contrast, hc)),
-          if (!_compassAltDemoPlaying)
-            Expanded(flex: 2, child: _buildCompassAltPad(contrast, hc)),
-        ],
-      ),
+              ],
+              // Сцената е малку помала, а копчињата со насоки поголеми.
+              Expanded(flex: 5, child: _buildCompassAltScene(contrast, hc)),
+              if (!_compassAltDemoPlaying)
+                Expanded(flex: 4, child: _buildCompassAltPad(contrast, hc)),
+            ],
+          ),
+        ),
+        ),
+      ],
     );
   }
 
@@ -4129,10 +4269,10 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 8, 14),
+      padding: const EdgeInsets.fromLTRB(0, 6, 0, 12),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 440),
+          constraints: const BoxConstraints(maxWidth: 620),
           child: Column(
             children: [
               Expanded(
@@ -4177,13 +4317,17 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   Widget _compassMoveButton(String move, Color contrast, bool hc) {
     final label = _compassMoveLabelKeys[move]!.tr();
-    return SoundTile(
-      icon: _compassMoveIcons[move]!,
-      label: label,
-      color: _moveColors[move]!,
-      onTap: _compassAltProcessing ? null : () => _onCompassAltMovePressed(move),
-      enabled: !_compassAltProcessing,
-      showLabel: false,
+    return _withKeyBadge(
+      SoundTile(
+        icon: _compassMoveIcons[move]!,
+        label: label,
+        color: _moveColors[move]!,
+        onTap: _compassAltProcessing ? null : () => _onCompassAltMovePressed(move),
+        enabled: !_compassAltProcessing,
+        showLabel: false,
+      ),
+      _keyFor(move),
+      hc,
     );
   }
 

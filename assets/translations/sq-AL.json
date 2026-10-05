@@ -20,13 +20,16 @@
     "guide_games": "Në çdo lojë dhe kategori ka kopsë për komandë me zë (dhe G): thuaj emrin e një loje ose kategorie tjetër (p.sh. nga Alfabeti Braille – Përbëj: „grupi 2“, „loja me fjalë“ ose „mëso dhe dëgjo“) dhe kalon direkt atje, pa u kthyer në meny. „Prapa“ kthen një nivel prapa, „menyja kryesore“ ose ESC – direkt në meny.",
     "guide_books": "Librat me figura ({} dhe {}) shfletohen edhe me kopsat < dhe > të tastierës.",
     "guide_scroll": "↑ ↓ – lëviz lart e poshtë, në çdo ekran. Page Up / Page Down – një ekran i tërë njëherësh, Home / End – në fillim / në fund.",
+    "guide_e": "E – hap dhe mbyll shpjegimin, në çdo lojë.",
+    "guide_numpad": "Tastet me numra (djathtas): te „Orientimi hapësinor – Kompasi“ 8 lart, 2 poshtë, 4 majtas, 6 djathtas, 7 dhe 9 rrotullim majtas dhe djathtas, 5 qëndro në vend; te „Simon – drejtimet“ 8, 2, 4 dhe 6 për drejtimet.",
     "section_learn": "Mëso dhe eksploro",
     "section_learn_hint": "Seksioni i mësimit. Pesë aktivitete më poshtë.",
     "section_sound": "Dëgjo dhe luaj",
     "section_sound_hint": "Seksioni i tingullit dhe lojërave. Gjashtë aktivitete më poshtë.",
     "section_safe": "Qëndro i sigurt në internet",
     "section_safe_hint": "Seksioni i sigurisë. Një aktivitet më poshtë.",
-    "fab_semantics": "Komandë me zë. Prekni dhe thuaj ku doni të shkoni, për shembull cilësimet ose libri me figura."
+    "fab_semantics": "Komandë me zë. Prekni dhe thuaj ku doni të shkoni, për shembull cilësimet ose libri me figura.",
+    "guide_sudoku": "Sudoku (Lojërat me numra): ← → ↑ ↓ – kalim mes katrorëve, numrat djathtas (7 8 9 / 4 5 6 / 1 2 3) – zgjedhja e kutisë, numrat lart – futja e numrit. Shkrimi Braj: F D S J K L – pikat, A – shqipto / konfirmo, „.“ – fshi pikën, „;“ – fshi."
   },
   "voice": {
     "speak_command": "Thuaj një komandë. Për shembull: Braille, libër fotosh, lojëra me numra, cilësimet.",
@@ -325,7 +328,11 @@
   "results_accuracy": "Saktësia: {}%",
   "results_streak": "Seria më e gjatë: {}",
   "play_again": "Luaj përsëri",
-  "change_mode": "Ndrysho lojën"
+  "change_mode": "Ndrysho lojën",
+  "multiply_divide": "Shumëzim dhe pjesëtim",
+  "input_pad": "Numra",
+  "input_braille": "Shkrimi Braj",
+  "voice_answer_hint": "Me zë: „numra“ ose „braj“, „konfirmo“, „fshi“."
 },
 "number_extra": {
   "section_title": "Lojëra të reja me prekje",
@@ -363,7 +370,9 @@
   "pos_middle_left": "majtas në mes",
   "pos_middle_center": "në qendër",
   "pos_middle_right": "djathtas në mes",
-  "pos_bottom_center": "poshtë në mes"
+  "pos_bottom_center": "poshtë në mes",
+  "title_sudoku": "Sudoku",
+  "explanation_sudoku": "Fusha ka 9 katrorë (lart 1 2 3, në mes 4 5 6, poshtë 7 8 9), secili me 9 kuti. Çdo rresht, çdo kolonë dhe çdo katror duhet të ketë të gjithë numrat nga 1 deri në 9. I njëjti numër nuk duhet të përsëritet në të njëjtin rresht, në të njëjtën kolonë, as në të njëjtin katror. Me shigjetat ← → ↑ ↓ ndërrohet katrori, ndërsa me numrat në anën e djathtë të tastierës (7 8 9 lart, 4 5 6 në mes, 1 2 3 poshtë) zgjidhet kutia në katror. Numri futet me numrat lart në tastierë, me butonat në ekran, me zë (p.sh. „shtatë“ ose „katror pesë“) ose me shkrimin Braj. Numri i gabuar nuk shkruhet dhe numërohet si gabim."
 },
   "camera": {
     "error_unsupported_platform": "Kjo veçori funksionon vetëm në telefon, jo në shfletues.",
@@ -687,7 +696,9 @@
     "name_heels": "Taka",
     "name_bird": "Zog",
     "name_water": "Ujë",
-    "name_glass": "Xham"
+    "name_glass": "Xham",
+    "choose_this": "Ky është tingulli!",
+    "islands_hint": "Rrotullo ishujt (tërhiq, shigjetat ose ← →), sille përgjigjen lart dhe zgjidhe. Mund edhe me zë: thuaj emrin (p.sh. „qen“)."
   },
   "cyber": {
   "question1": "A duhet të ndani informacionin tuaj personal në internet?",
@@ -888,5 +899,34 @@
     "s3_o2": "Libër për hapësirë",
     "s3_out1": "Sonia lexoi për luanë dhe elefantë. Donte t'i shihte në kopshtin zoologjik.",
     "s3_out2": "Sonia lexoi për yje dhe planete. Donte të bëhej astronaut."
+  },
+  "sudoku": {
+    "status": "Katrori {} · {}",
+    "filled": "Plotësuar: {} nga {}",
+    "mistakes": "Gabime: {}",
+    "empty": "bosh",
+    "cell_label": "Katrori {}, {}: {}",
+    "solved": "Të lumtë! E zgjidhe sudokun! Gabime: {}.",
+    "keys_hint": "← → ↑ ↓ – katrori · 7 8 9 / 4 5 6 / 1 2 3 (djathtas) – kutia · numrat lart – fut numrin · me zë: „shtatë“, „katror pesë“"
+  },
+  "braille_input": {
+    "number_sign": "Shenja e numrit",
+    "speak": "Shqipto",
+    "confirm": "Konfirmo",
+    "remove_dot": "Fshi pikën",
+    "clear": "Fshi",
+    "dot": "Pika {}"
+  },
+  "islands": {
+    "previous": "Ishulli i mëparshëm",
+    "next": "Ishulli tjetër",
+    "open": "Lundro te ishulli",
+    "hint": "Rrotullo ishujt (tërhiq, shigjetat ose ← →) për ta sjellë lojën lart, pastaj zgjidhe."
+  },
+  "sphere": {
+    "previous": "Loja e mëparshme",
+    "next": "Loja tjetër",
+    "open": "Fillo",
+    "hint": "Rrotullo globin me gisht ose me mi në çdo drejtim (ose ← →). Loja përpara është e zgjedhur - preke ose shtyp „Fillo“."
   }
 }

@@ -3114,27 +3114,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   }
 
   Widget _buildExpressExplanationButton(Color contrast) {
-    final label = _expressExplanationOpen ? 'braille.express_explanation_toggle_close'.tr() : 'braille.express_explanation_toggle_open'.tr();
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      child: Semantics(
-        label: label,
-        button: true,
-        child: SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: _toggleExpressExplanation,
-            icon: Icon(_expressExplanationOpen ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: 26),
-            label: Text(label, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _expressExplanationOpen ? AccessibilityUtils.getDisabledColor(context) : _accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: AccessibilityUtils.isHighContrast(context) ? 0 : 3,
-            ),
-          ),
-        ),
+      child: PlayfulExplainButton(
+        open: _expressExplanationOpen,
+        label: _expressExplanationOpen
+            ? 'braille.express_explanation_toggle_close'.tr()
+            : 'braille.express_explanation_toggle_open'.tr(),
+        onTap: _toggleExpressExplanation,
       ),
     );
   }

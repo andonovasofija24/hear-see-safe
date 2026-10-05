@@ -7,6 +7,7 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/utils/voice_level.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
+import 'package:hear_and_see_safe/widgets/island_carousel.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
@@ -567,6 +568,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   // кусото објаснување на играта.
 
   static const Color _neon = Color(0xFF22D3EE);
+  final IslandCarouselController _islands = IslandCarouselController();
   static const Color _gold = Color(0xFFFFC93C);
 
   Color _fg(bool hc, Color contrast) => hc ? contrast : Colors.white;
@@ -629,22 +631,25 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
               foreground: hc ? null : Playful.ink,
             ),
           ),
-          const SizedBox(height: 18),
-          for (var i = 0; i < modes.length; i++) ...[
-            PopIn(
-              index: 1 + i,
-              child: _modeCard(
-                context,
-                number: i + 1,
-                icon: modes[i].$1,
-                label: modes[i].$2.tr(),
-                desc: modes[i].$3.tr(),
-                onTap: modes[i].$4,
-                accent: modes[i].$5,
-              ),
+          const SizedBox(height: 10),
+          Text(
+            'islands.hint'.tr(),
+            textAlign: TextAlign.center,
+            style: Playful.body(15, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85)),
+          ),
+          const SizedBox(height: 8),
+          // Четирите игри - острови што се вртат во круг; горниот е избран.
+          PopIn(
+            index: 1,
+            child: IslandCarousel(
+              controller: _islands,
+              items: [
+                for (final m in modes)
+                  IslandItem(label: m.$2.tr(), description: m.$3.tr(), icon: m.$1, color: m.$5),
+              ],
+              onOpen: (i) => modes[i].$4(),
             ),
-            const SizedBox(height: 18),
-          ],
+          ),
         ]);
   }
 
@@ -662,6 +667,17 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   /// имињата, за директно префрлање од режим во режим.
   List<VoiceCategoryOption> _modeVoiceOptions({bool ordinals = true}) => [
       if (ordinals) ...[
+        // Вртење на островите со глас.
+        VoiceCategoryOption(
+          keywords: const [],
+          matches: (t) => _saysAny(t, const ['следн', 'десно', 'сврти', 'next', 'right', 'turn', 'tjetr', 'djathtas', 'rrotullo']),
+          onSelected: () => _islands.next(),
+        ),
+        VoiceCategoryOption(
+          keywords: const [],
+          matches: (t) => _saysAny(t, const ['претходн', 'лево', 'previous', 'back one', 'left', 'mëparshm', 'meparshm', 'majtas']),
+          onSelected: () => _islands.previous(),
+        ),
         // По реден број на картичката: „прва/1“ ... „четврта/4“.
         VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 0), onSelected: _startPhishing),
         VoiceCategoryOption(keywords: const [], matches: (t) => _saysOrdinal(t, 1), onSelected: _startQuiz),
@@ -833,104 +849,6 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
   static bool _saysOrdinal(String t, int index) {
     final words = t.replaceAll(RegExp(r'[.,!?]'), ' ').split(RegExp(r'\s+'));
     return _ordinalWords[index].any(words.contains);
-  }
-
-  /// Картичка за игра: градиент во бојата на играта, бел раб, сјај, реден
-  /// број во златно копче, име и кусо објаснување.
-  Widget _modeCard(
-    BuildContext context, {
-    required int number,
-    required IconData icon,
-    required String label,
-    required String desc,
-    required VoidCallback onTap,
-    required Color accent,
-  }) {
-    final hc = AccessibilityUtils.isHighContrast(context);
-    final deep = Color.lerp(accent, Colors.black, 0.35)!;
-    final fg = hc ? Colors.white : Colors.white;
-    return Semantics(
-      label: '$number. $label. $desc',
-      button: true,
-      child: PressableScale(
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(28),
-            onTap: onTap,
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                gradient: hc ? null : LinearGradient(colors: [accent, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                color: hc ? Colors.black : null,
-                border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
-                boxShadow: hc ? null : [BoxShadow(color: accent.withValues(alpha: 0.5), blurRadius: 24, offset: const Offset(0, 10))],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(26),
-                child: Stack(
-                  children: [
-                    if (!hc)
-                      Positioned(
-                        right: -18,
-                        bottom: -26,
-                        child: ExcludeSemantics(child: Icon(icon, size: 140, color: Colors.white.withValues(alpha: 0.10))),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: ExcludeSemantics(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Column(
-                              children: [
-                                Container(
-                                  width: 76,
-                                  height: 76,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white, border: hc ? Border.all(color: Colors.white, width: 2) : null),
-                                  child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : deep, size: 42),
-                                ),
-                                const SizedBox(height: 10),
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? const Color(0xFFFFFF00) : _gold, border: Border.all(color: Colors.white, width: 2)),
-                                  child: Text('$number', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Playful.ink)),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 18),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(label, style: Playful.display(26, color: fg)),
-                                  const SizedBox(height: 8),
-                                  Text(desc, style: Playful.body(16.5, color: fg.withValues(alpha: 0.95))),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              width: 46,
-                              height: 46,
-                              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: hc ? 0.1 : 0.22), border: Border.all(color: Colors.white, width: 2)),
-                              child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 28),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   // --- Заеднички елементи за игрите ---

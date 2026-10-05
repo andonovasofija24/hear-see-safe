@@ -20,13 +20,16 @@
     "guide_games": "Every game and category has a voice command button (and G): say the name of another game or category (e.g. from Braille Alphabet – Compose: \"group 2\", \"word game\" or \"learn and listen\") and you go straight there, without returning to the menu. \"Back\" goes one level back, \"main menu\" or ESC goes straight to the menu.",
     "guide_books": "The picture books ({} and {}) can also be paged with the < and > keys on the keyboard.",
     "guide_scroll": "↑ ↓ – scroll up and down, on every screen. Page Up / Page Down – a whole screen at once, Home / End – to the top / bottom.",
+    "guide_e": "E – open and close the explanation, in any game.",
+    "guide_numpad": "Number keys (on the right): in \"Spatial orientation – Compass\" 8 up, 2 down, 4 left, 6 right, 7 and 9 turn left and right, 5 stay in place; in \"Simon – directions\" 8, 2, 4 and 6 for the directions.",
     "section_learn": "Learn & explore",
     "section_learn_hint": "Learning section. Five activities below.",
     "section_sound": "Listen & play",
     "section_sound_hint": "Sound and games section. Six activities below.",
     "section_safe": "Stay safe online",
     "section_safe_hint": "Safety section. One activity below.",
-    "fab_semantics": "Voice command. Tap and say where you want to go, for example settings or picture book."
+    "fab_semantics": "Voice command. Tap and say where you want to go, for example settings or picture book.",
+    "guide_sudoku": "Sudoku (Number games): ← → ↑ ↓ – move between boxes, number keys on the right (7 8 9 / 4 5 6 / 1 2 3) – pick a cell, number keys at the top – enter a number. Braille: F D S J K L – dots, A – speak / confirm, \".\" – delete dot, \";\" – clear."
   },
   "voice": {
     "speak_command": "Say a command. For example: Braille, picture book, number games, settings.",
@@ -325,7 +328,11 @@
   "results_accuracy": "Accuracy: {}%",
   "results_streak": "Best streak: {}",
   "play_again": "Play again",
-  "change_mode": "Change game"
+  "change_mode": "Change game",
+  "multiply_divide": "Multiplication and division",
+  "input_pad": "Numbers",
+  "input_braille": "Braille",
+  "voice_answer_hint": "By voice: \"numbers\" or \"braille\", \"confirm\", \"clear\"."
 },
 "number_extra": {
   "section_title": "New touch games",
@@ -363,7 +370,9 @@
   "pos_middle_left": "in the middle left",
   "pos_middle_center": "in the center",
   "pos_middle_right": "in the middle right",
-  "pos_bottom_center": "at the bottom center"
+  "pos_bottom_center": "at the bottom center",
+  "title_sudoku": "Sudoku",
+  "explanation_sudoku": "The board has 9 boxes (top 1 2 3, middle 4 5 6, bottom 7 8 9), each with 9 cells. Every row, every column and every box must contain all the numbers from 1 to 9. The same number must not repeat in the same row, in the same column, or in the same box. The arrow keys ← → ↑ ↓ change the box, and the number keys on the right of the keyboard (7 8 9 top, 4 5 6 middle, 1 2 3 bottom) pick the cell in the box. Enter a number with the number keys at the top of the keyboard, the buttons on the screen, your voice (e.g. \"seven\" or \"box five\") or Braille. A wrong number is not written and counts as a mistake."
 },
   "camera": {
     "error_unsupported_platform": "This feature only works on a phone, not in a browser.",
@@ -687,7 +696,9 @@
     "name_heels": "High heels",
     "name_bird": "Bird",
     "name_water": "Water",
-    "name_glass": "Glass"
+    "name_glass": "Glass",
+    "choose_this": "This is the sound!",
+    "islands_hint": "Turn the islands (drag, the arrows or ← →), bring the answer to the top and choose it. You can also say its name (e.g. \"dog\")."
   },
   "cyber": {
   "question1": "Should you share your personal information online?",
@@ -888,5 +899,34 @@
     "s3_o2": "Book about space",
     "s3_out1": "Sonia read about lions and elephants. She wanted to see them at the zoo.",
     "s3_out2": "Sonia read about stars and planets. She wanted to become an astronaut."
+  },
+  "sudoku": {
+    "status": "Box {} · {}",
+    "filled": "Filled: {} of {}",
+    "mistakes": "Mistakes: {}",
+    "empty": "empty",
+    "cell_label": "Box {}, {}: {}",
+    "solved": "Well done! You solved the sudoku! Mistakes: {}.",
+    "keys_hint": "← → ↑ ↓ – box · 7 8 9 / 4 5 6 / 1 2 3 (right) – cell · top number keys – enter · voice: \"seven\", \"box five\""
+  },
+  "braille_input": {
+    "number_sign": "Number sign",
+    "speak": "Speak",
+    "confirm": "Confirm",
+    "remove_dot": "Delete dot",
+    "clear": "Clear",
+    "dot": "Dot {}"
+  },
+  "islands": {
+    "previous": "Previous island",
+    "next": "Next island",
+    "open": "Sail to the island",
+    "hint": "Turn the islands (drag, the arrows or ← →) to bring a game to the top, then choose it."
+  },
+  "sphere": {
+    "previous": "Previous game",
+    "next": "Next game",
+    "open": "Start",
+    "hint": "Spin the globe with your finger or mouse in any direction (or ← →). The game at the front is chosen - tap it or press \"Start\"."
   }
 }

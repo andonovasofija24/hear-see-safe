@@ -47,14 +47,18 @@ ScrollbarThemeData appScrollbarTheme({required bool highContrast}) {
   );
 }
 
-/// Стрелките и Page Up/Down не прават ништо друго во апликацијата (ниту
-/// преместуваат фокус) - лизгањето го прави [ArrowScroll.handleKey].
+/// Стрелките (↑ ↓ ← →) и Page Up/Down не прават ништо друго во апликацијата
+/// (ниту преместуваат фокус) - лизгањето го прави [ArrowScroll.handleKey].
 /// Полињата за пишување и понатаму ги користат стрелките за курсорот.
 Map<ShortcutActivator, Intent> appShortcuts() => {
       ...WidgetsApp.defaultShortcuts,
       for (final key in [
         LogicalKeyboardKey.arrowUp,
         LogicalKeyboardKey.arrowDown,
+        // ← → не го местат фокусот - ги користат сликовниците (листање)
+        // и судокуто (квадрати) преку HardwareKeyboard.
+        LogicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.arrowRight,
         LogicalKeyboardKey.pageUp,
         LogicalKeyboardKey.pageDown,
       ])
@@ -91,9 +95,14 @@ class _ArrowScrollTargetState extends State<_ArrowScrollTarget> {
 abstract final class ArrowScroll {
   static final List<_ArrowScrollTargetState> _targets = [];
 
+  /// Екран што самиот ги користи стрелките (пр. судоку - премин меѓу
+  /// квадратите) може да го исклучи лизгањето додека е активен.
+  static bool Function()? suppressWhen;
+
   /// Глобален слушач за тастатура (main.dart). Враќа true ако излизгал.
   static bool handleKey(KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    if (suppressWhen?.call() ?? false) return false;
     final key = event.logicalKey;
     // Не смее да биде `const` - LogicalKeyboardKey нема „примитивна“
     // еднаквост, па не може да биде во константно множество.

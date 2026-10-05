@@ -32,6 +32,7 @@ class VoiceCategoryOption {
     required this.keywords,
     required this.onSelected,
     this.matches,
+    this.beforeGlobal = false,
   });
 
   final List<String> keywords;
@@ -40,6 +41,10 @@ class VoiceCategoryOption {
   /// По избор: сопствена проверка на транскриптот (мали букви) - ако е
   /// зададена, опцијата се избира кога ова врати true (покрај `keywords`).
   final bool Function(String transcript)? matches;
+
+  /// Се проверува ПРЕД имињата на другите игри (пр. „Брајово писмо“ како
+  /// начин на одговор во Игри со броеви, наместо премин во Брајовата азбука).
+  final bool beforeGlobal;
 }
 
 /// Копче за гласовна команда што се користи ЛОКАЛНО во рамки на еден екран
@@ -210,6 +215,16 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
         setState(() => _isListening = false);
         widget.onBack!();
         return;
+      }
+
+      // Опции што имаат предност пред имињата на другите игри.
+      for (final option in widget.options) {
+        if (!option.beforeGlobal) continue;
+        if ((option.matches?.call(t) ?? false) || option.keywords.any(hasKeyword)) {
+          setState(() => _isListening = false);
+          option.onSelected();
+          return;
+        }
       }
 
       // Име на друга игра / „поставки“ / „главно мени“ - директно таму, од
