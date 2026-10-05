@@ -10,6 +10,9 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Колку пати е поголем текстот на екранот за поставки.
+const double _kSetText = 1.6;
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -45,7 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return GameScreenChrome(
       accent: _accent,
       title: 'settings.title'.tr(),
-      titleFontSize: 26,
+      titleFontSize: 26 * _kSetText,
       bodyBackground: const EmojiBackdrop(
         emojis: ['⚙️', '🌐', '🔊', '👁️', '📳', '🔆'],
         tint: _accent,
@@ -53,8 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 760) / 2).clamp(16.0, double.infinity);
-            final wide = constraints.maxWidth - side * 2 >= 520;
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             return ListView(
               key: ValueKey(locale.toString()),
               padding: EdgeInsets.fromLTRB(side, 16, side, 32),
@@ -64,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     icon: Icons.translate_rounded,
                     color: const Color(0xFF2563EB),
                     title: 'settings.language'.tr(),
-                    child: _buildLanguageSelector(context, wide),
+                    child: _buildLanguageSelector(context),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -115,9 +117,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: ExcludeSemantics(
               child: Row(
                 children: [
-                  _iconBubble(icon, color, 52),
+                  _iconBubble(icon, color, 68),
                   const SizedBox(width: 14),
-                  Expanded(child: Text(title, style: Playful.display(25, color: _fg))),
+                  Expanded(child: Text(title, style: Playful.display(25 * _kSetText, color: _fg))),
                 ],
               ),
             ),
@@ -150,7 +152,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildLanguageSelector(BuildContext context, bool wide) {
+  /// Јазиците се секогаш еден под друг (по еден во ред).
+  Widget _buildLanguageSelector(BuildContext context) {
     return Consumer<AppStateProvider>(
       builder: (context, appState, _) {
         final options = [
@@ -158,16 +161,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildLanguageOption(context, 'English', 'en', 'EN', appState.currentLanguage),
           _buildLanguageOption(context, 'Shqip', 'sq', 'SQ', appState.currentLanguage),
         ];
-        if (wide) {
-          return Row(
-            children: [
-              for (var i = 0; i < options.length; i++) ...[
-                if (i > 0) const SizedBox(width: 12),
-                Expanded(child: options[i]),
-              ],
-            ],
-          );
-        }
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -226,7 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 220),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
@@ -238,8 +231,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   children: [
                     Container(
-                      width: 44,
-                      height: 44,
+                      width: 60,
+                      height: 60,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -248,22 +241,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       child: Text(
                         badge,
-                        style: Playful.title(15, color: isSelected ? (hc ? Colors.white : Playful.sun) : _fg),
+                        style: Playful.title(15 * 1.4, color: isSelected ? (hc ? Colors.white : Playful.sun) : _fg),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Text(
                         name,
-                        overflow: TextOverflow.ellipsis,
-                        style: Playful.title(19, color: fg),
+                        style: Playful.title(19 * _kSetText, color: fg),
                       ),
                     ),
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 200),
                       child: isSelected
-                          ? Icon(Icons.check_circle_rounded, key: const ValueKey('on'), size: 28, color: fg)
-                          : const SizedBox(key: ValueKey('off'), width: 28, height: 28),
+                          ? Icon(Icons.check_circle_rounded, key: const ValueKey('on'), size: 38, color: fg)
+                          : const SizedBox(key: ValueKey('off'), width: 38, height: 38),
                     ),
                   ],
                 ),
@@ -292,7 +284,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           borderRadius: BorderRadius.circular(20),
           onTap: onToggle,
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
@@ -302,11 +294,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             child: Row(
               children: [
-                _iconBubble(icon, color, 44),
+                _iconBubble(icon, color, 58),
                 const SizedBox(width: 12),
-                Expanded(child: Text(label, style: Playful.title(19, color: _fg))),
+                Expanded(child: Text(label, style: Playful.title(19 * _kSetText, color: _fg))),
                 const SizedBox(width: 8),
-                Switch(
+                Transform.scale(
+                  scale: 1.3,
+                  child: Switch(
                   value: value,
                   onChanged: (_) => onToggle(),
                   thumbColor: WidgetStateProperty.resolveWith(
@@ -319,6 +313,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   trackOutlineColor: WidgetStatePropertyAll(hc ? Colors.white : Colors.white.withValues(alpha: 0.6)),
                 ),
+                ),
+                const SizedBox(width: 6),
               ],
             ),
           ),
@@ -403,9 +399,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Row(
                     children: [
-                      _iconBubble(Icons.graphic_eq_rounded, const Color(0xFFDB2777), 44),
+                      _iconBubble(Icons.graphic_eq_rounded, const Color(0xFFDB2777), 58),
                       const SizedBox(width: 12),
-                      Expanded(child: Text('settings.volume'.tr(), style: Playful.title(19, color: _fg))),
+                      Expanded(child: Text('settings.volume'.tr(), style: Playful.title(19 * _kSetText, color: _fg))),
+                      const SizedBox(width: 8),
                       ExcludeSemantics(
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -414,14 +411,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: Text('$percent%', style: Playful.title(16, color: hc ? Colors.white : Playful.ink)),
+                          child: Text('$percent%', style: Playful.title(16 * _kSetText, color: hc ? Colors.white : Playful.ink)),
                         ),
                       ),
                     ],
                   ),
                   Row(
                     children: [
-                      Icon(Icons.volume_mute_rounded, color: _fg.withValues(alpha: 0.8)),
+                      Icon(Icons.volume_mute_rounded, size: 32, color: _fg.withValues(alpha: 0.8)),
                       Expanded(
                         child: SliderTheme(
                           data: SliderTheme.of(context).copyWith(
@@ -447,7 +444,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ),
                       ),
-                      Icon(Icons.volume_up_rounded, color: _fg.withValues(alpha: 0.8)),
+                      Icon(Icons.volume_up_rounded, size: 32, color: _fg.withValues(alpha: 0.8)),
                     ],
                   ),
                 ],

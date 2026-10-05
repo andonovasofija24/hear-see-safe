@@ -10,6 +10,9 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Множител за големината на текстот на овој екран (поголеми букви).
+const double _kStoryText = 1.6;
+
 /// Приказна – твој избор: слушаш/читаш кратка приказна, избираш што ќе се
 /// случи понатаму, слушаш/читаш го исходот. И приказната И исходот се
 /// секогаш прикажани и на екран (не само изговорени) - клучно за деца со
@@ -352,7 +355,7 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             final sceneHeight = (constraints.maxHeight * 0.36).clamp(220.0, 400.0);
             return ListView(
               padding: EdgeInsets.fromLTRB(side, 12, side, 28),
@@ -518,7 +521,7 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: Playful.body(21, color: hc ? Colors.white : Playful.ink),
+        style: Playful.body(21 * _kStoryText, color: hc ? Colors.white : Playful.ink),
       ),
     );
   }
@@ -535,13 +538,13 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
       Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.auto_awesome_rounded, color: hc ? _fg : Playful.sun, size: 26),
+          Icon(Icons.auto_awesome_rounded, color: hc ? _fg : Playful.sun, size: 34),
           const SizedBox(width: 10),
           Flexible(
             child: Text(
               'story.what_next'.tr(),
               textAlign: TextAlign.center,
-              style: Playful.display(24, color: _fg),
+              style: Playful.display(24 * _kStoryText, color: _fg),
             ),
           ),
         ],
@@ -631,39 +634,60 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
                             ? null
                             : [BoxShadow(color: (selected ? Playful.sun : base).withValues(alpha: selected ? 0.7 : 0.45), blurRadius: selected ? 28 : 16)],
                       ),
-                      child: Row(
-                        children: [
+                      child: LayoutBuilder(
+                        builder: (context, c) {
+                          final badges = <Widget>[
                           // Број на опцијата.
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 52,
+                            height: 52,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: hc ? Colors.black : Playful.sun,
                               border: Border.all(color: Colors.white, width: 2),
                             ),
-                            child: Text('$number', style: Playful.display(20, color: hc ? Colors.white : Playful.ink)),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text('$number', style: Playful.display(20 * _kStoryText, color: hc ? Colors.white : Playful.ink)),
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Container(
-                            width: 70,
-                            height: 70,
+                            width: 84,
+                            height: 84,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: hc ? Colors.black : Colors.white.withValues(alpha: 0.18),
                               border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.8), width: 2),
                             ),
-                            child: Icon(icon, size: 42, color: Colors.white),
+                            child: Icon(icon, size: 52, color: Colors.white),
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Text(
-                              text,
-                              style: Playful.title(23, color: Colors.white),
-                            ),
-                          ),
-                        ],
+                          ];
+                          final label = Text(
+                            text,
+                            style: Playful.title(23 * _kStoryText, color: Colors.white),
+                          );
+                          // На тесен екран (телефон) текстот оди под бројот и
+                          // иконата, за големите букви да имаат цела ширина.
+                          if (c.maxWidth < 480) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(children: badges),
+                                const SizedBox(height: 10),
+                                label,
+                              ],
+                            );
+                          }
+                          return Row(
+                            children: [
+                              ...badges,
+                              const SizedBox(width: 14),
+                              Expanded(child: label),
+                            ],
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -688,13 +712,13 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.auto_stories_rounded, color: hc ? _fg : Playful.sun, size: 30),
+            Icon(Icons.auto_stories_rounded, color: hc ? _fg : Playful.sun, size: 40),
             const SizedBox(width: 10),
             Flexible(
               child: Text(
                 'story.the_end'.tr(),
                 textAlign: TextAlign.center,
-                style: Playful.display(26, color: _fg),
+                style: Playful.display(26 * _kStoryText, color: _fg),
               ),
             ),
           ],
@@ -705,7 +729,7 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
         Text(
           'story.all_done'.tr(),
           textAlign: TextAlign.center,
-          style: Playful.body(18, color: _fg),
+          style: Playful.body(18 * _kStoryText, color: _fg),
         ),
       ],
       const SizedBox(height: 24),
@@ -741,7 +765,7 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
         )
       else
         // Последна приказна, но завршната порака сè уште трае.
-        const SizedBox(height: 74),
+        const SizedBox(height: 90),
     ];
   }
 
@@ -764,20 +788,23 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
                 spread: 18,
                 child: PressableScale(
                   child: Container(
-                    width: 108,
-                    height: 108,
+                    width: 124,
+                    height: 124,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: hc ? Colors.black : (gold ? Playful.sun : Colors.white.withValues(alpha: 0.12)),
                       border: Border.all(color: Colors.white, width: hc ? 2 : 4),
                       boxShadow: hc || !gold ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.5), blurRadius: 22)],
                     ),
-                    child: Icon(icon, size: 52, color: hc ? Colors.white : (gold ? Playful.ink : Colors.white)),
+                    child: Icon(icon, size: 62, color: hc ? Colors.white : (gold ? Playful.ink : Colors.white)),
                   ),
                 ),
               ),
               const SizedBox(height: 10),
-              Text(shown, textAlign: TextAlign.center, style: Playful.title(18, color: _fg)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 320),
+                child: Text(shown, textAlign: TextAlign.center, style: Playful.title(18 * _kStoryText, color: _fg)),
+              ),
             ],
           ),
         ),

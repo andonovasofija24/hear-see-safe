@@ -17,6 +17,20 @@ import 'package:hear_and_see_safe/voice_system/application/voice_command_orchest
 import 'package:hear_and_see_safe/braille/braille_data.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
 
+/// Зголемување на читливиот текст на целиот екран (~1.6x, исто како на
+/// почетниот екран).
+const double _kBrailleText = 1.6;
+
+/// Најголема ширина на содержината (листите со избори - по една во ред).
+const double _kBrailleMaxContent = 980.0;
+
+/// Странична маргина за листа широка колку екранот, со содржина во средина
+/// (најмногу [_kBrailleMaxContent]) - лизгачот останува скроз десно.
+EdgeInsets _brailleSidePad(double width, {double top = 0, double bottom = 0}) {
+  final side = max(width >= 760 ? 28.0 : 16.0, (width - _kBrailleMaxContent) / 2);
+  return EdgeInsets.fromLTRB(side, top, side, bottom);
+}
+
 class BrailleLearningScreen extends StatefulWidget {
   const BrailleLearningScreen({super.key});
 
@@ -1449,7 +1463,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           side: BorderSide(color: Colors.white.withValues(alpha: 0.75), width: 2),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          textStyle: const TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w800),
         ),
       ),
     );
@@ -1588,8 +1602,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   Widget _buildCategorySelect(BuildContext context) {
     final contrast = _fg(context);
     final hc = AccessibilityUtils.isHighContrast(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+    return LayoutBuilder(
+      builder: (context, viewport) => ListView(
+      padding: _brailleSidePad(viewport.maxWidth, top: 20, bottom: 28),
       children: [
         // Насловот „напишан“ на Брајово писмо, со буквите под точките.
         if (!hc)
@@ -1602,7 +1617,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             ),
           ),
         if (!hc) const SizedBox(height: 16),
-        Text('braille.intro_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26)),
+        Text('braille.intro_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
         const SizedBox(height: 12),
         _buildIntroArea(contrast, hc),
         const SizedBox(height: 22),
@@ -1616,7 +1631,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 Text(
                   'braille.choose_group'.tr(),
                   textAlign: TextAlign.center,
-                  style: GameTypography.heading(context, contrast, 24),
+                  style: GameTypography.heading(context, contrast, 24 * _kBrailleText),
                 ),
                 const SizedBox(height: 16),
                 Center(
@@ -1635,30 +1650,34 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () => _openReference(_View.categorySelect),
-                      icon: Icon(Icons.menu_book_rounded, size: 28, color: hc ? null : _gold),
-                      label: Text('braille.reference_button'.tr(), style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+                      icon: Icon(Icons.menu_book_rounded, size: 36, color: hc ? null : _gold),
+                      label: Text(
+                        'braille.reference_button'.tr(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 19 * _kBrailleText, fontWeight: FontWeight.w800),
+                      ),
                       style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                // Групите и игрите - низ целиот екран, во 1 / 2 колони.
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final cols = constraints.maxWidth >= 900 ? 2 : 1;
+                // Групите и игрите - по една во ред, на цела ширина.
+                Builder(
+                  builder: (context) {
                     const gap = 18.0;
-                    final w = (constraints.maxWidth - gap * (cols - 1)) / cols - 0.5;
                     final cards = <Widget>[
                       for (var i = 0; i < _groups.length; i++) _groupCard(context, i, contrast, hc),
                       _wordGameCard(contrast, hc),
                       _expressThoughtCard(contrast, hc),
                       _sentenceGameCard(contrast, hc),
                     ];
-                    return Wrap(
-                      spacing: gap,
-                      runSpacing: gap,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        for (var i = 0; i < cards.length; i++) SizedBox(width: w, child: PopIn(index: i, child: cards[i])),
+                        for (var i = 0; i < cards.length; i++) ...[
+                          if (i > 0) const SizedBox(height: gap),
+                          PopIn(index: i, child: cards[i]),
+                        ],
                       ],
                     );
                   },
@@ -1668,6 +1687,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -1686,7 +1706,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('braille.intro_text'.tr(), style: GameTypography.body(context, contrast, 20)),
+          Text('braille.intro_text'.tr(), style: GameTypography.body(context, contrast, 20 * _kBrailleText)),
           const SizedBox(height: 20),
           // На тесен екран редот се смалува наместо да излезе надвор.
           FittedBox(
@@ -1788,8 +1808,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final fg = hc ? const Color(0xFFFFFF00) : Colors.white;
     return LayoutBuilder(builder: (context, constraints) {
     // Тесна картичка (телефон): помал круг и наслов, „Вежба“ под содржината.
-    final narrow = constraints.maxWidth < 480;
-    final circle = narrow ? 58.0 : 80.0;
+    final narrow = constraints.maxWidth < 560;
+    final circle = narrow ? 64.0 : 100.0;
     return PressableScale(
       child: Material(
         color: Colors.transparent,
@@ -1840,9 +1860,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text(title, style: Playful.display(narrow ? 22 : 26, color: fg)),
+                                      Text(title, style: Playful.display((narrow ? 20 : 26) * _kBrailleText, color: fg)),
                                       const SizedBox(height: 6),
-                                      Text(subtitle, style: Playful.body(16, color: fg.withValues(alpha: 0.95))),
+                                      Text(subtitle, style: Playful.body((narrow ? 15 : 16) * _kBrailleText, color: fg.withValues(alpha: 0.95))),
                                       if (preview != null) ...[
                                         const SizedBox(height: 10),
                                         preview,
@@ -1941,11 +1961,11 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.fitness_center_rounded, color: hc ? const Color(0xFFFFFF00) : Playful.ink, size: 32),
+                      Icon(Icons.fitness_center_rounded, color: hc ? const Color(0xFFFFFF00) : Playful.ink, size: 42),
                       const SizedBox(height: 4),
                       Text(
                         'braille.go_practice'.tr(),
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: hc ? const Color(0xFFFFFF00) : Playful.ink),
+                        style: TextStyle(fontSize: 14 * _kBrailleText, fontWeight: FontWeight.w900, color: hc ? const Color(0xFFFFFF00) : Playful.ink),
                       ),
                     ],
                   ),
@@ -1962,8 +1982,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// Неистражените се бледи, истражените светат.
   Widget _miniCell(List<int> dots, String label, {bool explored = true}) {
     Widget dot(int n) => Container(
-          width: 9,
-          height: 9,
+          width: 11,
+          height: 11,
           margin: const EdgeInsets.all(1.5),
           decoration: _studDecoration(on: dots.contains(n), hc: false),
         );
@@ -1986,7 +2006,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           ),
         ),
         const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: Colors.white)),
+        Text(label, style: const TextStyle(fontSize: 14 * _kBrailleText, fontWeight: FontWeight.w800, color: Colors.white)),
       ],
       ),
     );
@@ -2042,14 +2062,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Widget _cardArrow(bool hc) => ExcludeSemantics(
         child: Container(
-          width: 48,
-          height: 48,
+          width: 62,
+          height: 62,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: hc ? 0.1 : 0.22),
             border: Border.all(color: Colors.white, width: 2),
           ),
-          child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 28),
+          child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 36),
         ),
       );
 
@@ -2062,7 +2082,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text('${_group.titleKey.tr()}  ·  ${_symbolIndex + 1} / ${_group.symbols.length}', style: GameTypography.heading(context, contrast, 22)),
+          child: Text('${_group.titleKey.tr()}  ·  ${_symbolIndex + 1} / ${_group.symbols.length}', style: GameTypography.heading(context, contrast, 22 * _kBrailleText)),
         ),
         Expanded(
           child: PageView.builder(
@@ -2119,6 +2139,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     final textColor = hc ? Colors.white : contrastColor;
+                    // Средната зона на телефон е тесна (~200 px) - таму
+                    // помало зголемување, за долгите зборови да не се кршат.
+                    final k = constraints.maxWidth < 420 ? 1.2 : (constraints.maxWidth < 640 ? 1.4 : _kBrailleText);
                     return SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                       child: ConstrainedBox(
@@ -2136,14 +2159,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                                 Text(
                                   _symbolName(s),
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: textColor),
+                                  style: TextStyle(fontSize: 30 * k, fontWeight: FontWeight.w800, color: textColor),
                                 ),
                               ],
                               const SizedBox(height: 18),
                               Text(
                                 _explanationFor(s),
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600, color: textColor),
+                                style: TextStyle(fontSize: 28 * k, fontWeight: FontWeight.w600, color: textColor),
                               ),
                               const SizedBox(height: 22),
                               Semantics(
@@ -2278,7 +2301,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         _buildBackRow(contrast, onBack: _backToCategories),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(_group.titleKey.tr(), style: GameTypography.heading(context, contrast, 26)),
+          child: Text(_group.titleKey.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
         ),
         const SizedBox(height: 10),
         // Гласовно: „состави“, „препознај“, „напиши“ (и „назад“).
@@ -2293,8 +2316,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+          child: LayoutBuilder(
+            builder: (context, viewport) => ListView(
+            padding: _brailleSidePad(viewport.maxWidth, top: 4, bottom: 24),
             children: [
               _practiceModeCard(icon: Icons.touch_app_rounded, title: 'braille.mode_compose'.tr(), desc: 'braille.mode_compose_desc'.tr(), onTap: () => _startPractice(_View.practiceCompose)),
               const SizedBox(height: 14),
@@ -2302,6 +2326,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               const SizedBox(height: 14),
               _practiceModeCard(icon: Icons.edit_rounded, title: 'braille.mode_write'.tr(), desc: 'braille.mode_write_desc'.tr(), onTap: () => _startPractice(_View.practiceWrite)),
             ],
+            ),
           ),
         ),
       ],
@@ -2325,36 +2350,44 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           child: InkWell(
             borderRadius: BorderRadius.circular(26),
             onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              constraints: const BoxConstraints(minHeight: 110),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(26),
-                border: hc ? Border.all(color: Colors.white, width: 2) : const Border(bottom: BorderSide(color: _accent, width: 8)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : _accent),
-                    child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: 42),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(title, style: Playful.display(26, color: fg)),
-                        const SizedBox(height: 6),
-                        Text(desc, style: Playful.body(17, color: hc ? Colors.white : const Color(0xFF34336B))),
-                      ],
+            child: LayoutBuilder(builder: (context, constraints) {
+              // Тесна картичка (телефон): помал круг, без стрелка, помала маргина.
+              final narrow = constraints.maxWidth < 520;
+              final circle = narrow ? 64.0 : 100.0;
+              return Container(
+                padding: EdgeInsets.all(narrow ? 16 : 24),
+                constraints: const BoxConstraints(minHeight: 130),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(26),
+                  border: hc ? Border.all(color: Colors.white, width: 2) : const Border(bottom: BorderSide(color: _accent, width: 8)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: circle,
+                      height: circle,
+                      decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : _accent),
+                      child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: circle * 0.54),
                     ),
-                  ),
-                  Icon(Icons.arrow_forward_rounded, color: hc ? Colors.white : _accent, size: 32),
-                ],
-              ),
-            ),
+                    SizedBox(width: narrow ? 12 : 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(title, style: Playful.display((narrow ? 22 : 26) * _kBrailleText, color: fg)),
+                          const SizedBox(height: 6),
+                          Text(desc, style: Playful.body((narrow ? 16 : 17) * _kBrailleText, color: hc ? Colors.white : const Color(0xFF34336B))),
+                        ],
+                      ),
+                    ),
+                    if (!narrow) ...[
+                      const SizedBox(width: 12),
+                      Icon(Icons.arrow_forward_rounded, color: hc ? Colors.white : _accent, size: 42),
+                    ],
+                  ],
+                ),
+              );
+            }),
           ),
         ),
       ),
@@ -2363,21 +2396,48 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   // --- Практика: Состави / Напиши ---
 
+  /// Распоред за екраните со табла точки: текстот горе/долу (сега поголем)
+  /// и таблата во средина. Таблата добива барем [gridFraction] од висината
+  /// (FittedBox ја смалува ако треба), а ако сè заедно не собере (телефон,
+  /// долг текст) - екранот се лизга наместо да излезе надвор.
+  Widget _boardLayout({
+    required List<Widget> top,
+    required Widget board,
+    List<Widget> bottom = const [],
+    double gridFraction = 0.5,
+  }) {
+    return LayoutBuilder(
+      builder: (context, viewport) {
+        final boardHeight = max(240.0, viewport.maxHeight * gridFraction);
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: viewport.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(mainAxisSize: MainAxisSize.min, children: top),
+                SizedBox(height: boardHeight, child: Center(child: board)),
+                Column(mainAxisSize: MainAxisSize.min, children: bottom),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildPracticeCompose(BuildContext context) {
     final contrast = _fg(context);
     if (_practiceFinished) return _practiceDoneScreen(contrast, showScore: false);
     if (_practiceTarget == null) return const SizedBox.shrink();
-    return Column(
-      children: [
+    return _boardLayout(
+      top: [
         _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceTargetHeader(contrast),
-        Expanded(
-          child: Center(
-            child: _dotPairsGrid(pairCount: _practiceTarget!.cells.length, onTap: _tapComposeDot, hits: _correctDotsHit),
-          ),
-        ),
-        _buildKeyboardHint(contrast),
       ],
+      board: _dotPairsGrid(pairCount: _practiceTarget!.cells.length, onTap: _tapComposeDot, hits: _correctDotsHit),
+      bottom: [_buildKeyboardHint(contrast)],
+      gridFraction: 0.55,
     );
   }
 
@@ -2385,21 +2445,18 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final contrast = _fg(context);
     if (_practiceFinished) return _practiceDoneScreen(contrast, showScore: true);
     if (_practiceTarget == null) return const SizedBox.shrink();
-    return Column(
-      children: [
+    return _boardLayout(
+      top: [
         _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceProgressLine(contrast),
         _practiceTargetHeader(contrast),
-        Expanded(
-          child: Center(
-            child: AbsorbPointer(
-              absorbing: _writeFailed,
-              child: _dotPairsGrid(pairCount: _practiceTarget!.cells.length, onTap: _tapWriteDot, hits: _correctDotsHit, wrongVisual: _writeFailed),
-            ),
-          ),
-        ),
-        _buildKeyboardHint(contrast),
       ],
+      board: AbsorbPointer(
+        absorbing: _writeFailed,
+        child: _dotPairsGrid(pairCount: _practiceTarget!.cells.length, onTap: _tapWriteDot, hits: _correctDotsHit, wrongVisual: _writeFailed),
+      ),
+      bottom: [_buildKeyboardHint(contrast)],
+      gridFraction: 0.5,
     );
   }
 
@@ -2413,9 +2470,16 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Column(
         children: [
           Text(t.displayChar, style: TextStyle(fontSize: isSign ? 80 : 100, fontWeight: FontWeight.w900, color: AccessibilityUtils.isHighContrast(context) ? contrast : _gold, height: 1.05)),
-          if (isSign) Text(_symbolName(t), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 20)),
+          if (isSign)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(_symbolName(t), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 20 * _kBrailleText)),
+            ),
           if (t.isMultiCell)
-            Text('braille.two_pairs_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text('braille.two_pairs_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16 * _kBrailleText)),
+            ),
         ],
       ),
     );
@@ -2464,7 +2528,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: active ? _gold : contrast)),
+              Text(label, style: TextStyle(fontSize: 17 * _kBrailleText, fontWeight: FontWeight.w900, color: active ? _gold : contrast)),
               _interactiveDotGrid(
                 onTap: (d) => onTap(p, d),
                 wrongVisual: wrongVisual,
@@ -2586,7 +2650,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text('braille.recognize_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 24)),
+                  child: Text('braille.recognize_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 24 * _kBrailleText)),
                 ),
                 const SizedBox(height: 14),
                 AnimatedContainer(
@@ -2630,8 +2694,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         ),
         Expanded(
           flex: 5,
-          child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: LayoutBuilder(
+            builder: (context, viewport) => ListView(
+            padding: _brailleSidePad(viewport.maxWidth),
             children: _recognizeChoices.asMap().entries.map((entry) {
               final index = entry.key;
               final choice = entry.value;
@@ -2669,7 +2734,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                       button: unlocked,
                       child: SizedBox(
                         width: double.infinity,
-                        height: 84,
+                        height: 100,
                         child: ElevatedButton(
                           onPressed: () => _pickRecognizeAnswer(choice),
                           style: ElevatedButton.styleFrom(
@@ -2684,10 +2749,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                                   : BorderSide.none,
                             ),
                           ),
-                          child: Text(
-                            label,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                          // Фиксна висина на копчето - долгите имиња на знаци
+                          // се смалуваат наместо да излезат надвор.
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              label,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 30 * 1.4, fontWeight: FontWeight.bold),
+                            ),
                           ),
                         ),
                       ),
@@ -2696,6 +2766,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 ),
               );
             }).toList(),
+            ),
           ),
         ),
       ],
@@ -2707,14 +2778,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         '${_practiceRound + 1} / $_practiceRoundsTotal  ·  ${'braille.score'.tr()}: $_practiceScore',
-        style: GameTypography.heading(context, contrast, 20),
+        textAlign: TextAlign.center,
+        style: GameTypography.heading(context, contrast, 20 * _kBrailleText),
       ),
     );
   }
 
   Widget _practiceDoneScreen(Color contrast, {bool showScore = true}) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -2724,13 +2796,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             Text(
               showScore ? '${'braille.score'.tr()}: $_practiceScore / $_practiceRoundsTotal' : 'braille.practice_complete'.tr(),
               textAlign: TextAlign.center,
-              style: GameTypography.heading(context, contrast, 24),
+              style: GameTypography.heading(context, contrast, 24 * _kBrailleText),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _openPracticeModeSelect,
-              icon: const Icon(Icons.grid_view_rounded),
-              label: Text('braille.change_mode'.tr()),
+              icon: const Icon(Icons.grid_view_rounded, size: 32),
+              label: Text('braille.change_mode'.tr(), style: const TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w800)),
               style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16)),
             ),
           ],
@@ -2769,14 +2841,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final currentToken = min(_wordStep, _wordTokens.length - 1);
     final current = _wordTokens[currentToken];
     final currentIsSign = current.isModifier || current.kind == BrailleKind.punctuation;
-    return Column(
-      children: [
+    return _boardLayout(
+      top: [
         _buildBackRow(contrast, onBack: _backToCategories),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text(
             '${'braille.word_round_title'.tr()}  ·  ${_wordSessionCount + 1}/$_wordSessionTarget',
-            style: GameTypography.heading(context, contrast, 24),
+            textAlign: TextAlign.center,
+            style: GameTypography.heading(context, contrast, 24 * _kBrailleText),
           ),
         ),
         const SizedBox(height: 12),
@@ -2805,7 +2878,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 child: Text(
                   tok.displayChar,
                   style: TextStyle(
-                    fontSize: small ? 22 : 32,
+                    fontSize: (small ? 22 : 32) * _kBrailleText,
                     fontWeight: FontWeight.w900,
                     color: isCurrent && !hc ? Playful.ink : ((isDone || isCurrent) ? Colors.white : contrast),
                   ),
@@ -2824,11 +2897,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 if (current.isMultiCell) 'braille.two_pairs_hint'.tr(),
               ].join('  ·  '),
               textAlign: TextAlign.center,
-              style: GameTypography.heading(context, contrast, 18),
+              style: GameTypography.heading(context, contrast, 18 * _kBrailleText),
             ),
           ),
         const SizedBox(height: 6),
-        Text('braille.word_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 17)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text('braille.word_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 17 * _kBrailleText)),
+        ),
         const SizedBox(height: 8),
         Wrap(
           alignment: WrapAlignment.center,
@@ -2840,8 +2916,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               button: true,
               child: OutlinedButton.icon(
                 onPressed: _repeatWord,
-                icon: const Icon(Icons.volume_up_rounded),
-                label: Text('braille.word_listen'.tr(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                icon: const Icon(Icons.volume_up_rounded, size: 30),
+                label: Text('braille.word_listen'.tr(), style: const TextStyle(fontSize: 15 * _kBrailleText, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -2867,13 +2943,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             trigger: _voiceTrigger,
           ),
         ),
-        Expanded(
-          child: Center(
-            child: _dotPairsGrid(pairCount: current.cells.length, onTap: _tapWordDot, hits: _wordCorrectDotsHit),
-          ),
-        ),
-        _buildExpressKeyboardHint(contrast, 'braille.word_keyboard_hint'),
       ],
+      board: _dotPairsGrid(pairCount: current.cells.length, onTap: _tapWordDot, hits: _wordCorrectDotsHit),
+      bottom: [_buildExpressKeyboardHint(contrast, 'braille.word_keyboard_hint')],
+      gridFraction: 0.45,
     );
   }
 
@@ -2917,7 +2990,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: Colors.white, width: 2),
               ),
-              child: Text(b, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AccessibilityUtils.isHighContrast(context) ? Colors.black : Playful.ink)),
+              child: Text(b, style: TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w900, color: AccessibilityUtils.isHighContrast(context) ? Colors.black : Playful.ink)),
             ),
         ],
       ),
@@ -2933,13 +3006,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         button: true,
         child: ElevatedButton.icon(
           onPressed: onTap,
-          icon: Icon(icon, size: 22),
-          label: Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          icon: Icon(icon, size: 30),
+          label: Text(label, style: const TextStyle(fontSize: 15 * _kBrailleText, fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: _accent,
             foregroundColor: Colors.white,
-            minimumSize: const Size(0, 48),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            minimumSize: const Size(0, 60),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
         ),
@@ -2973,19 +3046,19 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           if (_expressExplanationOpen) _buildExpressExplanationPanel(contrast),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: Text('braille.express_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 18)),
+            child: Text('braille.express_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 18 * _kBrailleText)),
           ),
           _buildModeBadges(contrast),
           _buildWritingDotGrid(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Text('braille.express_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 13)),
+            child: Text('braille.express_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 13 * _kBrailleText)),
           ),
           _buildWritingActions(),
           // Полето за пишување - ограничена висина, со скрол и расте нагоре
           // со секој нов ред.
           ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 90, maxHeight: 170),
+            constraints: const BoxConstraints(minHeight: 120, maxHeight: 240),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -3021,7 +3094,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                           child: InkWell(
                             customBorder: const CircleBorder(),
                             onTap: _saveCurrentSentence,
-                            child: const Padding(padding: EdgeInsets.all(12), child: Icon(Icons.save_rounded, color: Colors.white, size: 24)),
+                            child: const Padding(padding: EdgeInsets.all(14), child: Icon(Icons.save_rounded, color: Colors.white, size: 32)),
                           ),
                         ),
                       ),
@@ -3036,7 +3109,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                           child: InkWell(
                             customBorder: const CircleBorder(),
                             onTap: _openSavedSentences,
-                            child: Padding(padding: const EdgeInsets.all(12), child: Icon(Icons.list_alt_rounded, color: _accent, size: 24)),
+                            child: Padding(padding: const EdgeInsets.all(14), child: Icon(Icons.list_alt_rounded, color: _accent, size: 32)),
                           ),
                         ),
                       ),
@@ -3093,7 +3166,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// ред и - подвлечен/во бојата на акцентот - знакот што е изговорен со А,
   /// но сеуште не е потврден.
   Widget _buildExpressComposedText(Color contrast) {
-    final baseStyle = TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: contrast, height: 1.4);
+    final baseStyle = TextStyle(fontSize: 22 * _kBrailleText, fontWeight: FontWeight.w700, color: contrast, height: 1.4);
     final pendingStyle = baseStyle.copyWith(color: _accent, decoration: TextDecoration.underline, decorationColor: _accent, decorationThickness: 2);
 
     final pending = _pendingPreviewText();
@@ -3140,17 +3213,17 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.chat_bubble_rounded, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : _gold),
+              Icon(Icons.chat_bubble_rounded, size: 32, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : _gold),
               const SizedBox(width: 8),
               Expanded(
-                child: Text('braille.express_explanation_title'.tr(), style: GameTypography.heading(context, contrast, 17)),
+                child: Text('braille.express_explanation_title'.tr(), style: GameTypography.heading(context, contrast, 17 * _kBrailleText)),
               ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             (_view == _View.sentenceGame ? 'braille.sentence_explanation_text' : 'braille.express_explanation_text').tr(),
-            style: GameTypography.body(context, contrast, 15),
+            style: GameTypography.body(context, contrast, 15 * _kBrailleText),
           ),
           const SizedBox(height: 12),
           _buildVoiceCommandsBox(
@@ -3175,14 +3248,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.record_voice_over_rounded, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : _gold),
+          Icon(Icons.record_voice_over_rounded, size: 32, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : _gold),
           const SizedBox(width: 8),
           Expanded(
             child: Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: '${'braille.voice_cmds_title'.tr()} ', style: GameTypography.heading(context, contrast, 15)),
-                  TextSpan(text: textKey.tr(), style: GameTypography.body(context, contrast, 15).copyWith(fontWeight: FontWeight.w700)),
+                  TextSpan(text: '${'braille.voice_cmds_title'.tr()} ', style: GameTypography.heading(context, contrast, 15 * _kBrailleText)),
+                  TextSpan(text: textKey.tr(), style: GameTypography.body(context, contrast, 15 * _kBrailleText).copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
             ),
@@ -3198,7 +3271,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Text(
         textKey.tr(),
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
+        style: TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
       ),
     );
   }
@@ -3255,7 +3328,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               child: Text(
                 labels[i],
                 style: TextStyle(
-                  fontSize: small ? 18 : 24,
+                  fontSize: (small ? 18 : 24) * _kBrailleText,
                   fontWeight: FontWeight.w900,
                   color: isCurrent && !hc ? Playful.ink : ((isDone || isCurrent) ? Colors.white : contrast),
                 ),
@@ -3286,12 +3359,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             child: Text(
               '${'braille.sentence_title'.tr()}  ·  ${_sentenceCount + 1}/$_sentenceSessionTarget  ·  ${'braille.sentence_mistakes'.tr()}: $_sentenceMistakes',
               textAlign: TextAlign.center,
-              style: GameTypography.heading(context, contrast, 17),
+              style: GameTypography.heading(context, contrast, 17 * _kBrailleText),
             ),
           ),
           _buildSentenceTarget(contrast, hc),
           if (currentIsSign)
-            Text(_symbolName(current!), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 17)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(_symbolName(current!), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 17 * _kBrailleText)),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Wrap(
@@ -3304,8 +3380,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   button: true,
                   child: OutlinedButton.icon(
                     onPressed: () => _playSentenceAudio(),
-                    icon: const Icon(Icons.volume_up_rounded),
-                    label: Text('braille.sentence_listen'.tr(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.volume_up_rounded, size: 30),
+                    label: Text('braille.sentence_listen'.tr(), style: const TextStyle(fontSize: 15 * _kBrailleText, fontWeight: FontWeight.bold)),
                   ),
                 ),
                 Semantics(
@@ -3313,8 +3389,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   button: true,
                   child: OutlinedButton.icon(
                     onPressed: _playSentenceHint,
-                    icon: const Icon(Icons.lightbulb_rounded),
-                    label: Text('braille.sentence_hint'.tr(), style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    icon: const Icon(Icons.lightbulb_rounded, size: 30),
+                    label: Text('braille.sentence_hint'.tr(), style: const TextStyle(fontSize: 15 * _kBrailleText, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -3360,7 +3436,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Widget _sentenceDoneScreen(Color contrast) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -3370,19 +3446,19 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             Text(
               'braille.sentence_done_text'.tr(args: ['$_sentenceCount', '$_sentenceMistakesTotal']),
               textAlign: TextAlign.center,
-              style: GameTypography.heading(context, contrast, 22),
+              style: GameTypography.heading(context, contrast, 22 * _kBrailleText),
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: _startSentenceGame,
-              icon: const Icon(Icons.replay_rounded),
-              label: Text('braille.sentence_again'.tr()),
+              icon: const Icon(Icons.replay_rounded, size: 32),
+              label: Text('braille.sentence_again'.tr(), style: const TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w800)),
               style: ElevatedButton.styleFrom(backgroundColor: _accent, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16)),
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _backToCategories,
-              icon: const Icon(Icons.arrow_back_rounded),
+              icon: const Icon(Icons.arrow_back_rounded, size: 30),
               label: Text('braille.back'.tr()),
             ),
           ],
@@ -3404,7 +3480,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         _buildBackRow(contrast, onBack: _closeSavedSentences, withVoiceBack: false),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text('braille.express_preview'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 20)),
+          child: Text('braille.express_preview'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 20 * _kBrailleText)),
         ),
         const SizedBox(height: 8),
         Center(
@@ -3429,11 +3505,12 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   child: Text(
                     'braille.express_no_saved'.tr(),
                     textAlign: TextAlign.center,
-                    style: GameTypography.body(context, contrast, 16),
+                    style: GameTypography.body(context, contrast, 16 * _kBrailleText),
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              : LayoutBuilder(
+                  builder: (context, viewport) => ListView.builder(
+                  padding: _brailleSidePad(viewport.maxWidth, top: 8, bottom: 8),
                   itemCount: _savedSentences.length,
                   itemBuilder: (context, index) {
                     final sentence = _savedSentences[index];
@@ -3447,12 +3524,12 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                       ),
                       child: Row(
                         children: [
-                          Expanded(child: Text(sentence, style: GameTypography.body(context, hc ? contrast : Playful.ink, 19))),
+                          Expanded(child: Text(sentence, style: GameTypography.body(context, hc ? contrast : Playful.ink, 19 * _kBrailleText))),
                           Semantics(
                             label: 'braille.express_delete'.tr(),
                             button: true,
                             child: IconButton(
-                              icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
+                              icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 34),
                               onPressed: () => _deleteSavedSentence(index),
                             ),
                           ),
@@ -3460,6 +3537,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                       ),
                     );
                   },
+                  ),
                 ),
         ),
       ],
@@ -3471,7 +3549,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return Column(
       children: [
         _buildBackRow(contrast, onBack: _closeReference, withVoiceBack: true),
-        Center(
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Semantics(
             button: true,
             label: _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
@@ -3491,11 +3570,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                         const SoundWave(color: Playful.ink, bars: 5, height: 24, barWidth: 4)
                       else
                         Icon(_referenceListening ? Icons.mic_rounded : Icons.record_voice_over_rounded,
-                            color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink, size: 24),
+                            color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink, size: 32),
                       const SizedBox(width: 8),
-                      Text(
-                        _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink),
+                      Flexible(
+                        child: Text(
+                          _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w800, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink),
+                        ),
                       ),
                     ],
                   ),
@@ -3511,15 +3593,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('braille.letters'.tr(), style: GameTypography.heading(context, contrast, 20)),
+                Text('braille.letters'.tr(), style: GameTypography.heading(context, contrast, 20 * _kBrailleText)),
                 const SizedBox(height: 12),
                 _buildReferenceRow(BrailleData.lettersFor(_lang), contrast),
                 const SizedBox(height: 24),
-                Text('braille.numbers'.tr(), style: GameTypography.heading(context, contrast, 20)),
+                Text('braille.numbers'.tr(), style: GameTypography.heading(context, contrast, 20 * _kBrailleText)),
                 const SizedBox(height: 12),
                 _buildReferenceRow(BrailleData.numbers, contrast),
                 const SizedBox(height: 24),
-                Text('braille.group_punct'.tr(), style: GameTypography.heading(context, contrast, 20)),
+                Text('braille.group_punct'.tr(), style: GameTypography.heading(context, contrast, 20 * _kBrailleText)),
                 const SizedBox(height: 12),
                 _buildReferenceRow(BrailleData.punctuationFor(_lang), contrast),
                 const SizedBox(height: 24),
@@ -3715,7 +3797,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Text(
         'braille.keyboard_hint'.tr(),
         textAlign: TextAlign.center,
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
+        style: TextStyle(fontSize: 18 * _kBrailleText, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
       ),
     );
   }
@@ -3736,7 +3818,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             label: 'braille.back'.tr(),
             button: true,
             child: IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: contrast, size: 30),
+              icon: Icon(Icons.arrow_back_rounded, color: contrast, size: 38),
               style: IconButton.styleFrom(
                 backgroundColor: AccessibilityUtils.isHighContrast(context) ? null : Colors.white.withValues(alpha: 0.15),
                 side: AccessibilityUtils.isHighContrast(context) ? null : BorderSide(color: Colors.white.withValues(alpha: 0.5), width: 1.5),
@@ -3749,12 +3831,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             // Покрај „назад“ и локалните опции: имињата на другите групи и
             // вежби во Брајовата азбука (пр. од „Состави“ директно „група 2“),
             // а преку копчето - и имињата на другите игри.
-            CategoryVoiceCommandButton(
-              options: [...?voiceOptions, ..._categoryVoiceOptions()],
-              onBack: onBack,
-              compact: true,
-              background: AccessibilityUtils.isHighContrast(context) ? _accent : _gold,
-              foreground: AccessibilityUtils.isHighContrast(context) ? null : Playful.ink,
+            Flexible(
+              child: CategoryVoiceCommandButton(
+                options: [...?voiceOptions, ..._categoryVoiceOptions()],
+                onBack: onBack,
+                compact: true,
+                background: AccessibilityUtils.isHighContrast(context) ? _accent : _gold,
+                foreground: AccessibilityUtils.isHighContrast(context) ? null : Playful.ink,
+              ),
             ),
           ],
         ],
@@ -3859,7 +3943,7 @@ class _ReferenceCell extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(character, style: TextStyle(fontSize: 30 * buttonSize, fontWeight: FontWeight.bold, color: contrastColor)),
+                Text(character, style: TextStyle(fontSize: 30 * 1.3 * buttonSize, fontWeight: FontWeight.bold, color: contrastColor)),
                 const SizedBox(height: 10),
                 Row(
                   mainAxisSize: MainAxisSize.min,

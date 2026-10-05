@@ -11,6 +11,9 @@ import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Множител за големината на текстот на овој екран (поголеми букви).
+const double _kRhythmText = 1.6;
+
 /// Ритмичка игра: [Почни] -> [Пушти звук] -> откриваат се тапанот
 /// [Удари], полето со бројот + [Потврди] и [Пушти звук повторно]. Секое притискање на "Удари" го зголемува бројот
 /// прикажан на копчето "Потврди". Кога детето мисли дека тој број е точен,
@@ -496,7 +499,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             final inner = constraints.maxWidth - side * 2;
             final header = <Widget>[
               PlayfulExplainButton(
@@ -531,7 +534,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                           Text(
                             'rhythm.game_over_title'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.display(26, color: fg),
+                            style: Playful.display(26 * _kRhythmText, color: fg),
                           ),
                         ],
                       ),
@@ -581,7 +584,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                 _gated(_gameLocked, _buildListenStage(hc, fg)),
                 const SizedBox(height: 24),
                 // Чекор 3: тапан за броење + поле со бројот и Потврди.
-                if (inner >= 560)
+                if (inner >= 760)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -643,9 +646,15 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.play_arrow_rounded, size: 34, color: hc ? Colors.white : Playful.ink),
+                      Icon(Icons.play_arrow_rounded, size: 44, color: hc ? Colors.white : Playful.ink),
                       const SizedBox(width: 10),
-                      Text(label, style: Playful.display(24, color: hc ? Colors.white : Playful.ink)),
+                      Flexible(
+                        child: Text(
+                          label,
+                          textAlign: TextAlign.center,
+                          style: Playful.display(24 * _kRhythmText, color: hc ? Colors.white : Playful.ink),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -724,7 +733,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                     ),
                   ),
                 const SizedBox(width: 8),
-                Text('$_playCount/$_maxPlays', style: Playful.title(18, color: fg)),
+                Text('$_playCount/$_maxPlays', style: Playful.title(18 * _kRhythmText, color: fg)),
               ],
             ),
           ),
@@ -756,7 +765,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
           Text(
             'rhythm.helper_explanation'.tr(),
             textAlign: TextAlign.center,
-            style: Playful.body(15.5, color: fg),
+            style: Playful.body(15.5 * _kRhythmText, color: fg),
           ),
           const SizedBox(height: 16),
           Semantics(
@@ -791,7 +800,14 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                       children: [
                         const Icon(Icons.back_hand_rounded, size: 76, color: Colors.white),
                         const SizedBox(height: 4),
-                        Text(label, style: Playful.display(24, color: Colors.white)),
+                        // Тапанот е со фиксна големина - натписот се смалува ако не собира.
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 18),
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(label, style: Playful.display(24 * _kRhythmText, color: Colors.white)),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -819,7 +835,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
           Text(
             'rhythm.entry_explanation'.tr(),
             textAlign: TextAlign.center,
-            style: Playful.body(15.5, color: fg),
+            style: Playful.body(15.5 * _kRhythmText, color: fg),
           ),
           const SizedBox(height: 14),
           Semantics(
@@ -830,12 +846,12 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
               keyboardType: TextInputType.number,
               textAlign: TextAlign.center,
               autofocus: false,
-              style: Playful.display(44, color: hc ? Colors.white : Playful.ink),
+              style: Playful.display(44 * 1.3, color: hc ? Colors.white : Playful.ink),
               decoration: InputDecoration(
                 filled: true,
                 fillColor: hc ? Colors.black : Colors.white,
                 hintText: '0',
-                hintStyle: Playful.display(44, color: (hc ? Colors.white : Playful.ink).withValues(alpha: 0.25)),
+                hintStyle: Playful.display(44 * 1.3, color: (hc ? Colors.white : Playful.ink).withValues(alpha: 0.25)),
                 contentPadding: const EdgeInsets.symmetric(vertical: 12),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
@@ -861,7 +877,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: Icon(
                         i < attemptsLeft ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        size: 28,
+                        size: 36,
                         color: i < attemptsLeft
                             ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFFB7185))
                             : fg.withValues(alpha: 0.4),
@@ -898,9 +914,9 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.check_circle_rounded, size: 28, color: Colors.white),
+                            const Icon(Icons.check_circle_rounded, size: 36, color: Colors.white),
                             const SizedBox(width: 10),
-                            Flexible(child: Text(confirmLabel, style: Playful.title(20, color: Colors.white))),
+                            Flexible(child: Text(confirmLabel, textAlign: TextAlign.center, style: Playful.title(20 * _kRhythmText, color: Colors.white))),
                           ],
                         ),
                       ),
@@ -931,7 +947,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
         Text(
           'rhythm.voice_hint'.tr(),
           textAlign: TextAlign.center,
-          style: Playful.body(14.5, color: hc ? fg : Colors.white.withValues(alpha: 0.85)),
+          style: Playful.body(14.5 * _kRhythmText, color: hc ? fg : Colors.white.withValues(alpha: 0.85)),
         ),
       ],
     );

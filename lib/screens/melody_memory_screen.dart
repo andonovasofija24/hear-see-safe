@@ -10,6 +10,9 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Колку пати е поголем текстот на екранот за мелодиска меморија.
+const double _kMelText = 1.6;
+
 /// Мемorија на звуци: детето слуша НИЗА звуци по ред (пр. мачка, мачка,
 /// куче, автомобил) - никогаш автоматски, само по притискање на Почни да
 /// слушаш. Потоа треба да ги тапне истите звуци, во истиот редослед.
@@ -268,7 +271,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             final header = <Widget>[
               PlayfulExplainButton(
                 open: _explanationOpen,
@@ -302,7 +305,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
                           Text(
                             'melody.game_over_title'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.display(26, color: fg),
+                            style: Playful.display(26 * _kMelText, color: fg),
                           ),
                         ],
                       ),
@@ -348,6 +351,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
                       label: 'melody.start_listening'.tr(),
                       onTap: _playSequence,
                       active: _isPlaying,
+                      size: 150,
                     ),
                   )
                 else ...[
@@ -386,8 +390,8 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
             AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutBack,
-              width: 44,
-              height: 44,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: i < _userIndex ? done : (hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.85)),
@@ -396,7 +400,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
               ),
               child: Icon(
                 Icons.music_note_rounded,
-                size: 24,
+                size: 31,
                 color: i < _userIndex ? (hc ? Colors.black : Playful.ink) : (hc ? Colors.white : Colors.white.withValues(alpha: 0.7)),
               ),
             ),

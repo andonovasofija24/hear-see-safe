@@ -18,6 +18,9 @@ import '../utils/accessibility_utils.dart';
 import '../utils/voice_level.dart';
 import '../widgets/playful_ui.dart';
 
+/// Множител за големината на текстот на овој екран (поголеми букви).
+const double _kLangText = 1.6;
+
 class LanguageSelectionScreen extends StatefulWidget {
   const LanguageSelectionScreen({super.key});
 
@@ -95,7 +98,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
     final fg = highContrast ? AccessibilityUtils.getContrastColor(context) : Playful.ink;
     Widget line(String text) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Text(text, style: GoogleFonts.lexend(fontSize: 17, fontWeight: FontWeight.w600, height: 1.35, color: fg)),
+          child: Text(text, style: GoogleFonts.lexend(fontSize: 17 * _kLangText, fontWeight: FontWeight.w600, height: 1.35, color: fg)),
         );
     final key = highContrast
         ? KeyCap('M',
@@ -174,7 +177,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                     text,
                     textAlign: TextAlign.center,
                     style: GoogleFonts.lexend(
-                      fontSize: 26,
+                      fontSize: 26 * _kLangText,
                       fontWeight: FontWeight.w700,
                       height: 1.6,
                       color: Colors.white,
@@ -301,7 +304,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                 Text(
                   'app.title'.tr(),
                   style: GoogleFonts.lexend(
-                    fontSize: 26,
+                    fontSize: 26 * _kLangText,
                     fontWeight: FontWeight.w800,
                     color: AccessibilityUtils.getContrastColor(context),
                   ),
@@ -310,7 +313,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                 Text(
                   'language.welcome'.tr(),
                   style: GoogleFonts.lexend(
-                    fontSize: 16,
+                    fontSize: 16 * _kLangText,
                     color: AccessibilityUtils.getContrastColor(context),
                   ),
                 ),
@@ -371,8 +374,8 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 // Листата е широка колку екранот (лизгачот е скроз десно),
-                // а содржината е во средина, до 720 широка.
-                final maxWidth = constraints.maxWidth > 720 ? 720.0 : constraints.maxWidth;
+                // а содржината е во средина, до 980 широка.
+                final maxWidth = constraints.maxWidth > 980 ? 980.0 : constraints.maxWidth;
                 return SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                     child: ConstrainedBox(
@@ -392,13 +395,13 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                                 Text(
                                   'app.title'.tr(),
                                   textAlign: TextAlign.center,
-                                  style: Playful.display(38),
+                                  style: Playful.display(38 * _kLangText),
                                 ),
                                 const SizedBox(height: 12),
                                 Text(
                                   'language.welcome'.tr(),
                                   textAlign: TextAlign.center,
-                                  style: Playful.body(18, color: Playful.mist),
+                                  style: Playful.body(18 * _kLangText, color: Playful.mist),
                                 ),
                                 const SizedBox(height: 18),
                                 ExcludeSemantics(
@@ -424,7 +427,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                             child: Text(
                               'language.choose'.tr(),
                               textAlign: TextAlign.center,
-                              style: Playful.title(24),
+                              style: Playful.title(24 * _kLangText),
                             ),
                           ),
                           const SizedBox(height: 18),
@@ -572,7 +575,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
             heard.isEmpty
                 ? 'Не те слушнав - обиди се повторно / I didn\'t hear you - try again / Nuk të dëgjova - provo përsëri'
                 : 'Чув / I heard / Dëgjova: „$heard“',
-            style: const TextStyle(fontSize: 16),
+            style: const TextStyle(fontSize: 16 * _kLangText),
           ),
         ),
       );
@@ -608,7 +611,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
             onTap: _listening ? null : listen,
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Icon(_listening ? Icons.hearing_rounded : Icons.mic_rounded, color: Colors.white, size: 40),
+              child: Icon(_listening ? Icons.hearing_rounded : Icons.mic_rounded, color: Colors.white, size: 52),
             ),
           ),
         ),
@@ -635,15 +638,15 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('language.voice_title'.tr(), style: GoogleFonts.lexend(fontSize: 22, fontWeight: FontWeight.w700, color: contrast)),
+                        Text('language.voice_title'.tr(), style: GoogleFonts.lexend(fontSize: 22 * _kLangText, fontWeight: FontWeight.w700, color: contrast)),
                         const SizedBox(height: 4),
                         Text(_listening ? 'voice.listening'.tr() : 'language.voice_ready'.tr(),
-                            style: GoogleFonts.lexend(fontSize: 18, fontWeight: FontWeight.w500, color: contrast)),
+                            style: GoogleFonts.lexend(fontSize: 18 * _kLangText, fontWeight: FontWeight.w500, color: contrast)),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.volume_up_rounded, size: 26, color: accent),
+                  Icon(Icons.volume_up_rounded, size: 34, color: accent),
                 ],
               ),
             ),
@@ -660,7 +663,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(children: [micButton, const SizedBox(width: 18), Expanded(child: textArea)]),
+            _micAndText(micButton, textArea, 18),
             const SizedBox(height: 14),
             _keyHint(highContrast: true),
           ],
@@ -689,7 +692,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
               onTap: _listening ? null : listen,
               child: Padding(
                 padding: const EdgeInsets.all(26),
-                child: Icon(_listening ? Icons.hearing_rounded : Icons.mic_rounded, color: Colors.white, size: 42),
+                child: Icon(_listening ? Icons.hearing_rounded : Icons.mic_rounded, color: Colors.white, size: 54),
               ),
             ),
           ),
@@ -715,7 +718,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('language.voice_title'.tr(), style: Playful.title(22, color: Playful.ink)),
+                      Text('language.voice_title'.tr(), style: Playful.title(22 * _kLangText, color: Playful.ink)),
                       const SizedBox(height: 6),
                       if (_listening) ...[
                         // Гласот се гледа додека се слуша.
@@ -724,13 +727,13 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                       ],
                       Text(
                         _listening ? 'voice.listening'.tr() : 'language.voice_ready'.tr(),
-                        style: Playful.body(17, color: const Color(0xFF34336B)),
+                        style: Playful.body(17 * _kLangText, color: const Color(0xFF34336B)),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.volume_up_rounded, size: 28, color: micColor),
+                const Icon(Icons.volume_up_rounded, size: 36, color: micColor),
               ],
             ),
           ),
@@ -751,17 +754,31 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Padding(padding: const EdgeInsets.all(8), child: micButton),
-              const SizedBox(width: 14),
-              Expanded(child: textArea),
-            ],
-          ),
+          _micAndText(Padding(padding: const EdgeInsets.all(8), child: micButton), textArea, 14),
           const SizedBox(height: 18),
           _keyHint(highContrast: false),
         ],
       ),
+    );
+  }
+
+  /// Микрофонот и текстот до него; на тесен екран (телефон) текстот оди
+  /// под микрофонот, за големите букви да имаат место.
+  Widget _micAndText(Widget mic, Widget text, double gap) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        if (c.maxWidth < 520) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(child: mic),
+              SizedBox(height: gap),
+              text,
+            ],
+          );
+        }
+        return Row(children: [mic, SizedBox(width: gap), Expanded(child: text)]);
+      },
     );
   }
 
@@ -811,26 +828,36 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                     ),
                     child: Row(
                       children: [
+                        Expanded(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                         Text(
                           code,
                           style: GoogleFonts.lexend(
-                            fontSize: 36,
+                            fontSize: 36 * _kLangText,
                             fontWeight: FontWeight.w800,
                             color: AccessibilityUtils.getAccentColor(context),
                           ),
                         ),
                         const SizedBox(width: 20),
-                        Expanded(
-                          child: Text(
-                            name,
-                            style: GoogleFonts.lexend(
-                              fontSize: 27,
-                              fontWeight: FontWeight.w700,
-                              color: AccessibilityUtils.getContrastColor(context),
+                        Text(
+                          name,
+                          style: GoogleFonts.lexend(
+                            fontSize: 27 * _kLangText,
+                            fontWeight: FontWeight.w700,
+                            color: AccessibilityUtils.getContrastColor(context),
+                          ),
+                        ),
+                              ],
                             ),
                           ),
                         ),
-                        Icon(Icons.arrow_forward_rounded, color: AccessibilityUtils.getContrastColor(context), size: 30),
+                        const SizedBox(width: 8),
+                        Icon(Icons.arrow_forward_rounded, color: AccessibilityUtils.getContrastColor(context), size: 40),
                       ],
                     ),
                   ),
@@ -839,7 +866,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
             ),
             const SizedBox(width: 12),
             IconButton.filled(
-              iconSize: 36,
+              iconSize: 46,
               padding: const EdgeInsets.all(20),
               style: IconButton.styleFrom(
                 backgroundColor: AccessibilityUtils.getPrimaryButtonBackground(context),
@@ -903,7 +930,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                                         FittedBox(
                                           fit: BoxFit.scaleDown,
                                           alignment: Alignment.centerLeft,
-                                          child: Text(greeting, style: Playful.display(34, color: Playful.ink)),
+                                          child: Text(greeting, style: Playful.display(34 * _kLangText, color: Playful.ink)),
                                         ),
                                         const SizedBox(height: 8),
                                         BrailleWordReveal(
@@ -914,26 +941,31 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                                           showLetters: false,
                                         ),
                                         const SizedBox(height: 10),
-                                        Row(
+                                        FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerLeft,
+                                          child: Row(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
                                             Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                               decoration: BoxDecoration(color: Playful.ink, borderRadius: BorderRadius.circular(10)),
-                                              child: Text(code, style: Playful.title(16, color: accent)),
+                                              child: Text(code, style: Playful.title(16 * _kLangText, color: accent)),
                                             ),
                                             const SizedBox(width: 10),
-                                            Flexible(child: Text(name, style: Playful.title(22, color: Playful.ink))),
+                                            Text(name, style: Playful.title(22 * _kLangText, color: Playful.ink)),
                                           ],
+                                          ),
                                         ),
                                       ],
                                     ),
                                   ),
                                   const SizedBox(width: 8),
                                   Container(
-                                    width: 52,
-                                    height: 52,
+                                    width: 66,
+                                    height: 66,
                                     decoration: const BoxDecoration(color: Playful.ink, shape: BoxShape.circle),
-                                    child: Icon(Icons.arrow_forward_rounded, color: accent, size: 30),
+                                    child: Icon(Icons.arrow_forward_rounded, color: accent, size: 38),
                                   ),
                                 ],
                               ),
@@ -952,15 +984,15 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                           borderRadius: BorderRadius.circular(22),
                           onTap: preview,
                           child: Container(
-                            width: 76,
-                            height: 76,
+                            width: 96,
+                            height: 96,
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(22),
                               border: Border.all(color: accent, width: 3),
                             ),
                             child: lit
-                                ? Center(child: SoundWave(color: accent, bars: 5, height: 34, barWidth: 5))
-                                : Icon(Icons.volume_up_rounded, color: accent, size: 36),
+                                ? Center(child: SoundWave(color: accent, bars: 5, height: 44, barWidth: 6))
+                                : Icon(Icons.volume_up_rounded, color: accent, size: 46),
                           ),
                         ),
                       ),

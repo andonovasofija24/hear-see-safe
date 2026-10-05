@@ -8,6 +8,10 @@ import '../utils/accessibility_utils.dart';
 import '../utils/vibration_utils.dart';
 import 'playful_ui.dart';
 
+/// Множител за натписите (копчиња, преглед на цифрата). Точките и
+/// ќелијата ја задржуваат својата геометрија.
+const double _kBdText = 1.55;
+
 /// За управување однадвор (пр. гласовни команди „потврди“ / „избриши“).
 class BrailleDigitController {
   _BrailleDigitInputState? _state;
@@ -323,7 +327,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                       children: [
                         _staticCell(const {3, 4, 5, 6}, widget.compact ? 12 : 14, hc),
                         const SizedBox(height: 4),
-                        Text('⠼', style: TextStyle(fontSize: 18, color: fg.withValues(alpha: 0.8))),
+                        Text('⠼', style: TextStyle(fontSize: 18 * 1.3, color: fg.withValues(alpha: 0.8))),
                       ],
                     ),
                   ),
@@ -336,17 +340,23 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                   child: ExcludeSemantics(
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
-                      width: widget.compact ? 56 : 68,
-                      height: widget.compact ? 56 : 68,
+                      width: widget.compact ? 72 : 88,
+                      height: widget.compact ? 72 : 88,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: _preview != null ? (hc ? const Color(0xFFFFFF00) : Playful.sun) : (hc ? Colors.black : Colors.white.withValues(alpha: 0.1)),
                         border: Border.all(color: Colors.white, width: 3),
                       ),
-                      child: Text(
-                        previewText,
-                        style: Playful.display(widget.compact ? 28 : 34, color: _preview != null ? Playful.ink : fg.withValues(alpha: 0.5)),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            previewText,
+                            style: Playful.display((widget.compact ? 28 : 34) * 1.45, color: _preview != null ? Playful.ink : fg.withValues(alpha: 0.5)),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -472,17 +482,22 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(icon, size: 20, color: fg),
-                    const SizedBox(width: 6),
-                    Text(label, style: Playful.title(15, color: fg)),
-                    const SizedBox(width: 6),
+                    Icon(icon, size: 26, color: fg),
+                    const SizedBox(width: 8),
+                    // Ограничена ширина: подолг натпис (mk/sq) оди во втор ред
+                    // наместо да излезе надвор од копчето на тесен екран.
+                    ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.55),
+                      child: Text(label, style: Playful.title(15 * _kBdText, color: fg)),
+                    ),
+                    const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: primary ? Playful.ink : Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(keyLabel, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: primary ? Playful.sun : Colors.white)),
+                      child: Text(keyLabel, style: TextStyle(fontSize: 13 * _kBdText, fontWeight: FontWeight.w900, color: primary ? Playful.sun : Colors.white)),
                     ),
                   ],
                 ),

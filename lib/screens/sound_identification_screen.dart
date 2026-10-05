@@ -10,6 +10,9 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Колку пати е поголем текстот на екранот за идентификација на звук.
+const double _kSidText = 1.6;
+
 /// Идентификација на звук: детето слуша еден звук (копче Пушти звук,
 /// никогаш автоматски) и избира од понудените одговори кое животно/предмет
 /// го создава тој звук. Играта трае вкупно 20 рунди, а на крајот се
@@ -271,7 +274,7 @@ class _SoundIdentificationScreenState extends State<SoundIdentificationScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             final header = <Widget>[
               PlayfulExplainButton(
                 open: _explanationOpen,
@@ -305,7 +308,7 @@ class _SoundIdentificationScreenState extends State<SoundIdentificationScreen> {
                           Text(
                             'sound.game_over_title'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.display(26, color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white),
+                            style: Playful.display(26 * _kSidText, color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white),
                           ),
                         ],
                       ),
@@ -348,6 +351,7 @@ class _SoundIdentificationScreenState extends State<SoundIdentificationScreen> {
                     label: 'sound.start'.tr(),
                     onTap: _playTargetSound,
                     active: _isPlaying,
+                    size: 150,
                   ),
                 ),
                 const SizedBox(height: 12),

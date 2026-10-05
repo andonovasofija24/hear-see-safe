@@ -9,6 +9,9 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Колку пати е поголем текстот на екранот за гласовен понг.
+const double _kPongText = 1.6;
+
 /// Гласовен Понг за деца со оштетен вид и/или слух - верзија со подвижна
 /// палка.
 ///
@@ -316,7 +319,7 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
                           Text(
                             'pong.game_over_title'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.display(26, color: fg),
+                            style: Playful.display(26 * _kPongText, color: fg),
                           )
                         else
                           Center(child: _scorePill(hc)),
@@ -365,9 +368,9 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.sports_tennis_rounded, size: 26, color: hc ? Colors.white : Playful.ink),
+                Icon(Icons.sports_tennis_rounded, size: 34, color: hc ? Colors.white : Playful.ink),
                 const SizedBox(width: 10),
-                Text(text, style: Playful.display(22, color: hc ? Colors.white : Playful.ink)),
+                Flexible(child: Text(text, textAlign: TextAlign.center, style: Playful.display(22 * _kPongText, color: hc ? Colors.white : Playful.ink))),
               ],
             ),
           ),
@@ -480,7 +483,13 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
                         ),
                       ),
                     ),
-                  if (!_playing) Center(child: _startButton(hc)),
+                  if (!_playing)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: _startButton(hc),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -518,10 +527,10 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.sports_tennis_rounded, size: 36, color: hc ? Colors.white : Playful.ink),
+                      Icon(Icons.sports_tennis_rounded, size: 46, color: hc ? Colors.white : Playful.ink),
                       const SizedBox(width: 12),
                       Flexible(
-                        child: Text(label, style: Playful.display(26, color: hc ? Colors.white : Playful.ink)),
+                        child: Text(label, textAlign: TextAlign.center, style: Playful.display(26 * _kPongText, color: hc ? Colors.white : Playful.ink)),
                       ),
                     ],
                   ),

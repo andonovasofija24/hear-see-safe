@@ -22,7 +22,7 @@ dependencies:
   just_audio: ^0.9.36
   audioplayers: ^5.2.1
   vibration: ^3.1.6
-  flutter_compass: ^0.7.0
+  flutter_compass: ^0.8.1
   
   # Camera & Image Processing
   camera: ^0.10.5+5
@@ -43,7 +43,7 @@ dependencies:
   shared_preferences: ^2.2.2
   path_provider: ^2.1.1
   permission_handler: ^11.1.0
-  record: ^5.1.2
+  record: ^6.1.1
 
 dev_dependencies:
   flutter_test:

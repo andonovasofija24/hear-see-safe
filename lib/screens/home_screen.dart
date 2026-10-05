@@ -66,6 +66,9 @@ class _HomeSection {
   final List<_HomeFeature> features;
 }
 
+/// Колку пати е поголем текстот на почетниот екран од основната големина.
+const double _kHomeText = 1.6;
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -448,7 +451,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   welcome,
                   style: GoogleFonts.lexend(
-                    fontSize: 20 * buttonSize,
+                    fontSize: 20 * _kHomeText * buttonSize,
                     fontWeight: FontWeight.w700,
                     height: 1.4,
                     color: contrastColor,
@@ -458,7 +461,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Text(
                   sub,
                   style: GoogleFonts.lexend(
-                    fontSize: 17 * buttonSize,
+                    fontSize: 17 * _kHomeText * buttonSize,
                     fontWeight: FontWeight.w500,
                     color: secondaryColor,
                   ),
@@ -486,17 +489,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 BrailleWordReveal(
                   text: 'app.title'.tr(),
                   lang: brailleLangFor(context.locale.languageCode),
-                  cellSize: 30 * buttonSize,
+                  cellSize: 42 * buttonSize,
                 ),
                 SizedBox(height: 22 * buttonSize),
                 // Пораката за добредојде светнува збор по збор додека се слуша.
                 KaraokeText(
                   text: welcome,
                   progress: _welcomeProgress,
-                  style: Playful.title(24 * buttonSize),
+                  style: Playful.title(24 * _kHomeText * buttonSize),
                 ),
                 SizedBox(height: 10 * buttonSize),
-                Text(sub, style: Playful.body(17 * buttonSize, color: Playful.mist)),
+                Text(sub, style: Playful.body(17 * _kHomeText * buttonSize, color: Playful.mist)),
               ],
             ),
           ),
@@ -556,7 +559,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.lexend(fontSize: 21 * buttonSize, fontWeight: FontWeight.w800, color: contrastColor)),
+                Text(title, style: GoogleFonts.lexend(fontSize: 21 * _kHomeText * buttonSize, fontWeight: FontWeight.w800, color: contrastColor)),
                 SizedBox(height: 10 * buttonSize),
                 for (final (_, icon, text) in lines)
                   Padding(
@@ -564,10 +567,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(icon, size: 24 * buttonSize, color: accent),
+                        Icon(icon, size: 34 * buttonSize, color: accent),
                         SizedBox(width: 10 * buttonSize),
                         Expanded(
-                          child: Text(text, style: GoogleFonts.lexend(fontSize: 17 * buttonSize, fontWeight: FontWeight.w500, height: 1.4, color: contrastColor)),
+                          child: Text(text, style: GoogleFonts.lexend(fontSize: 17 * _kHomeText * buttonSize, fontWeight: FontWeight.w500, height: 1.4, color: contrastColor)),
                         ),
                       ],
                     ),
@@ -598,40 +601,40 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lightbulb_rounded, color: Playful.sun, size: 30 * buttonSize),
+                    Icon(Icons.lightbulb_rounded, color: Playful.sun, size: 44 * buttonSize),
                     SizedBox(width: 10 * buttonSize),
-                    Expanded(child: Text(title, style: Playful.title(22 * buttonSize))),
+                    Expanded(child: Text(title, style: Playful.title(22 * _kHomeText * buttonSize))),
                   ],
                 ),
                 SizedBox(height: 16 * buttonSize),
                 for (final (key, icon, text) in lines)
                   Padding(
-                    padding: EdgeInsets.only(bottom: 14 * buttonSize),
+                    padding: EdgeInsets.only(bottom: 20 * buttonSize),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         SizedBox(
-                          width: 64 * buttonSize,
+                          width: 120 * buttonSize,
                           child: Align(
                             alignment: Alignment.topLeft,
                             child: key != null
-                                ? KeyCap(key, size: 0.9 * buttonSize)
+                                ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.topLeft, child: KeyCap(key, size: 1.3 * buttonSize))
                                 : Container(
-                                    width: 44 * buttonSize,
-                                    height: 44 * buttonSize,
+                                    width: 60 * buttonSize,
+                                    height: 60 * buttonSize,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: Colors.white.withValues(alpha: 0.12),
                                     ),
-                                    child: Icon(icon, size: 24 * buttonSize, color: Playful.sun),
+                                    child: Icon(icon, size: 34 * buttonSize, color: Playful.sun),
                                   ),
                           ),
                         ),
                         SizedBox(width: 6 * buttonSize),
                         Expanded(
                           child: Padding(
-                            padding: EdgeInsets.only(top: 8 * buttonSize),
-                            child: Text(stripKey(key, text), style: Playful.body(16.5 * buttonSize)),
+                            padding: EdgeInsets.only(top: 10 * buttonSize),
+                            child: Text(stripKey(key, text), style: Playful.body(16.5 * _kHomeText * buttonSize)),
                           ),
                         ),
                       ],
@@ -663,13 +666,13 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: EdgeInsets.only(top: 24 * buttonSize, bottom: 12 * buttonSize),
           child: Row(
             children: [
-              Icon(section.icon, color: AccessibilityUtils.getAccentColor(context), size: 32 * buttonSize),
+              Icon(section.icon, color: AccessibilityUtils.getAccentColor(context), size: 46 * buttonSize),
               SizedBox(width: 12 * buttonSize),
               Expanded(
                 child: Text(
                   title,
                   style: GoogleFonts.lexend(
-                    fontSize: 24 * buttonSize,
+                    fontSize: 24 * _kHomeText * buttonSize,
                     fontWeight: FontWeight.w800,
                     color: contrastColor,
                   ),
@@ -693,22 +696,22 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Container(
-                  width: 58 * buttonSize,
-                  height: 58 * buttonSize,
+                  width: 80 * buttonSize,
+                  height: 80 * buttonSize,
                   decoration: BoxDecoration(
                     color: section.tint,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(section.icon, color: Playful.ink, size: 32 * buttonSize),
+                  child: Icon(section.icon, color: Playful.ink, size: 46 * buttonSize),
                 ),
                 SizedBox(width: 16 * buttonSize),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: Playful.display(26 * buttonSize)),
+                      Text(title, style: Playful.display(26 * _kHomeText * buttonSize)),
                       SizedBox(height: 4 * buttonSize),
-                      Text(hint, style: Playful.body(16 * buttonSize, color: section.tint)),
+                      Text(hint, style: Playful.body(16 * _kHomeText * buttonSize, color: section.tint)),
                     ],
                   ),
                 ),
@@ -736,7 +739,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return Padding(
         padding: const EdgeInsets.only(right: 10),
         child: IconButton(
-          icon: Icon(icon, size: 30 * buttonSize),
+          icon: Icon(icon, size: 38 * buttonSize),
           color: topIconColor,
           tooltip: tooltip,
           padding: EdgeInsets.all(10 * buttonSize),
@@ -755,14 +758,14 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 0,
-        toolbarHeight: 72 * buttonSize.clamp(1.0, 1.4),
+        toolbarHeight: 88 * buttonSize.clamp(1.0, 1.4),
         // Иста боја како горниот дел од позадината - без шев.
         backgroundColor: hc ? AccessibilityUtils.getAppBarBackgroundColor(context) : Playful.background.colors.first,
         title: Text(
           'app.title'.tr(),
           style: hc
-              ? GoogleFonts.lexend(fontSize: 24 * buttonSize, fontWeight: FontWeight.w800, color: contrastColor)
-              : Playful.display(26 * buttonSize),
+              ? GoogleFonts.lexend(fontSize: 34 * buttonSize, fontWeight: FontWeight.w800, color: contrastColor)
+              : Playful.display(36 * buttonSize),
         ),
         actions: [
           topButton(
@@ -790,18 +793,17 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // Низ целиот екран: листата е широка колку екранот (лизгачот
-                  // е скроз десно), а картичките се во 1 / 2 / 3 колони.
+                  // Една игра во ред: содржината е во средина (најмногу ~980 px),
+                  // а листата е широка колку екранот, па лизгачот е скроз десно.
                   final width = constraints.maxWidth;
-                  final side = width >= 1200 ? 40.0 : (width >= 760 ? 28.0 : 20.0);
-                  final columns = width >= 1300 ? 3 : (width >= 760 ? 2 : 1);
-                  const gap = 16.0;
-                  final innerWidth = width - side * 2;
-                  final cardWidth = (innerWidth - gap * (columns - 1)) / columns - 0.5;
+                  const maxContent = 980.0;
+                  final side = math.max(width >= 760 ? 28.0 : 16.0, (width - maxContent) / 2);
+                  const gap = 20.0;
+                  final cardWidth = width - side * 2 - 0.5;
                   return SizedBox(
                       width: width,
                       child: ListView(
-                        padding: EdgeInsets.fromLTRB(side, 8, side, 140),
+                        padding: EdgeInsets.fromLTRB(side, 8, side, 170),
                         children: [
                           _buildHero(
                             hc: hc,
@@ -901,7 +903,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   SizedBox(width: 12 * buttonSize),
                   Text(label,
                       style: GoogleFonts.lexend(
-                          fontSize: 19 * buttonSize,
+                          fontSize: 26 * buttonSize,
                           fontWeight: FontWeight.w800,
                           color: AccessibilityUtils.getPrimaryButtonForeground(context))),
                 ],
@@ -947,7 +949,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: Icon(Icons.record_voice_over_rounded, color: bg, size: 26 * buttonSize),
                         ),
                       SizedBox(width: 14 * buttonSize),
-                      Text(label, style: Playful.display(20 * buttonSize, color: Playful.ink)),
+                      Text(label, style: Playful.display(27 * buttonSize, color: Playful.ink)),
                     ],
                   ),
                 ),
@@ -991,6 +993,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: borderSide.color, width: math.max(borderSide.width, 2)),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     padding: EdgeInsets.all(14 * buttonSize),
@@ -999,7 +1002,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: contrastColor),
                     ),
-                    child: Icon(icon, size: 38 * buttonSize, color: AccessibilityUtils.getPrimaryButtonForeground(context)),
+                    child: Icon(icon, size: 50 * buttonSize, color: AccessibilityUtils.getPrimaryButtonForeground(context)),
                   ),
                   SizedBox(width: 16 * buttonSize),
                   Expanded(
@@ -1008,17 +1011,15 @@ class _HomeScreenState extends State<HomeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(title,
-                              style: GoogleFonts.lexend(fontSize: 22 * buttonSize, fontWeight: FontWeight.w800, height: 1.2, color: contrastColor)),
+                              style: GoogleFonts.lexend(fontSize: 22 * _kHomeText * buttonSize, fontWeight: FontWeight.w800, height: 1.2, color: contrastColor)),
                           SizedBox(height: 6 * buttonSize),
                           Text(description,
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.lexend(fontSize: 17 * buttonSize, fontWeight: FontWeight.w500, height: 1.35, color: secondaryColor)),
+                              style: GoogleFonts.lexend(fontSize: 17 * _kHomeText * buttonSize, fontWeight: FontWeight.w500, height: 1.35, color: secondaryColor)),
                         ],
                       ),
                     ),
                   ),
-                  Icon(Icons.arrow_forward_rounded, color: contrastColor, size: 30 * buttonSize),
+                  Icon(Icons.arrow_forward_rounded, color: contrastColor, size: 40 * buttonSize),
                 ],
               ),
             ),
@@ -1062,53 +1063,76 @@ class _HomeScreenState extends State<HomeScreen> {
                     right: -14,
                     bottom: -18,
                     child: ExcludeSemantics(
-                      child: Icon(icon, size: 120 * buttonSize, color: Colors.white.withValues(alpha: 0.10)),
+                      child: Icon(icon, size: 160 * buttonSize, color: Colors.white.withValues(alpha: 0.10)),
                     ),
                   ),
                   Padding(
-                    padding: EdgeInsets.all(18 * buttonSize),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 68 * buttonSize,
-                          height: 68 * buttonSize,
+                    padding: EdgeInsets.all(22 * buttonSize),
+                    child: LayoutBuilder(
+                      builder: (context, box) {
+                        final narrow = box.maxWidth < 600 * buttonSize;
+                        final iconBox = Container(
+                          width: 92 * buttonSize,
+                          height: 92 * buttonSize,
                           decoration: BoxDecoration(
                             color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(24),
                           ),
-                          child: Icon(icon, size: 38 * buttonSize, color: deep),
-                        ),
-                        SizedBox(width: 18 * buttonSize),
-                        Expanded(
-                          child: ExcludeSemantics(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(title, style: Playful.display(22 * buttonSize)),
-                                SizedBox(height: 6 * buttonSize),
-                                Text(
-                                  description,
-                                  maxLines: 3,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Playful.body(16 * buttonSize, color: Colors.white.withValues(alpha: 0.95)),
-                                ),
-                              ],
-                            ),
+                          child: Icon(icon, size: 54 * buttonSize, color: deep),
+                        );
+                        final braille = firstCell == null
+                            ? null
+                            : EmbossedBrailleCell(
+                                dots: firstCell.$2,
+                                letter: firstCell.$1,
+                                size: 54 * buttonSize,
+                                plateColor: Color.lerp(accent, Colors.black, 0.5)!,
+                                delayMs: brailleDelayMs,
+                              );
+                        final texts = ExcludeSemantics(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(title, style: Playful.display((narrow ? 30 : 22 * _kHomeText) * buttonSize)),
+                              SizedBox(height: 8 * buttonSize),
+                              Text(
+                                description,
+                                style: Playful.body((narrow ? 22 : 16 * _kHomeText) * buttonSize, color: Colors.white.withValues(alpha: 0.95)),
+                              ),
+                            ],
                           ),
-                        ),
-                        SizedBox(width: 12 * buttonSize),
-                        // Првата буква од името на Брајово писмо (испакната).
-                        if (firstCell != null)
-                          EmbossedBrailleCell(
-                            dots: firstCell.$2,
-                            letter: firstCell.$1,
-                            size: 40 * buttonSize,
-                            plateColor: Color.lerp(accent, Colors.black, 0.5)!,
-                            delayMs: brailleDelayMs,
-                          ),
-                      ],
+                        );
+                        // Тесен екран (телефон): иконата и Брајовата буква горе,
+                        // текстот под нив преку целата ширина.
+                        if (narrow) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  iconBox,
+                                  const Spacer(),
+                                  if (braille != null) braille,
+                                ],
+                              ),
+                              SizedBox(height: 16 * buttonSize),
+                              texts,
+                            ],
+                          );
+                        }
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            iconBox,
+                            SizedBox(width: 22 * buttonSize),
+                            Expanded(child: texts),
+                            SizedBox(width: 16 * buttonSize),
+                            // Првата буква од името на Брајово писмо (испакната).
+                            if (braille != null) braille,
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ],

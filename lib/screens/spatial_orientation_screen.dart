@@ -2059,6 +2059,14 @@ import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Зголемување на читливиот текст (наслови, табови, упатства, копчиња).
+const double _kSpatialText = 1.6;
+
+/// Поумерено зголемување за текстот ВНАТРЕ во сцената на компасот - таму
+/// геометријата (стрелка, мрежа, копчиња) останува иста, а текстот расте
+/// само колку што собира.
+const double _kSpatialStageText = 1.35;
+
 /// Модул за просторна ориентација со 4 режими (табови горе):
 /// - Симон - насоки: вибрациска низа од 4 насоки, детето ја повторува со допир.
 /// - Лавиринт: следење невидлива патека со прст, вибрација при излегување.
@@ -3061,7 +3069,10 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: Text(key, style: Playful.title(15, color: hc ? Colors.white : Playful.ink)),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(key, style: Playful.title(15 * 1.2, color: hc ? Colors.white : Playful.ink)),
+                ),
               ),
             ),
           ),
@@ -3154,23 +3165,31 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       (_SpatialTab.compass, 'spatial.tab_compass'.tr()),
     ];
     final hc = AccessibilityUtils.isHighContrast(context);
+    // Со поголемиот текст, на тесен екран (телефон) табовите се во 2 реда
+    // по 2 (икона лево, име десно), за имињата да не се сечат.
+    final narrow = MediaQuery.sizeOf(context).width < 640;
+    Widget tabRow(int from, int to) => IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = from; i < to; i++) ...[
+                if (i > from) const SizedBox(width: 6),
+                Expanded(child: _tabTile(tabs[i].$1, tabs[i].$2, hc, compact: narrow)),
+              ],
+            ],
+          ),
+        );
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 10, 0, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (var i = 0; i < tabs.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  Expanded(child: _tabTile(tabs[i].$1, tabs[i].$2, hc)),
-                ],
-              ],
-            ),
-          ),
-        ],
+        children: narrow
+            ? [
+                tabRow(0, 2),
+                const SizedBox(height: 6),
+                tabRow(2, 4),
+              ]
+            : [tabRow(0, tabs.length)],
       ),
     );
   }
@@ -3208,7 +3227,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   /// Голема плочка за режим: голема икона горе, име долу. Избраната е
   /// златна (темен текст, бел раб и сјај), другите се проѕирни со бел раб.
-  Widget _tabTile(_SpatialTab tab, String label, bool hc) {
+  Widget _tabTile(_SpatialTab tab, String label, bool hc, {bool compact = false}) {
     final isActive = _tab == tab;
     final Color fg;
     final Color bg;
@@ -3235,8 +3254,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
             onTap: () => _switchTab(tab),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              constraints: const BoxConstraints(minHeight: 92),
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 10),
+              constraints: BoxConstraints(minHeight: compact ? 68 : 104),
+              padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 6, vertical: compact ? 8 : 10),
               decoration: BoxDecoration(
                 color: bg,
                 borderRadius: BorderRadius.circular(20),
@@ -3249,20 +3268,33 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                     : [BoxShadow(color: Playful.sun.withValues(alpha: 0.55), blurRadius: 20)],
               ),
               child: ExcludeSemantics(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(_tabIcons[tab], size: 40, color: iconColor),
-                    const SizedBox(height: 6),
-                    Text(
-                      label,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Playful.title(12.5, color: fg),
-                    ),
-                  ],
-                ),
+                child: compact
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(_tabIcons[tab], size: 34, color: iconColor),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              label,
+                              textAlign: TextAlign.center,
+                              style: Playful.title(12.5 * _kSpatialText, color: fg),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(_tabIcons[tab], size: 40 * 1.3, color: iconColor),
+                          const SizedBox(height: 6),
+                          Text(
+                            label,
+                            textAlign: TextAlign.center,
+                            style: Playful.title(12.5 * _kSpatialText, color: fg),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),
@@ -3314,7 +3346,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                 fit: BoxFit.scaleDown,
                 child: PopIn(
                   child: Container(
-                    constraints: const BoxConstraints(maxWidth: 300),
+                    // Поширока за поголемиот натпис на копчето (кругот е ист).
+                    constraints: const BoxConstraints(maxWidth: 380),
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
                     decoration: BoxDecoration(
                       color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.94),
@@ -3399,6 +3432,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     required String label,
     required VoidCallback? onTap,
     required bool hc,
+    double textScale = _kSpatialText,
   }) {
     final fg = _fg(hc);
     final enabled = onTap != null;
@@ -3426,14 +3460,14 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(icon, size: 20, color: hc ? fg : Playful.sun),
+                      Icon(icon, size: 20 * (1 + (textScale - 1) / 2), color: hc ? fg : Playful.sun),
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
                           label,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: Playful.title(15, color: fg),
+                          style: Playful.title(15 * textScale, color: fg),
                         ),
                       ),
                     ],
@@ -3479,7 +3513,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                 Text(
                   'spatial.choose_prompt'.tr(),
                   textAlign: TextAlign.center,
-                  style: Playful.body(15.5, color: fg),
+                  style: Playful.body(15.5 * _kSpatialText, color: fg),
                 ),
                 const SizedBox(height: 6),
                 Center(
@@ -3633,7 +3667,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
         Text(
           'spatial.maze_prompt'.tr(),
           textAlign: TextAlign.center,
-          style: Playful.body(14.5, color: fg),
+          style: Playful.body(14.5 * _kSpatialText, color: fg),
         ),
         Expanded(
           child: Padding(
@@ -3768,7 +3802,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
         Text(
           _radarFound ? 'spatial.radar_drag_prompt'.tr() : 'spatial.radar_prompt'.tr(),
           textAlign: TextAlign.center,
-          style: Playful.body(14.5, color: fg),
+          style: Playful.body(14.5 * _kSpatialText, color: fg),
         ),
         Expanded(
           child: Padding(
@@ -4006,13 +4040,13 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               Text(
                 'spatial.compass_target'.tr(args: [targetLabel]),
                 textAlign: TextAlign.center,
-                style: Playful.display(22, color: hc ? fg : Playful.sun),
+                style: Playful.display(22 * _kSpatialStageText, color: hc ? fg : Playful.sun),
               ),
               const SizedBox(height: 4),
               Text(
                 'spatial.compass_current'.tr(args: [headingText]),
                 textAlign: TextAlign.center,
-                style: Playful.body(15, color: fg),
+                style: Playful.body(15 * _kSpatialStageText, color: fg),
               ),
               Expanded(
                 child: Container(
@@ -4116,7 +4150,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                     ? 'spatial.compass_alt_prompt'.tr()
                     : 'spatial.compass_alt_choose_prompt'.tr(),
                 textAlign: TextAlign.center,
-                style: Playful.body(14.5, color: fg),
+                style: Playful.body(14.5 * _kSpatialStageText, color: fg),
               ),
               if (!_compassAltDemoPlaying) ...[
                 const SizedBox(height: 6),
@@ -4130,12 +4164,14 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                       label: 'spatial.compass_alt_replay'.tr(),
                       onTap: _playCompassAltDemo,
                       hc: hc,
+                      textScale: _kSpatialStageText,
                     ),
                     _miniGhostButton(
                       icon: Icons.lightbulb_outline_rounded,
                       label: 'spatial.compass_alt_hint'.tr(),
                       onTap: () => setState(() => _compassAltHintRevealed = true),
                       hc: hc,
+                      textScale: _kSpatialStageText,
                     ),
                   ],
                 ),
@@ -4157,7 +4193,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                             Icon(
                               _compassMoveIcons[_compassAltSequence[_compassAltUserIndex]],
                               color: hc ? Colors.white : Playful.ink,
-                              size: 22,
+                              size: 26,
                             ),
                             const SizedBox(width: 6),
                             Flexible(
@@ -4165,7 +4201,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                                 'spatial.compass_alt_hint_label'.tr(args: [
                                   _compassMoveLabelKeys[_compassAltSequence[_compassAltUserIndex]]!.tr(),
                                 ]),
-                                style: Playful.title(15, color: hc ? Colors.white : Playful.ink),
+                                style: Playful.title(15 * _kSpatialStageText, color: hc ? Colors.white : Playful.ink),
                               ),
                             ),
                           ],

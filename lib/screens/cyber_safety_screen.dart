@@ -11,6 +11,9 @@ import 'package:hear_and_see_safe/widgets/island_carousel.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
+/// Колку пати поголем текст (како на почетниот екран).
+const double _kCyText = 1.6;
+
 enum _View { modeSelect, phishing, phishingResult, quiz, quizResult, password, agent, agentResult }
 
 class _ScamMessage {
@@ -524,7 +527,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
     return GameScreenChrome(
       accent: _moduleAccent,
       title: 'features.cyber_safety'.tr(),
-      titleFontSize: 26,
+      titleFontSize: 26 * _kCyText,
       // Секој поглед има свое (жолто) копче за глас - со одговорите на
       // играта, имињата на другите режими и „назад“.
       voiceCommand: false,
@@ -573,11 +576,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
 
   Color _fg(bool hc, Color contrast) => hc ? contrast : Colors.white;
 
-  /// Целата ширина (лизгачот скроз десно), содржината во средина до 860.
+  /// Целата ширина (лизгачот скроз десно), содржината во средина до 980.
   Widget _page(List<Widget> Function(double side) children) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final side = ((constraints.maxWidth - 860) / 2).clamp(20.0, double.infinity);
+        final side = ((constraints.maxWidth - 980) / 2).clamp(20.0, double.infinity);
         return ListView(
           padding: EdgeInsets.fromLTRB(side, 12, side, 32),
           children: children(side),
@@ -599,12 +602,12 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: hc ? Colors.white : _neon, size: 32),
+          Icon(icon, color: hc ? Colors.white : _neon, size: 42),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               '> $text',
-              style: TextStyle(fontFamily: 'monospace', fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: 0.6, color: hc ? Colors.white : _neon),
+              style: TextStyle(fontFamily: 'monospace', fontSize: 24 * _kCyText, fontWeight: FontWeight.w900, letterSpacing: 0.6, color: hc ? Colors.white : _neon),
             ),
           ),
         ],
@@ -635,7 +638,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           Text(
             'islands.hint'.tr(),
             textAlign: TextAlign.center,
-            style: Playful.body(15, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85)),
+            style: Playful.body(15 * _kCyText, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85)),
           ),
           const SizedBox(height: 8),
           // Четирите игри - острови што се вртат во круг; горниот е избран.
@@ -864,7 +867,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: Colors.white, width: hc ? 1.5 : 2),
         ),
-        child: Text(text, style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
+        child: Text(text, style: TextStyle(fontSize: 17 * _kCyText, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
       ),
     );
   }
@@ -888,18 +891,18 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.terminal_rounded, color: hc ? Colors.white : _neon, size: 24),
+                  Icon(Icons.terminal_rounded, color: hc ? Colors.white : _neon, size: 31),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '> ${'cyber.how_to_play'.tr()}',
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.white : _neon),
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 17 * _kCyText, fontWeight: FontWeight.w900, color: hc ? Colors.white : _neon),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
-              Text(key.tr(), style: Playful.body(17, color: Colors.white)),
+              Text(key.tr(), style: Playful.body(17 * _kCyText, color: Colors.white)),
             ],
           ),
         ),
@@ -925,7 +928,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
         ),
         if (hintKey != null) ...[
           const SizedBox(height: 8),
-          Text(hintKey.tr(), textAlign: TextAlign.center, style: Playful.body(15, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85))),
+          Text(hintKey.tr(), textAlign: TextAlign.center, style: Playful.body(15 * _kCyText, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85))),
         ],
       ],
     );
@@ -961,22 +964,22 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           Row(
             children: [
               Container(
-                width: 58,
-                height: 58,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   color: answered ? Colors.white.withValues(alpha: 0.25) : (hc ? Colors.white : headerIconColor),
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: Icon(headerIcon, size: 32, color: answered ? Colors.white : (hc ? Colors.black : Colors.white)),
+                child: Icon(headerIcon, size: 42, color: answered ? Colors.white : (hc ? Colors.black : Colors.white)),
               ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(senderText, style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: ink)),
+                    Text(senderText, style: TextStyle(fontSize: 19 * _kCyText, fontWeight: FontWeight.w800, color: ink)),
                     const SizedBox(height: 2),
-                    Text('cyber.new_message_label'.tr(), style: TextStyle(fontSize: 14, color: ink.withValues(alpha: 0.75))),
+                    Text('cyber.new_message_label'.tr(), style: TextStyle(fontSize: 14 * _kCyText, color: ink.withValues(alpha: 0.75))),
                   ],
                 ),
               ),
@@ -985,7 +988,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           const SizedBox(height: 16),
           Divider(color: ink.withValues(alpha: 0.25), height: 1),
           const SizedBox(height: 16),
-          Text(bodyText, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, height: 1.4, color: ink)),
+          Text(bodyText, style: TextStyle(fontSize: 22 * _kCyText, fontWeight: FontWeight.w700, height: 1.4, color: ink)),
         ],
       ),
     );
@@ -1013,8 +1016,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                 borderRadius: BorderRadius.circular(24),
                 onTap: onTap,
                 child: Container(
-                  height: 134,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  constraints: const BoxConstraints(minHeight: 170),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(color: hc ? color : Colors.white, width: picked ? 5 : 3),
@@ -1023,9 +1026,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(icon, color: Colors.white, size: 48),
-                        const SizedBox(height: 8),
-                        Text(label, textAlign: TextAlign.center, style: Playful.title(21)),
+                        Icon(icon, color: Colors.white, size: 60),
+                        const SizedBox(height: 10),
+                        Text(label, textAlign: TextAlign.center, style: Playful.title(21 * _kCyText)),
                       ],
                     ),
                   ),
@@ -1035,6 +1038,31 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Двете копчиња за одговор: на широк екран едно до друго (иста висина),
+  /// на тесен (телефон) - едно под друго, за големиот текст да собере.
+  Widget _choicePair(Widget a, Widget b) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 560) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [a, const SizedBox(height: 14), b],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(child: a),
+              const SizedBox(width: 16),
+              Expanded(child: b),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1063,7 +1091,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             ),
           ),
           const SizedBox(height: 26),
-          PopIn(index: 1, child: Text(titleKey.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26))),
+          PopIn(index: 1, child: Text(titleKey.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kCyText))),
           const SizedBox(height: 14),
           // По еден штит за секој точен одговор.
           Wrap(
@@ -1084,7 +1112,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          Text('cyber.score'.tr(args: [score.toString(), total.toString()]), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 20)),
+          Text('cyber.score'.tr(args: [score.toString(), total.toString()]), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 20 * _kCyText)),
           const SizedBox(height: 28),
           _bigButton(icon: Icons.refresh_rounded, label: 'cyber.play_again'.tr(), onTap: onAgain, primary: true),
           const SizedBox(height: 12),
@@ -1114,9 +1142,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(icon, color: fg, size: 28),
-                const SizedBox(width: 10),
-                Flexible(child: Text(label, style: Playful.title(20, color: fg))),
+                Icon(icon, color: fg, size: 36),
+                const SizedBox(width: 12),
+                Flexible(child: Text(label, textAlign: TextAlign.center, style: Playful.title(20 * _kCyText, color: fg))),
               ],
             ),
           ),
@@ -1146,7 +1174,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           const SizedBox(height: 14),
           _briefing(hc),
           const SizedBox(height: 16),
-          Text('cyber.phishing_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26)),
+          Text('cyber.phishing_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kCyText)),
           const SizedBox(height: 16),
           _buildMessageCard(
             context,
@@ -1157,14 +1185,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             cardColor: cardColor,
           ),
           const SizedBox(height: 18),
-          Text('cyber.choose_feeling'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19)),
+          Text('cyber.choose_feeling'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19 * _kCyText)),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.danger'.tr(), icon: Icons.warning_rounded, color: const Color(0xFFDC2626), onTap: () => _answerPhishing(false), locked: _phishingLocked, picked: _phishingPickedSafe == false)),
-              const SizedBox(width: 16),
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.safe'.tr(), icon: Icons.verified_user_rounded, color: const Color(0xFF15803D), onTap: () => _answerPhishing(true), locked: _phishingLocked, picked: _phishingPickedSafe == true)),
-            ],
+          _choicePair(
+            _phishingChoiceButton(context, label: 'cyber.danger'.tr(), icon: Icons.warning_rounded, color: const Color(0xFFDC2626), onTap: () => _answerPhishing(false), locked: _phishingLocked, picked: _phishingPickedSafe == false),
+            _phishingChoiceButton(context, label: 'cyber.safe'.tr(), icon: Icons.verified_user_rounded, color: const Color(0xFF15803D), onTap: () => _answerPhishing(true), locked: _phishingLocked, picked: _phishingPickedSafe == true),
           ),
           const SizedBox(height: 18),
           _voiceRow('cyber.voice_hint_phishing', hc),
@@ -1206,9 +1231,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.help_rounded, color: hc ? Colors.white : const Color(0xFF6D28D9), size: 34),
+                  Icon(Icons.help_rounded, color: hc ? Colors.white : const Color(0xFF6D28D9), size: 44),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(q.question, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, height: 1.35, color: hc ? Colors.white : Playful.ink))),
+                  Expanded(child: Text(q.question, style: TextStyle(fontSize: 22 * _kCyText, fontWeight: FontWeight.w800, height: 1.35, color: hc ? Colors.white : Playful.ink))),
                 ],
               ),
             ),
@@ -1218,8 +1243,8 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             Center(
               child: OutlinedButton.icon(
                 onPressed: _repeatQuizQuestion,
-                icon: Icon(Icons.replay_rounded, color: hc ? null : _gold),
-                label: Text('cyber.repeat_question'.tr(), style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                icon: Icon(Icons.replay_rounded, color: hc ? null : _gold, size: 30),
+                label: Text('cyber.repeat_question'.tr(), textAlign: TextAlign.center, style: const TextStyle(fontSize: 17 * _kCyText, fontWeight: FontWeight.w800)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
                   side: BorderSide(color: Colors.white.withValues(alpha: 0.75), width: 2),
@@ -1245,9 +1270,9 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.lightbulb_rounded, color: hc ? Colors.white : _gold, size: 30),
+                  Icon(Icons.lightbulb_rounded, color: hc ? Colors.white : _gold, size: 39),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(q.explanation, style: Playful.body(18))),
+                  Expanded(child: Text(q.explanation, style: Playful.body(18 * _kCyText))),
                 ],
               ),
             ),
@@ -1309,18 +1334,18 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                     child: Row(
                       children: [
                         Container(
-                          width: 46,
-                          height: 46,
+                          width: 60,
+                          height: 60,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : const Color(0xFF6D28D9), border: Border.all(color: Colors.white, width: 2)),
                           child: showCorrect
-                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 28)
+                              ? const Icon(Icons.check_rounded, color: Colors.white, size: 36)
                               : (picked
-                                  ? const Icon(Icons.close_rounded, color: Colors.white, size: 28)
-                                  : Text('${index + 1}', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: Colors.white))),
+                                  ? const Icon(Icons.close_rounded, color: Colors.white, size: 36)
+                                  : FittedBox(fit: BoxFit.scaleDown, child: Text('${index + 1}', style: const TextStyle(fontSize: 21 * _kCyText, fontWeight: FontWeight.w900, color: Colors.white)))),
                         ),
                         const SizedBox(width: 14),
-                        Expanded(child: Text(option, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, height: 1.3, color: fg))),
+                        Expanded(child: Text(option, style: TextStyle(fontSize: 20 * _kCyText, fontWeight: FontWeight.w800, height: 1.3, color: fg))),
                         if (reading && !hc) const SoundWave(color: Playful.ink, bars: 5, height: 26, barWidth: 4),
                       ],
                     ),
@@ -1377,7 +1402,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                   child: Text(emojis[level], key: ValueKey(level), style: const TextStyle(fontSize: 96)),
                 ),
                 const SizedBox(height: 8),
-                Text(levelLabels[level], style: Playful.display(28, color: Colors.white)),
+                Text(levelLabels[level], textAlign: TextAlign.center, style: Playful.display(28 * _kCyText, color: Colors.white)),
                 const SizedBox(height: 14),
                 // Метар на сила: три дела.
                 Row(
@@ -1422,13 +1447,13 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                 ),
                 if (_castleMessageKey != null) ...[
                   const SizedBox(height: 12),
-                  Text(_castleMessageKey!.tr(), textAlign: TextAlign.center, style: Playful.body(18)),
+                  Text(_castleMessageKey!.tr(), textAlign: TextAlign.center, style: Playful.body(18 * _kCyText)),
                 ],
               ],
             ),
           ),
           const SizedBox(height: 20),
-          Text('cyber.castle_add_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 18)),
+          Text('cyber.castle_add_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 18 * _kCyText)),
           const SizedBox(height: 14),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -1448,7 +1473,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                   for (final t in tiles)
                     SizedBox(
                       width: w,
-                      height: 150,
+                      height: 180,
                       child: _ingredientButton(context, label: t.$1.tr(), icon: t.$2, color: t.$3, sample: t.$5, onTap: () => _addIngredient(t.$4)),
                     ),
                 ],
@@ -1487,18 +1512,24 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(icon, color: Colors.white, size: 40),
-                        const SizedBox(width: 8),
-                        Text(sample, style: const TextStyle(fontFamily: 'monospace', fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white)),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(icon, color: Colors.white, size: 48),
+                            const SizedBox(width: 8),
+                            Text(sample, style: const TextStyle(fontFamily: 'monospace', fontSize: 28 * _kCyText, fontWeight: FontWeight.w900, color: Colors.white)),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6),
-                      child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: Playful.title(19))),
+                      child: FittedBox(fit: BoxFit.scaleDown, child: Text(label, style: Playful.title(19 * _kCyText))),
                     ),
                   ],
                 ),
@@ -1530,7 +1561,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           const SizedBox(height: 14),
           _briefing(hc),
           const SizedBox(height: 16),
-          Text('cyber.agent_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26)),
+          Text('cyber.agent_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kCyText)),
           const SizedBox(height: 16),
           _buildMessageCard(
             context,
@@ -1541,14 +1572,11 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
             cardColor: cardColor,
           ),
           const SizedBox(height: 18),
-          Text('cyber.agent_choose_label'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19)),
+          Text('cyber.agent_choose_label'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 19 * _kCyText)),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_answer'.tr(), icon: Icons.chat_bubble_rounded, color: const Color(0xFFDC2626), onTap: () => _answerAgent(false), locked: _agentLocked, picked: _agentPickedRefuse == false)),
-              const SizedBox(width: 16),
-              Expanded(child: _phishingChoiceButton(context, label: 'cyber.agent_refuse'.tr(), icon: Icons.shield_rounded, color: const Color(0xFF15803D), onTap: () => _answerAgent(true), locked: _agentLocked, picked: _agentPickedRefuse == true)),
-            ],
+          _choicePair(
+            _phishingChoiceButton(context, label: 'cyber.agent_answer'.tr(), icon: Icons.chat_bubble_rounded, color: const Color(0xFFDC2626), onTap: () => _answerAgent(false), locked: _agentLocked, picked: _agentPickedRefuse == false),
+            _phishingChoiceButton(context, label: 'cyber.agent_refuse'.tr(), icon: Icons.shield_rounded, color: const Color(0xFF15803D), onTap: () => _answerAgent(true), locked: _agentLocked, picked: _agentPickedRefuse == true),
           ),
           const SizedBox(height: 18),
           _voiceRow('cyber.voice_hint_agent', hc),

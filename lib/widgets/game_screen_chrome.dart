@@ -4,6 +4,10 @@ import 'package:hear_and_see_safe/theme/app_style.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 
+/// Множител за стандардната големина на насловот во горната лента
+/// (кога екранот не дава своја `titleFontSize`).
+const double _kChromeText = 1.55;
+
 /// Shared shell for game / activity screens: accent-tinted gradient, soft blobs,
 /// Lexend titles — high contrast stays flat and semantic-friendly.
 class GameScreenChrome extends StatelessWidget {
@@ -14,7 +18,7 @@ class GameScreenChrome extends StatelessWidget {
     required this.child,
     this.actions,
     this.leading,
-    this.titleFontSize = 22,
+    this.titleFontSize = 22 * _kChromeText,
     this.voiceCommand = true,
     this.voiceOptions = const [],
     this.onVoiceBack,
@@ -66,6 +70,14 @@ class GameScreenChrome extends StatelessWidget {
     final appBarBg = AccessibilityUtils.getAppBarBackgroundColor(context);
     final buttonSize = AccessibilityUtils.getButtonSize(context);
     final scaledTitleSize = titleFontSize * buttonSize;
+    // Повисока лента за поголемиот наслов; подолг наслов се смалува
+    // (FittedBox) наместо да се скрати со „…“.
+    final toolbarHeight = (scaledTitleSize * 1.3 + 24).clamp(kToolbarHeight, 120.0);
+    Widget titleWidget(TextStyle style) => FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(title, style: style, maxLines: 1),
+        );
 
     final titleStyle = hc
         ? TextStyle(
@@ -84,7 +96,8 @@ class GameScreenChrome extends StatelessWidget {
       return Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
-          title: Text(title, style: titleStyle),
+          title: titleWidget(titleStyle),
+          toolbarHeight: toolbarHeight,
           backgroundColor: appBarBg,
           foregroundColor: contrast,
           iconTheme: IconThemeData(color: contrast),
@@ -102,7 +115,8 @@ class GameScreenChrome extends StatelessWidget {
     return Scaffold(
       backgroundColor: bodyTop,
       appBar: AppBar(
-        title: Text(title, style: titleStyle),
+        title: titleWidget(titleStyle),
+        toolbarHeight: toolbarHeight,
         flexibleSpace: Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(

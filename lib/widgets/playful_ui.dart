@@ -9,6 +9,11 @@ import '../utils/accessibility_utils.dart';
 import '../utils/voice_hotkey.dart';
 import '../utils/voice_level.dart';
 
+/// Множител за читливиот текст во заедничките делови (објаснување,
+/// напредок, резултат, плочки, совети). Не важи за Playful.display/title/body
+/// (екраните сами ги зголемуваат своите големини).
+const double _kPlayText = 1.55;
+
 /// Заеднички изглед за почетниот екран и екранот за јазик: темна „ноќна“
 /// позадина (бел текст = силен контраст), полни бои на картичките и брајови
 /// точки како мотив. Сите бои на картичките се избрани така што белиот текст
@@ -1184,9 +1189,9 @@ class PlayfulExplainButton extends StatelessWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(open ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: compact ? 22 : 28, color: hc ? fg : Playful.sun),
+                    Icon(open ? Icons.expand_less_rounded : Icons.menu_book_rounded, size: compact ? 28 : 36, color: hc ? fg : Playful.sun),
                     SizedBox(width: compact ? 8 : 10),
-                    Flexible(child: Text(label, style: Playful.title(compact ? 16 : 19, color: fg))),
+                    Flexible(child: Text(label, style: Playful.title((compact ? 16 : 19) * _kPlayText, color: fg))),
                   ],
                 ),
               ),
@@ -1225,13 +1230,13 @@ class PlayfulExplainPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, color: hc ? Colors.white : accent, size: 28),
+              Icon(icon, color: hc ? Colors.white : accent, size: 36),
               const SizedBox(width: 10),
-              Expanded(child: Text(title, style: Playful.title(20, color: fg))),
+              Expanded(child: Text(title, style: Playful.title(20 * _kPlayText, color: fg))),
             ],
           ),
           const SizedBox(height: 10),
-          Text(text, style: Playful.body(17.5, color: fg)),
+          Text(text, style: Playful.body(17.5 * _kPlayText, color: fg)),
         ],
       ),
     );
@@ -1263,7 +1268,7 @@ class RoundProgress extends StatelessWidget {
         children: [
           Row(
             children: [
-              Expanded(child: ExcludeSemantics(child: Text(label, style: Playful.display(24, color: fg)))),
+              Expanded(child: ExcludeSemantics(child: Text(label, style: Playful.display(24 * _kPlayText, color: fg)))),
               if (extra != null)
                 ExcludeSemantics(
                   child: Container(
@@ -1273,7 +1278,7 @@ class RoundProgress extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white, width: hc ? 1.5 : 2),
                     ),
-                    child: Text(extra!, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
+                    child: Text(extra!, style: TextStyle(fontSize: 16 * _kPlayText, fontWeight: FontWeight.w900, color: hc ? Colors.white : Playful.ink)),
                   ),
                 ),
               // Копчето (пр. гласовна команда) останува посебно копче за
@@ -1359,7 +1364,7 @@ class SoundOrb extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             ExcludeSemantics(
-              child: Text(label, textAlign: TextAlign.center, style: Playful.title(20, color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white)),
+              child: Text(label, textAlign: TextAlign.center, style: Playful.title(20 * _kPlayText, color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white)),
             ),
           ],
         ),
@@ -1427,7 +1432,7 @@ class PlayfulResult extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            PopIn(index: 2, child: Text(text, textAlign: TextAlign.center, style: Playful.title(22, color: fg))),
+            PopIn(index: 2, child: Text(text, textAlign: TextAlign.center, style: Playful.title(22 * _kPlayText, color: fg))),
             const SizedBox(height: 28),
             PressableScale(
               child: Material(
@@ -1445,9 +1450,9 @@ class PlayfulResult extends StatelessWidget {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.refresh_rounded, color: hc ? Colors.white : Playful.ink, size: 28),
+                        Icon(Icons.refresh_rounded, color: hc ? Colors.white : Playful.ink, size: 36),
                         const SizedBox(width: 10),
-                        Flexible(child: Text(buttonLabel, style: Playful.title(20, color: hc ? Colors.white : Playful.ink))),
+                        Flexible(child: Text(buttonLabel, style: Playful.title(20 * _kPlayText, color: hc ? Colors.white : Playful.ink))),
                       ],
                     ),
                   ),
@@ -1533,7 +1538,10 @@ class SoundTile extends StatelessWidget {
                     child: ExcludeSemantics(
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final iconSize = math.min(constraints.maxWidth, constraints.maxHeight) * (showLabel ? 0.5 : 0.62);
+                          final shortSide = math.min(constraints.maxWidth, constraints.maxHeight);
+                          final iconSize = shortSide * (showLabel ? 0.46 : 0.62);
+                          // Поголем натпис, но ограничен според плочката (икона + натпис да собере).
+                          final labelSize = math.min(19 * _kPlayText, shortSide * 0.22);
                           final fg = flash && !hc ? Color.lerp(c, Colors.black, 0.45)! : Colors.white;
                           return Stack(
                             children: [
@@ -1548,7 +1556,7 @@ class SoundTile extends StatelessWidget {
                                         padding: const EdgeInsets.symmetric(horizontal: 6),
                                         child: FittedBox(
                                           fit: BoxFit.scaleDown,
-                                          child: Text(label, style: GoogleFonts.lexend(fontSize: 19, fontWeight: FontWeight.w800, color: fg)),
+                                          child: Text(label, style: GoogleFonts.lexend(fontSize: labelSize, fontWeight: FontWeight.w800, color: fg)),
                                         ),
                                       ),
                                     ],
@@ -1604,8 +1612,8 @@ class PlayfulGhostButton extends StatelessWidget {
           enabled: onTap != null,
           child: OutlinedButton.icon(
             onPressed: onTap,
-            icon: Icon(icon, size: 24, color: hc ? fg : Playful.sun),
-            label: Text(label, style: Playful.title(17, color: fg)),
+            icon: Icon(icon, size: 31, color: hc ? fg : Playful.sun),
+            label: Text(label, style: Playful.title(17 * _kPlayText, color: fg)),
             style: OutlinedButton.styleFrom(
               backgroundColor: hc ? Colors.black : Colors.white.withValues(alpha: 0.1),
               side: BorderSide(color: hc ? fg : Colors.white.withValues(alpha: 0.7), width: 2),
@@ -1636,7 +1644,7 @@ class PlayfulHint extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: hc ? fg : Colors.white.withValues(alpha: 0.25), width: hc ? 2 : 1),
       ),
-      child: Text(text, textAlign: TextAlign.center, style: Playful.body(17, color: fg)),
+      child: Text(text, textAlign: TextAlign.center, style: Playful.body(17 * _kPlayText, color: fg)),
     );
   }
 }

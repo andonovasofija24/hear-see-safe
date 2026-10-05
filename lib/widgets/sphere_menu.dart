@@ -8,6 +8,12 @@ import 'package:flutter/services.dart';
 import '../utils/accessibility_utils.dart';
 import 'playful_ui.dart';
 
+/// Множител за читливиот текст во картичката за предната категорија.
+const double _kSphereText = 1.55;
+
+/// Висина на натписот под топчињата на сферата (поголем натпис, ист ред).
+const double _kSphereNodeLabelH = 27;
+
 /// Една категорија на [SphereMenu].
 class SphereItem {
   const SphereItem({required this.label, required this.icon, required this.color});
@@ -360,17 +366,17 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                       child: Row(
                         children: [
                           Container(
-                            width: 46,
-                            height: 46,
+                            width: 56,
+                            height: 56,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: hc ? Colors.black : Colors.white,
                               border: Border.all(color: hc ? Colors.white : item.color, width: 3),
                             ),
-                            child: Icon(item.icon, color: hc ? const Color(0xFFFFFF00) : item.color, size: 26),
+                            child: Icon(item.icon, color: hc ? const Color(0xFFFFFF00) : item.color, size: 32),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(item.label, style: Playful.display(23, color: fg))),
+                          Expanded(child: Text(item.label, style: Playful.display(23 * _kSphereText, color: fg))),
                         ],
                       ),
                     ),
@@ -395,12 +401,12 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.play_arrow_rounded, size: 30, color: hc ? Colors.white : Playful.ink),
+                                    Icon(Icons.play_arrow_rounded, size: 38, color: hc ? Colors.white : Playful.ink),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Text(
                                         widget.openLabel ?? 'sphere.open'.tr(),
-                                        style: Playful.title(21, color: hc ? Colors.white : Playful.ink),
+                                        style: Playful.title(21 * _kSphereText, color: hc ? Colors.white : Playful.ink),
                                       ),
                                     ),
                                   ],
@@ -436,7 +442,7 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
       left: cx - w / 2,
       top: cy - w / 2,
       width: w,
-      height: w + (showLabel ? 22 : 0),
+      height: w + (showLabel ? _kSphereNodeLabelH : 0),
       child: Semantics(
         button: true,
         selected: isFront,
@@ -511,7 +517,7 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                   ),
                   if (showLabel)
                     SizedBox(
-                      height: 22,
+                      height: _kSphereNodeLabelH,
                       width: w * 1.8,
                       child: OverflowBox(
                         maxWidth: w * 2.2,
@@ -520,7 +526,7 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
-                          style: Playful.title(12.5, color: hc ? Colors.white : Colors.white),
+                          style: Playful.title(12.5 * 1.4, color: hc ? Colors.white : Colors.white),
                         ),
                       ),
                     ),

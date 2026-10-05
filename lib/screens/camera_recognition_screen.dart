@@ -12,6 +12,9 @@ import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 
+/// Множител за големината на текстот на овој екран (поголеми букви).
+const double _kCamText = 1.6;
+
 class CameraRecognitionScreen extends StatefulWidget {
   const CameraRecognitionScreen({super.key});
 
@@ -269,26 +272,41 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final side = ((constraints.maxWidth - 820) / 2).clamp(16.0, double.infinity);
+            final side = ((constraints.maxWidth - 980) / 2).clamp(16.0, double.infinity);
             final shortScreen = constraints.maxHeight < 620;
+            // Режимите се еден под друг (цела ширина) кога има доволно
+            // висина; на ниски екрани остануваат три во ред, за визирот на
+            // камерата да не исчезне.
+            final stackedModes = constraints.maxHeight >= 700;
+            // На ниски екрани текстот во резултатот расте помалку.
+            final resultScale = shortScreen ? 1.3 : _kCamText;
             return Padding(
               padding: EdgeInsets.fromLTRB(side, 12, side, 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      for (var i = 0; i < _modes.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 10),
-                        Expanded(
-                          child: PopIn(
-                            index: i,
-                            child: _modeButton(_modes[i], modeLabels[_modes[i]]!, hc),
+                  if (stackedModes)
+                    for (var i = 0; i < _modes.length; i++) ...[
+                      if (i > 0) const SizedBox(height: 10),
+                      PopIn(
+                        index: i,
+                        child: _modeButton(_modes[i], modeLabels[_modes[i]]!, hc, stacked: true),
+                      ),
+                    ]
+                  else
+                    Row(
+                      children: [
+                        for (var i = 0; i < _modes.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 10),
+                          Expanded(
+                            child: PopIn(
+                              index: i,
+                              child: _modeButton(_modes[i], modeLabels[_modes[i]]!, hc),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
+                    ),
                   const SizedBox(height: 14),
                   // Визир: камерата во рамка со златни агли; при анализа -
                   // златна линија што скенира.
@@ -321,7 +339,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                   ),
                   const SizedBox(height: 14),
                   if (_lastResult != null || _isProcessing) ...[
-                    _buildResultPanel(hc, compact: shortScreen),
+                    _buildResultPanel(hc, compact: shortScreen, textScale: resultScale),
                     const SizedBox(height: 12),
                   ],
                   Center(
@@ -366,7 +384,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
             Text(
               _cameraErrorKey!.tr(),
               textAlign: TextAlign.center,
-              style: Playful.title(19, color: Colors.white),
+              style: Playful.title(19 * _kCamText, color: Colors.white),
             ),
             const SizedBox(height: 18),
             PressableScale(
@@ -385,13 +403,13 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.refresh_rounded, color: hc ? Colors.white : Playful.ink),
+                        Icon(Icons.refresh_rounded, size: 32, color: hc ? Colors.white : Playful.ink),
                         const SizedBox(width: 8),
                         Flexible(
                           child: Text(
                             'camera.retry'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.title(18, color: hc ? Colors.white : Playful.ink),
+                            style: Playful.title(18 * _kCamText, color: hc ? Colors.white : Playful.ink),
                           ),
                         ),
                       ],
@@ -408,7 +426,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
 
   /// „Жив“ резултат - бела картичка со златен раб: додека се анализира
   /// бранови, потоа зелена ✓ (пронајдено) или портокалово ? (несигурно).
-  Widget _buildResultPanel(bool hc, {bool compact = false}) {
+  Widget _buildResultPanel(bool hc, {bool compact = false, double textScale = _kCamText}) {
     final result = _lastResult;
     final uncertain = result != null &&
         (result.confidence < ImageRecognitionService.defaultConfidenceThreshold ||
@@ -457,14 +475,14 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('camera.result_label'.tr(), style: Playful.body(14, color: ink.withValues(alpha: 0.7))),
+                    Text('camera.result_label'.tr(), style: Playful.body(14 * textScale, color: ink.withValues(alpha: 0.7))),
                     const SizedBox(height: 2),
                     if (_isProcessing)
                       Text(
                         'camera.analyzing'.tr(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Playful.display(compact ? 20 : 22, color: ink),
+                        style: Playful.display((compact ? 20 : 22) * textScale, color: ink),
                       )
                     else if (result != null)
                       // maxLines: на 360x640 со голем текст (до 1.6x) долгите
@@ -474,7 +492,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                         uncertain ? 'camera.uncertain'.tr() : result.labelKey.tr(),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: Playful.display(compact ? 22 : 26, color: ink),
+                        style: Playful.display((compact ? 22 : 26) * textScale, color: ink),
                       ),
                     if (!_isProcessing && result != null && !uncertain && result.secondaryLabelKey != null) ...[
                       const SizedBox(height: 2),
@@ -482,7 +500,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                         result.secondaryLabelKey!.tr(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Playful.body(17, color: ink),
+                        style: Playful.body(17 * textScale, color: ink),
                       ),
                     ],
                   ],
@@ -496,7 +514,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
   }
 
   /// Плочка за режим - во својата боја; избраната е златна со бел раб.
-  Widget _modeButton(String mode, String label, bool hc) {
+  Widget _modeButton(String mode, String label, bool hc, {bool stacked = false}) {
     final isActive = _recognitionMode == mode;
     final color = _modeColors[mode] ?? _accent;
     final fg = isActive ? (hc ? Colors.black : Playful.ink) : Colors.white;
@@ -520,7 +538,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
               },
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+                padding: EdgeInsets.symmetric(vertical: stacked ? 8 : 10, horizontal: stacked ? 18 : 6),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
                   color: hc ? (isActive ? const Color(0xFFFFFF00) : Colors.black) : (isActive ? Playful.sun : null),
@@ -536,17 +554,30 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
                       ? null
                       : [BoxShadow(color: (isActive ? Playful.sun : color).withValues(alpha: isActive ? 0.6 : 0.35), blurRadius: isActive ? 20 : 12)],
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(_modeIcons[mode], size: 28, color: fg),
-                    const SizedBox(height: 4),
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(label, textAlign: TextAlign.center, style: Playful.title(15, color: fg)),
-                    ),
-                  ],
-                ),
+                child: stacked
+                    // Еден под друг: икона + натпис во ред, на средина.
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(_modeIcons[mode], size: 36, color: fg),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(label, textAlign: TextAlign.center, style: Playful.title(15 * _kCamText, color: fg)),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(_modeIcons[mode], size: 34, color: fg),
+                          const SizedBox(height: 4),
+                          // Три во ред (низок екран) - натписот се смалува ако не собира.
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(label, textAlign: TextAlign.center, style: Playful.title(15 * _kCamText, color: fg)),
+                          ),
+                        ],
+                      ),
               ),
             ),
           ),

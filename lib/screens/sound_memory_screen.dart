@@ -11,6 +11,9 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
+/// Колку пати е поголем текстот на екранот за меморија на звуци.
+const double _kSmemText = 1.6;
+
 /// Меморија на звуци: 12 картички (6 пара исти звуци), сите почетно
 /// затворени. При старт, системот ги отвора сите картички една по една
 /// (случаен редослед) - секоја покажува икона + го пушта својот звук, па
@@ -380,7 +383,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
                           Text(
                             'sound_memory.game_over_title'.tr(),
                             textAlign: TextAlign.center,
-                            style: Playful.display(26, color: fg),
+                            style: Playful.display(26 * _kSmemText, color: fg),
                           ),
                         ],
                       ),
@@ -422,7 +425,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
                     label: 'sound_memory.start_button'.tr(),
                     onTap: _demoPlaying ? null : _startDemo,
                     active: _demoPlaying,
-                    size: 112,
+                    size: 140,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -450,7 +453,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
                 scale: i < matched ? 1.15 : 1.0,
                 child: Icon(
                   i < matched ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  size: 32,
+                  size: 40,
                   color: i < matched
                       ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
                       : (hc ? Colors.white : Colors.white.withValues(alpha: 0.5)),

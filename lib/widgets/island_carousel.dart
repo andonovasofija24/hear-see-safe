@@ -8,6 +8,9 @@ import 'package:flutter/services.dart';
 import '../utils/accessibility_utils.dart';
 import 'playful_ui.dart';
 
+/// Множител за читливиот текст во картичката на избраниот остров.
+const double _kIslandText = 1.55;
+
 /// Еден остров (категорија) во [IslandCarousel].
 class IslandItem {
   const IslandItem({
@@ -299,8 +302,8 @@ class _IslandCarouselState extends State<IslandCarousel> with TickerProviderStat
                       child: Row(
                         children: [
                           Container(
-                            width: 40,
-                            height: 40,
+                            width: 52,
+                            height: 52,
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
@@ -308,17 +311,17 @@ class _IslandCarouselState extends State<IslandCarousel> with TickerProviderStat
                               border: Border.all(color: Colors.white, width: 2),
                             ),
                             child: widget.showNumbers
-                                ? Text('${selected + 1}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Playful.ink))
-                                : Icon(item.icon, size: 24, color: Playful.ink),
+                                ? FittedBox(fit: BoxFit.scaleDown, child: Text('${selected + 1}', style: const TextStyle(fontSize: 20 * _kIslandText, fontWeight: FontWeight.w900, color: Playful.ink)))
+                                : Icon(item.icon, size: 32, color: Playful.ink),
                           ),
                           const SizedBox(width: 12),
-                          Expanded(child: Text(item.label, style: Playful.display(25, color: fg))),
+                          Expanded(child: Text(item.label, style: Playful.display(25 * _kIslandText, color: fg))),
                         ],
                       ),
                     ),
                     if (item.description.isNotEmpty) ...[
                       const SizedBox(height: 10),
-                      Text(item.description, style: Playful.body(16.5, color: fg.withValues(alpha: 0.95))),
+                      Text(item.description, style: Playful.body(16.5 * _kIslandText, color: fg.withValues(alpha: 0.95))),
                     ],
                     const SizedBox(height: 16),
                     Semantics(
@@ -346,12 +349,12 @@ class _IslandCarouselState extends State<IslandCarousel> with TickerProviderStat
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(widget.openIcon, size: 28, color: hc ? Colors.white : Playful.ink),
+                                    Icon(widget.openIcon, size: 36, color: hc ? Colors.white : Playful.ink),
                                     const SizedBox(width: 10),
                                     Flexible(
                                       child: Text(
                                         widget.openLabel ?? 'islands.open'.tr(),
-                                        style: Playful.title(21, color: hc ? Colors.white : Playful.ink),
+                                        style: Playful.title(21 * _kIslandText, color: hc ? Colors.white : Playful.ink),
                                       ),
                                     ),
                                   ],

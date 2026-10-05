@@ -10,6 +10,9 @@ import '../utils/voice_hotkey.dart';
 import '../voice_system/application/voice_command_orchestrator.dart';
 import '../voice_system/presentation/global_voice_navigation.dart';
 
+/// Множител за натписот на копчето (и пораката „чуено“).
+const double _kVoiceText = 1.55;
+
 /// Клучни зборови (mk/en/sq) кои значат "врати се назад" - се препознаваат
 /// автоматски на секое копче за гласовна команда, независно од `options`,
 /// доколку е поставено `onBack`.
@@ -253,7 +256,7 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
         // препознаена (пр. препознавањето враќа друг збор).
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(
-            content: Text('voice.heard'.tr(args: [transcript]), style: const TextStyle(fontSize: 16)),
+            content: Text('voice.heard'.tr(args: [transcript]), style: const TextStyle(fontSize: 16 * _kVoiceText)),
             duration: const Duration(seconds: 4),
           ),
         );
@@ -270,8 +273,8 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
     final bg = widget.background ?? const Color(0xFF115E59);
     final fg = widget.foreground ?? Colors.white;
     final pad = widget.compact
-        ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
-        : const EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+        ? const EdgeInsets.symmetric(horizontal: 18, vertical: 12)
+        : const EdgeInsets.symmetric(horizontal: 24, vertical: 16);
 
     if (widget.iconOnly) {
       return Semantics(
@@ -317,15 +320,21 @@ class _CategoryVoiceCommandButtonState extends State<CategoryVoiceCommandButton>
                 Icon(
                   _isListening ? Icons.mic_rounded : Icons.record_voice_over_rounded,
                   color: fg,
-                  size: widget.compact ? 20 : 24,
+                  size: widget.compact ? 26 : 32,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  _isListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
-                  style: GoogleFonts.lexend(
-                    fontSize: widget.compact ? 13 : 15,
-                    fontWeight: FontWeight.w700,
-                    color: fg,
+                const SizedBox(width: 10),
+                // Ограничена ширина (не Flexible - копчето понекогаш е во Row
+                // без ограничување), па подолг натпис оди во втор ред.
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.6),
+                  child: Text(
+                    _isListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.lexend(
+                      fontSize: (widget.compact ? 13 : 15) * _kVoiceText,
+                      fontWeight: FontWeight.w700,
+                      color: fg,
+                    ),
                   ),
                 ),
               ],
