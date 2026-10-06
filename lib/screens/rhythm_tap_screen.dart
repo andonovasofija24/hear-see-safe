@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
@@ -577,7 +578,7 @@ class _RhythmTapScreenState extends State<RhythmTapScreen> {
                 const SizedBox(height: 22),
                 // Чекор 1: Почни (само еднаш - потоа исчезнува).
                 if (_gameLocked) ...[
-                  Center(child: _buildStartButton(hc)),
+                  Center(child: StartHotkeyListener(onTrigger: _startGame, child: _buildStartButton(hc))),
                   const SizedBox(height: 22),
                 ],
                 // Чекор 2: слушај (Пушти звук + Пушти повторно, вкупно 3).

@@ -9,6 +9,17 @@
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
+    <!-- Android 11+: без ова, препознавањето говор (гласовни команди) и
+         синтетизираниот глас (TTS) не се „гледаат“ од апликацијата. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:label="Hear &amp; See Safe"
         android:name="${applicationName}"

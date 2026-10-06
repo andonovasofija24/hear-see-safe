@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:provider/provider.dart';
@@ -664,8 +665,10 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _micAndText(micButton, textArea, 18),
-            const SizedBox(height: 14),
-            _keyHint(highContrast: true),
+            if (InputMode.showKeys(context)) ...[
+              const SizedBox(height: 14),
+              _keyHint(highContrast: true),
+            ],
           ],
         ),
       );
@@ -755,8 +758,10 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _micAndText(Padding(padding: const EdgeInsets.all(8), child: micButton), textArea, 14),
-          const SizedBox(height: 18),
-          _keyHint(highContrast: false),
+          if (InputMode.showKeys(context)) ...[
+            const SizedBox(height: 18),
+            _keyHint(highContrast: false),
+          ],
         ],
       ),
     );

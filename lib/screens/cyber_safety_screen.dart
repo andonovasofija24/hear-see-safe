@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
@@ -636,7 +637,7 @@ class _CyberSafetyScreenState extends State<CyberSafetyScreen> {
           ),
           const SizedBox(height: 10),
           Text(
-            'islands.hint'.tr(),
+            (InputMode.showKeys(context) ? 'islands.hint' : 'islands.touch_hint').tr(),
             textAlign: TextAlign.center,
             style: Playful.body(15 * _kCyText, color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85)),
           ),

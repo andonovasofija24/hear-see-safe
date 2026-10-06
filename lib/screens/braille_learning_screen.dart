@@ -16,6 +16,7 @@ import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
 import 'package:hear_and_see_safe/braille/braille_data.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 
 /// Зголемување на читливиот текст на целиот екран (~1.6x, исто како на
 /// почетниот екран).
@@ -332,7 +333,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Future<void> _playClip(String key) async {
     if (!mounted) return;
-    final relativePath = 'audio/braille/$_langCode/$key.mp3';
+    final relativePath = await InputMode.touchClip('audio/braille/$_langCode/$key.mp3');
+    if (!mounted) return;
     try {
       await _voicePlayer.stop();
       await _voicePlayer.play(AssetSource(relativePath));
@@ -563,6 +565,9 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         return 1;
     }
   }
+
+  /// „Два пара - H за пар 2“ (тастатура) или „... избери Пар 2 горе“ (допир).
+  String get _twoPairsHintKey => InputMode.showKeys(context) ? 'braille.two_pairs_hint' : 'braille.two_pairs_touch_hint';
 
   /// H - префрлување помеѓу пар 1 и пар 2.
   void _togglePair() {
@@ -1281,6 +1286,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (opening) {
       // Посебна снимка за секоја игра: express_explanation.mp3 /
       // sentence_explanation.mp3.
+      // На телефон без тастатура _playClip сам ја бира снимката за допир
+      // (…_touch.mp3), ако постои.
       _playClip(_view == _View.sentenceGame ? 'sentence_explanation' : 'express_explanation');
     } else {
       _voicePlayer.stop();
@@ -1706,7 +1713,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('braille.intro_text'.tr(), style: GameTypography.body(context, contrast, 20 * _kBrailleText)),
+          Text((InputMode.showKeys(context) ? 'braille.intro_text' : 'braille.intro_touch_text').tr(), style: GameTypography.body(context, contrast, 20 * _kBrailleText)),
           const SizedBox(height: 20),
           // На тесен екран редот се смалува наместо да излезе надвор.
           FittedBox(
@@ -1755,6 +1762,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// е испакната златна, копчето е жолт тастер.
   Widget _dotKeyColumn(List<int> dotNumbers, Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
+    // На допир (без тастатура) - само бројовите на точките, без копчињата.
+    final showKeys = InputMode.showKeys(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -1771,8 +1780,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   decoration: _studDecoration(on: true, hc: hc),
                   child: Text('$d', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.black : Playful.ink)),
                 ),
-                const SizedBox(width: 8),
-                KeyCap(_keyLetters[d - 1], size: 0.8),
+                if (showKeys) ...[
+                  const SizedBox(width: 8),
+                  KeyCap(_keyLetters[d - 1], size: 0.8),
+                ],
               ],
             ),
           ),
@@ -2408,7 +2419,12 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   }) {
     return LayoutBuilder(
       builder: (context, viewport) {
-        final boardHeight = max(240.0, viewport.maxHeight * gridFraction);
+        // На допир таблата е Перкинс распоред преку целата ширина - добива
+        // малку повеќе висина за големите точки (и прекинувачот за пар).
+        final touch = InputMode.touchLayout(context);
+        final boardHeight = touch
+            ? max(300.0, viewport.maxHeight * max(gridFraction, 0.55))
+            : max(240.0, viewport.maxHeight * gridFraction);
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: viewport.maxHeight),
@@ -2478,7 +2494,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           if (t.isMultiCell)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text('braille.two_pairs_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16 * _kBrailleText)),
+              child: Text(_twoPairsHintKey.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 16 * _kBrailleText)),
             ),
         ],
       ),
@@ -2495,7 +2511,11 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     bool wrongVisual = false,
     double? dotSize,
     double? dotPadding,
+    String? centerText,
   }) {
+    if (InputMode.touchLayout(context)) {
+      return _perkinsBoard(pairCount: pairCount, onTap: onTap, hits: hits, wrongVisual: wrongVisual, centerText: centerText);
+    }
     if (pairCount <= 1) {
       return FittedBox(
         fit: BoxFit.scaleDown,
@@ -2567,24 +2587,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     // испакнато златно копче што „искокнува“; погрешно = сиво.
     Widget dotButton(int i) {
       final hit = hits.contains(i);
-      final Decoration deco;
-      final Color numberColor;
-      if (wrongVisual) {
-        deco = BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6B7280), border: Border.all(color: Colors.white54, width: 3));
-        numberColor = Colors.white;
-      } else if (hit) {
-        deco = _studDecoration(on: true, hc: hc, color: hc ? null : const Color(0xFF4ADE80));
-        numberColor = hc ? Colors.black : const Color(0xFF052E16);
-      } else {
-        deco = hc
-            ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4))
-            : BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withValues(alpha: 0.35),
-                border: Border.all(color: _gold, width: 4),
-              );
-        numberColor = hc ? Colors.white : _gold;
-      }
+      final (deco, numberColor) = _entryDotStyle(hit: hit, wrongVisual: wrongVisual, hc: hc);
       return Padding(
         padding: EdgeInsets.all(dotPadding),
         child: Semantics(
@@ -2622,6 +2625,264 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         Column(mainAxisSize: MainAxisSize.min, children: [dotButton(0), dotButton(1), dotButton(2)]),
         Column(mainAxisSize: MainAxisSize.min, children: [dotButton(3), dotButton(4), dotButton(5)]),
       ],
+    );
+  }
+
+  /// Изглед на точка за внес: празна = вдлабната дупка со бројот;
+  /// погодена = испакнато златно (зелено) копче; погрешно = сиво.
+  (BoxDecoration, Color) _entryDotStyle({required bool hit, required bool wrongVisual, required bool hc}) {
+    if (wrongVisual) {
+      return (BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF6B7280), border: Border.all(color: Colors.white54, width: 3)), Colors.white);
+    }
+    if (hit) {
+      return (_studDecoration(on: true, hc: hc, color: hc ? null : const Color(0xFF4ADE80)), hc ? Colors.black : const Color(0xFF052E16));
+    }
+    final deco = hc
+        ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4))
+        : BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.black.withValues(alpha: 0.35),
+            border: Border.all(color: _gold, width: 4),
+          );
+    return (deco, hc ? Colors.white : _gold);
+  }
+
+  // --- Перкинс распоред (само на допир, телефон / таблет без тастатура) ---
+
+  /// Точките за внес како на Перкинс машина: 1-2-3 во колона на левиот
+  /// раб, 4-5-6 на десниот - детето пишува со прстите на двете раце. Секоја
+  /// точка е околу третина од висината и барем 30% од ширината. Во средина:
+  /// преглед (само за гледање) на целиот знак и, ако има, буквата.
+  /// Кај знаците од два пара, горе е прекинувач „Пар 1 / Пар 2“ - точките
+  /// на рабовите го уредуваат избраниот пар.
+  Widget _perkinsBoard({
+    required int pairCount,
+    required void Function(int pair, int dot) onTap,
+    required List<Set<int>> hits,
+    required bool wrongVisual,
+    String? centerText,
+  }) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = _fg(context);
+    final pairs = min(max(pairCount, 1), hits.length);
+    final pair = pairs > 1 && _activePair < pairs ? _activePair : 0;
+    const gap = 10.0;
+    const switchH = 56.0;
+
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth.isFinite ? c.maxWidth : MediaQuery.sizeOf(context).width;
+        final h = c.maxHeight.isFinite ? c.maxHeight : 340.0;
+        final inner = max(0.0, w - 16);
+        final colW = inner * 0.34;
+        final dotsH = max(0.0, h - (pairs > 1 ? switchH + gap : 0.0));
+        final dotH = max(0.0, (dotsH - gap * 2) / 3);
+        final radius = BorderRadius.circular(min(dotH, colW) / 2);
+
+        Widget dot(int i) {
+          final hit = hits[pair].contains(i);
+          final (base, numberColor) = _entryDotStyle(hit: hit, wrongVisual: wrongVisual, hc: hc);
+          final deco = base.copyWith(shape: BoxShape.rectangle, borderRadius: radius);
+          return Semantics(
+            label: '${'braille.dot'.tr()} ${i + 1}',
+            button: true,
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 280),
+              curve: Curves.easeOutBack,
+              scale: hit ? 1.04 : 1.0,
+              child: Material(
+                color: Colors.transparent,
+                shape: RoundedRectangleBorder(borderRadius: radius),
+                child: InkWell(
+                  customBorder: RoundedRectangleBorder(borderRadius: radius),
+                  onTap: () => onTap(pair, i),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: colW,
+                    height: dotH,
+                    decoration: deco,
+                    alignment: Alignment.center,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('${i + 1}', style: TextStyle(fontSize: max(18.0, dotH * 0.45), fontWeight: FontWeight.w900, color: numberColor)),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        Widget column(List<int> dots) => SizedBox(
+              width: colW,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [for (final d in dots) dot(d)],
+              ),
+            );
+
+        return SizedBox(
+          width: w,
+          height: h,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Column(
+              children: [
+                if (pairs > 1) ...[
+                  SizedBox(height: switchH, child: _pairSwitch(pairs, hc, contrast)),
+                  const SizedBox(height: gap),
+                ],
+                SizedBox(
+                  height: dotsH,
+                  child: Row(
+                    children: [
+                      column(const [0, 1, 2]),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: Center(
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: _perkinsPreview(pairs, pair, hits, wrongVisual, hc, contrast, centerText),
+                            ),
+                          ),
+                        ),
+                      ),
+                      column(const [3, 4, 5]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Прекинувач „Пар 1 / Пар 2“ над точките (наместо копчето H).
+  Widget _pairSwitch(int pairs, bool hc, Color contrast) {
+    final selColor = hc ? const Color(0xFFFFFF00) : _gold;
+    final borderColor = hc ? Colors.white : _gold;
+    Widget seg(int p) {
+      final sel = p == _activePair;
+      final label = 'braille.pair_label'.tr(args: ['${p + 1}']);
+      final r = BorderRadius.horizontal(
+        left: p == 0 ? const Radius.circular(15) : Radius.zero,
+        right: p == pairs - 1 ? const Radius.circular(15) : Radius.zero,
+      );
+      return Expanded(
+        child: Semantics(
+          label: sel ? '$label, ${'braille.pair_active'.tr()}' : label,
+          button: true,
+          selected: sel,
+          inMutuallyExclusiveGroup: true,
+          child: ExcludeSemantics(
+            child: Material(
+              color: sel ? selColor : (hc ? Colors.black : Colors.white.withValues(alpha: 0.08)),
+              borderRadius: r,
+              child: InkWell(
+                borderRadius: r,
+                onTap: () => _selectPair(p),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        label,
+                        style: TextStyle(fontSize: 17 * _kBrailleText, fontWeight: FontWeight.w900, color: sel ? (hc ? Colors.black : Playful.ink) : contrast),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: 3),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var p = 0; p < pairs; p++) ...[
+            if (p > 0) Container(width: 3, color: borderColor),
+            seg(p),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Избор на пар од екранот - исто како H (со „пар N“ на глас).
+  void _selectPair(int p) {
+    if (p != _activePair) _togglePair();
+  }
+
+  /// Мал преглед (само за гледање) на целиот знак - сите парови, избраниот
+  /// е врамен - и буквата/знакот ако е позната.
+  Widget _perkinsPreview(int pairs, int active, List<Set<int>> hits, bool wrongVisual, bool hc, Color contrast, String? centerText) {
+    Widget miniCell(int p) {
+      final sel = pairs > 1 && p == active;
+      Widget d(int i) {
+        final on = hits[p].contains(i);
+        final fill = wrongVisual
+            ? const Color(0xFF6B7280)
+            : (hc ? const Color(0xFFFFFF00) : const Color(0xFF4ADE80));
+        return Container(
+          width: 16,
+          height: 16,
+          margin: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: on ? fill : Colors.transparent,
+            border: Border.all(color: on ? fill : (hc ? Colors.white : contrast.withValues(alpha: 0.6)), width: 2),
+          ),
+        );
+      }
+
+      return Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : Colors.black.withValues(alpha: 0.3),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: sel ? (hc ? const Color(0xFFFFFF00) : _gold) : (hc ? Colors.white : contrast.withValues(alpha: 0.35)), width: sel ? 3 : 1.5),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Column(mainAxisSize: MainAxisSize.min, children: [d(0), d(1), d(2)]),
+            Column(mainAxisSize: MainAxisSize.min, children: [d(3), d(4), d(5)]),
+          ],
+        ),
+      );
+    }
+
+    return ExcludeSemantics(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var p = 0; p < pairs; p++) ...[
+                if (p > 0) const SizedBox(width: 6),
+                miniCell(p),
+              ],
+            ],
+          ),
+          if (centerText != null) ...[
+            const SizedBox(height: 8),
+            Text(centerText, style: TextStyle(fontSize: 40 * _kBrailleText, fontWeight: FontWeight.w900, color: hc ? contrast : _gold, height: 1.0)),
+          ],
+        ],
+      ),
     );
   }
 
@@ -2894,7 +3155,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             child: Text(
               [
                 if (currentIsSign) _symbolName(current),
-                if (current.isMultiCell) 'braille.two_pairs_hint'.tr(),
+                if (current.isMultiCell) _twoPairsHintKey.tr(),
               ].join('  ·  '),
               textAlign: TextAlign.center,
               style: GameTypography.heading(context, contrast, 18 * _kBrailleText),
@@ -2945,7 +3206,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         ),
       ],
       board: _dotPairsGrid(pairCount: current.cells.length, onTap: _tapWordDot, hits: _wordCorrectDotsHit),
-      bottom: [_buildExpressKeyboardHint(contrast, 'braille.word_keyboard_hint')],
+      bottom: [_buildExpressKeyboardHint(contrast, 'braille.word_keyboard_hint', touchKey: 'braille.word_touch_hint')],
       gridFraction: 0.45,
     );
   }
@@ -2953,8 +3214,11 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   // --- Пишување: „Искажи ја својата мисла“ и „Пишувај реченици“ ---
 
   Widget _buildWritingDotGrid() {
+    // На допир: Перкинс распоред - повисока табла (прекинувач за пар +
+    // три големи точки по колона); екранот и онака се лизга.
+    final touch = InputMode.touchLayout(context);
     return SizedBox(
-      height: 270,
+      height: touch ? (MediaQuery.sizeOf(context).height * 0.5).clamp(300.0, 480.0) : 270.0,
       child: Center(
         child: _dotPairsGrid(
           pairCount: 2,
@@ -2962,6 +3226,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           hits: _writingDots,
           dotSize: 56,
           dotPadding: 6,
+          centerText: touch ? _pendingPreviewText() : null,
         ),
       ),
     );
@@ -3000,6 +3265,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// Копчиња на екранот за истите дејства како А, : и П на тастатурата
   /// (за телефон/таблет без тастатура).
   Widget _buildWritingActions() {
+    // На допир - натписите без ознаката за копчето (А, ., :, П).
+    final keys = InputMode.showKeys(context);
     Widget action(IconData icon, String label, VoidCallback onTap) {
       return Semantics(
         label: label,
@@ -3026,10 +3293,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         spacing: 10,
         runSpacing: 8,
         children: [
-          action(Icons.record_voice_over_rounded, 'braille.action_confirm'.tr(), _onConfirmKey),
-          action(Icons.undo_rounded, 'braille.action_remove_dot'.tr(), _removeLastWritingDot),
-          action(Icons.backspace_rounded, 'braille.action_reset'.tr(), _onResetKey),
-          action(Icons.menu_book_rounded, 'braille.action_reference'.tr(), () => _openReference(_view)),
+          action(Icons.record_voice_over_rounded, (keys ? 'braille.action_confirm' : 'braille.touch_action_confirm').tr(), _onConfirmKey),
+          action(Icons.undo_rounded, (keys ? 'braille.action_remove_dot' : 'braille.touch_action_remove_dot').tr(), _removeLastWritingDot),
+          action(Icons.backspace_rounded, (keys ? 'braille.action_reset' : 'braille.touch_action_reset').tr(), _onResetKey),
+          action(Icons.menu_book_rounded, (keys ? 'braille.action_reference' : 'braille.touch_action_reference').tr(), () => _openReference(_view)),
         ],
       ),
     );
@@ -3052,7 +3319,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           _buildWritingDotGrid(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Text('braille.express_hint'.tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 13 * _kBrailleText)),
+            child: Text((InputMode.showKeys(context) ? 'braille.express_hint' : 'braille.express_touch_hint').tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 13 * _kBrailleText)),
           ),
           _buildWritingActions(),
           // Полето за пишување - ограничена висина, со скрол и расте нагоре
@@ -3140,7 +3407,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               trigger: _voiceTrigger,
             ),
           ),
-          _buildExpressKeyboardHint(contrast, 'braille.express_keyboard_hint'),
+          _buildExpressKeyboardHint(contrast, 'braille.express_keyboard_hint', touchKey: 'braille.express_touch_more_hint'),
         ],
       ),
     );
@@ -3222,7 +3489,11 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            (_view == _View.sentenceGame ? 'braille.sentence_explanation_text' : 'braille.express_explanation_text').tr(),
+            // Тастатура или допир - различно објаснување.
+            (_view == _View.sentenceGame
+                    ? (InputMode.showKeys(context) ? 'braille.sentence_explanation_text' : 'braille.sentence_explanation_touch_text')
+                    : (InputMode.showKeys(context) ? 'braille.express_explanation_text' : 'braille.express_explanation_touch_text'))
+                .tr(),
             style: GameTypography.body(context, contrast, 15 * _kBrailleText),
           ),
           const SizedBox(height: 12),
@@ -3254,7 +3525,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             child: Text.rich(
               TextSpan(
                 children: [
-                  TextSpan(text: '${'braille.voice_cmds_title'.tr()} ', style: GameTypography.heading(context, contrast, 15 * _kBrailleText)),
+                  TextSpan(text: '${(InputMode.showKeys(context) ? 'braille.voice_cmds_title' : 'braille.voice_cmds_title_touch').tr()} ', style: GameTypography.heading(context, contrast, 15 * _kBrailleText)),
                   TextSpan(text: textKey.tr(), style: GameTypography.body(context, contrast, 15 * _kBrailleText).copyWith(fontWeight: FontWeight.w700)),
                 ],
               ),
@@ -3265,11 +3536,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     );
   }
 
-  Widget _buildExpressKeyboardHint(Color contrast, String textKey) {
+  /// Упатство под таблата: за тастатура ([textKey]) или - на телефон /
+  /// таблет без тастатура - кратко упатство за допир ([touchKey]).
+  Widget _buildExpressKeyboardHint(Color contrast, String textKey, {required String touchKey}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Text(
-        textKey.tr(),
+        (InputMode.showKeys(context) ? textKey : touchKey).tr(),
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
       ),
@@ -3428,7 +3701,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               trigger: _voiceTrigger,
             ),
           ),
-          _buildExpressKeyboardHint(contrast, 'braille.sentence_keyboard_hint'),
+          _buildExpressKeyboardHint(contrast, 'braille.sentence_keyboard_hint', touchKey: 'braille.sentence_touch_hint'),
         ],
       ),
     );
@@ -3791,11 +4064,19 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     }
   }
 
+  /// Упатство под таблата (Состави / Напиши): за тастатура или за допир.
   Widget _buildKeyboardHint(Color contrast) {
+    final String text;
+    if (InputMode.showKeys(context)) {
+      text = 'braille.keyboard_hint'.tr();
+    } else {
+      final twoPairs = (_practiceTarget?.cells.length ?? 1) > 1;
+      text = twoPairs ? '${'braille.touch_hint'.tr()} ${'braille.touch_pair_hint'.tr()}' : 'braille.touch_hint'.tr();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Text(
-        'braille.keyboard_hint'.tr(),
+        text,
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 18 * _kBrailleText, fontWeight: FontWeight.w700, color: contrast.withOpacity(0.9)),
       ),

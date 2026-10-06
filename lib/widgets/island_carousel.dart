@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../utils/accessibility_utils.dart';
+import '../utils/voice_hotkey.dart';
 import 'playful_ui.dart';
 
 /// Множител за читливиот текст во картичката на избраниот остров.
@@ -219,7 +220,9 @@ class _IslandCarouselState extends State<IslandCarousel> with TickerProviderStat
   // -------------------------------------------------------------------
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => StartHotkeyListener(onTrigger: _open, child: _buildBody(context));
+
+  Widget _buildBody(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
     final selected = _selected;

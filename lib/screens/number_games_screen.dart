@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:audioplayers/audioplayers.dart';
@@ -195,6 +196,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _effectsPlayer.dispose();
     _inputController.dispose();
     _seqInputController.dispose();
+    _sdTicker?.cancel();
     super.dispose();
   }
 
@@ -241,7 +243,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       _inputLocked = false;
       _tallyIntroSpoken = false;
     });
-    if (mode == _GameMode.sudoku) _newSudoku();
+    if (mode == _GameMode.sudoku) {
+      _newSudoku();
+    } else {
+      _sdStopTimer();
+    }
     _pickNewQuestion();
     _announceQuestion();
   }
@@ -257,6 +263,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _narrationToken++;
     _countToken++;
     _voicePlayer.stop();
+    _sdStopTimer();
     setState(() => _view = _View.modeSelect);
   }
 
@@ -526,7 +533,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   /// почнал; ако не почне за 4 секунди (недостасува датотека), се продолжува.
   Future<void> _playKey(String key) async {
     if (!mounted) return;
-    final path = _clipPath(key);
+    // Телефон без тастатура: снимката …_touch.mp3 ако постои (пр.
+    // what_number_touch, explanation_sudoku_touch).
+    final path = await InputMode.touchClip(_clipPath(key));
+    if (!mounted) return;
     try {
       await _voicePlayer.stop();
     } catch (_) {}
@@ -1878,6 +1888,32 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   int? _sdFlashWrong;
   int? _sdFlashRight;
   bool _sdExplanationOpen = false;
+  // Тајмер за судоку: тече од новата табла до решавањето.
+  final Stopwatch _sdWatch = Stopwatch();
+  Timer? _sdTicker;
+
+  String get _sdTimeText {
+    final secs = _sdWatch.elapsed.inSeconds;
+    final h = secs ~/ 3600, m = (secs % 3600) ~/ 60, sec = secs % 60;
+    String two(int v) => v.toString().padLeft(2, '0');
+    return h > 0 ? '$h:${two(m)}:${two(sec)}' : '${two(m)}:${two(sec)}';
+  }
+
+  void _sdStartTimer() {
+    _sdTicker?.cancel();
+    _sdWatch
+      ..reset()
+      ..start();
+    _sdTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted && _view == _View.playing && _mode == _GameMode.sudoku) setState(() {});
+    });
+  }
+
+  void _sdStopTimer() {
+    _sdWatch.stop();
+    _sdTicker?.cancel();
+    _sdTicker = null;
+  }
 
   int get _sdFilled => _sdValues.where((v) => v != 0).length;
 
@@ -1926,6 +1962,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _sdFlashWrong = null;
     _sdFlashRight = null;
     _sdExplanationOpen = false;
+    _sdStartTimer();
   }
 
   bool _sdCanPlace(List<int> g, int i, int v) {
@@ -2022,6 +2059,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       unawaited(_vib(duration: 150));
       unawaited(_effect('sounds/pong/hit.mp3'));
       if (_sdFilled == 81) {
+        _sdStopTimer();
         setState(() => _inputLocked = true);
         await _playSequence(['sudoku_solved']);
         if (!mounted) return;
@@ -2148,7 +2186,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               PlayfulExplainPanel(
                 icon: Icons.grid_3x3_rounded,
                 title: 'number_extra.title_sudoku'.tr(),
-                text: 'number_extra.explanation_sudoku'.tr(),
+                // Тастатура или допир - различно објаснување.
+                text: (InputMode.showKeys(context) ? 'number_extra.explanation_sudoku' : 'number_extra.explanation_sudoku_touch').tr(),
                 accent: _moduleAccent,
               ),
             _inputMethodToggle(hc),
@@ -2193,7 +2232,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'sudoku.keys_hint'.tr(),
+              InputMode.showKeys(context) ? 'sudoku.keys_hint'.tr() : 'sudoku.touch_hint'.tr(),
               textAlign: TextAlign.center,
               style: Playful.body(13.5 * _kNumText, color: fg.withValues(alpha: 0.85)),
             ),
@@ -2625,7 +2664,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'sphere.hint'.tr(),
+              (InputMode.showKeys(context) ? 'sphere.hint' : 'sphere.touch_hint').tr(),
               textAlign: TextAlign.center,
               style: Playful.body(14.5 * _kNumText, color: fg.withValues(alpha: 0.85)),
             ),
@@ -2771,6 +2810,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                       ? [
                           _statPill('✏️ ${'sudoku.filled'.tr(args: [_sdFilled.toString(), '81'])}', hc, gold: true),
                           _statPill('❌ ${'sudoku.mistakes'.tr(args: [_sdMistakes.toString()])}', hc),
+                          _statPill('⏱️ ${'sudoku.time'.tr(args: [_sdTimeText])}', hc),
                         ]
                       : [
                           _statPill('⭐ ${'number_games.score'.tr(args: [_score.toString()])}', hc, gold: true),
@@ -3377,6 +3417,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                       style: Playful.display(26 * _kNumText, color: fg),
                     ),
                     const SizedBox(height: 12),
+                    if (sudoku)
+                      Center(child: _statPill('⏱️ ${'sudoku.time'.tr(args: [_sdTimeText])}', hc, gold: true)),
                     if (!sudoku)
                       Wrap(
                         alignment: WrapAlignment.center,

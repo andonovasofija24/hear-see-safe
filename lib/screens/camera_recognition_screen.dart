@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -57,6 +58,12 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> {
 
   Future<void> _initializeCamera() async {
     setState(() => _cameraErrorKey = null);
+    // Препознавањето (Google ML Kit) работи само во апликацијата на
+    // Android / iOS, не во прелистувач.
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _failInit('camera.error_web'));
+      return;
+    }
     try {
       final status = await Permission.camera.request();
 

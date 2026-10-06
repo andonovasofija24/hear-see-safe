@@ -9,6 +9,7 @@ import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/services/speech_command_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:hear_and_see_safe/utils/navigation.dart';
 import 'package:hear_and_see_safe/utils/arrow_scroll.dart';
 import 'package:hear_and_see_safe/screens/language_selection_screen.dart';
@@ -47,6 +48,8 @@ class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
   }
 
   bool _onKey(KeyEvent event) {
+    // Вистинска тастатура на телефон → прикажи ги ознаките за копчињата.
+    InputMode.noteKeyEvent(event);
     // Стрелки ↑ ↓ / Page Up / Page Down / Home / End - лизгање на екранот.
     if (ArrowScroll.handleKey(event)) return true;
     if (event is! KeyDownEvent) return false;
@@ -64,6 +67,13 @@ class _GlobalHomeShortcutState extends State<_GlobalHomeShortcut> {
       final focusCtx = FocusManager.instance.primaryFocus?.context;
       final typing = focusCtx != null && focusCtx.findAncestorWidgetOfExactType<EditableText>() != null;
       if (!typing) ExplainHotkey.pressed.value++;
+      return false;
+    }
+    // С (физичкото S) - „Старт“: копчето што ја почнува играта.
+    if (event.physicalKey == PhysicalKeyboardKey.keyS) {
+      final focusCtx = FocusManager.instance.primaryFocus?.context;
+      final typing = focusCtx != null && focusCtx.findAncestorWidgetOfExactType<EditableText>() != null;
+      if (!typing) StartHotkey.pressed.value++;
       return false;
     }
     if (event.logicalKey != LogicalKeyboardKey.escape) return false;
@@ -244,7 +254,7 @@ class HearAndSeeSafeApp extends StatelessWidget {
                     AccessibilityUtils.getTextScale(context),
                   ),
                 ),
-                child: _GlobalHomeShortcut(child: child!),
+                child: InputModeScope(child: _GlobalHomeShortcut(child: child!)),
               );
             },
           );

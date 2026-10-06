@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../braille/braille_data.dart';
 import '../utils/accessibility_utils.dart';
+import '../utils/input_mode.dart';
 import '../utils/vibration_utils.dart';
 import 'playful_ui.dart';
 
@@ -282,6 +283,9 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
     final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
     final dotSize = widget.compact ? 40.0 : 50.0;
     final gap = widget.compact ? 8.0 : 10.0;
+    // Телефон / таблет без тастатура: нема ознаки за копчиња (F D S, A . ;)
+    // и точките се распоредени како на Перкинс машина.
+    final touch = InputMode.touchLayout(context);
 
     Widget cell = Container(
       padding: EdgeInsets.all(gap),
@@ -296,14 +300,69 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Column(mainAxisSize: MainAxisSize.min, children: [for (final d in [1, 2, 3]) _dotButton(d, dotSize, gap, hc)]),
+          Column(mainAxisSize: MainAxisSize.min, children: [for (final d in [1, 2, 3]) _dotButton(d, dotSize, gap, hc, showKey: !touch)]),
           SizedBox(width: gap),
-          Column(mainAxisSize: MainAxisSize.min, children: [for (final d in [4, 5, 6]) _dotButton(d, dotSize, gap, hc)]),
+          Column(mainAxisSize: MainAxisSize.min, children: [for (final d in [4, 5, 6]) _dotButton(d, dotSize, gap, hc, showKey: !touch)]),
         ],
       ),
     );
 
     final previewText = _preview ?? '?';
+
+    // Знак за број - само за приказ (секогаш пред цифрата).
+    final numberSign = Semantics(
+      label: 'braille_input.number_sign'.tr(),
+      child: ExcludeSemantics(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _staticCell(const {3, 4, 5, 6}, widget.compact ? 12 : 14, hc),
+            const SizedBox(height: 4),
+            Text('⠼', style: TextStyle(fontSize: 18 * 1.3, color: fg.withValues(alpha: 0.8))),
+          ],
+        ),
+      ),
+    );
+
+    // Преглед на цифрата (по првото А).
+    final previewBubble = Semantics(
+      liveRegion: true,
+      label: _preview == null ? '' : _preview!,
+      child: ExcludeSemantics(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: widget.compact ? 72 : 88,
+          height: widget.compact ? 72 : 88,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _preview != null ? (hc ? const Color(0xFFFFFF00) : Playful.sun) : (hc ? Colors.black : Colors.white.withValues(alpha: 0.1)),
+            border: Border.all(color: Colors.white, width: 3),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                previewText,
+                style: Playful.display((widget.compact ? 28 : 34) * 1.45, color: _preview != null ? Playful.ink : fg.withValues(alpha: 0.5)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Widget board = touch
+        ? _perkinsBoard(hc: hc, gap: gap, middle: [numberSign, SizedBox(height: gap), previewBubble])
+        : Wrap(
+            alignment: WrapAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 14,
+            runSpacing: 10,
+            children: [numberSign, cell, previewBubble],
+          );
+
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: widget.enabled ? 1 : 0.45,
@@ -312,57 +371,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 14,
-              runSpacing: 10,
-              children: [
-                // Знак за број - само за приказ (секогаш пред цифрата).
-                Semantics(
-                  label: 'braille_input.number_sign'.tr(),
-                  child: ExcludeSemantics(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _staticCell(const {3, 4, 5, 6}, widget.compact ? 12 : 14, hc),
-                        const SizedBox(height: 4),
-                        Text('⠼', style: TextStyle(fontSize: 18 * 1.3, color: fg.withValues(alpha: 0.8))),
-                      ],
-                    ),
-                  ),
-                ),
-                cell,
-                // Преглед на цифрата (по првото А).
-                Semantics(
-                  liveRegion: true,
-                  label: _preview == null ? '' : _preview!,
-                  child: ExcludeSemantics(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: widget.compact ? 72 : 88,
-                      height: widget.compact ? 72 : 88,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: _preview != null ? (hc ? const Color(0xFFFFFF00) : Playful.sun) : (hc ? Colors.black : Colors.white.withValues(alpha: 0.1)),
-                        border: Border.all(color: Colors.white, width: 3),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            previewText,
-                            style: Playful.display((widget.compact ? 28 : 34) * 1.45, color: _preview != null ? Playful.ink : fg.withValues(alpha: 0.5)),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            board,
             SizedBox(height: gap),
             Wrap(
               alignment: WrapAlignment.center,
@@ -372,13 +381,13 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                 _actionButton(
                   icon: _preview == null ? Icons.record_voice_over_rounded : Icons.check_rounded,
                   label: _preview == null ? 'braille_input.speak'.tr() : 'braille_input.confirm'.tr(),
-                  keyLabel: 'A',
+                  keyLabel: touch ? null : 'A',
                   onTap: _confirm,
                   hc: hc,
                   primary: true,
                 ),
-                _actionButton(icon: Icons.backspace_outlined, label: 'braille_input.remove_dot'.tr(), keyLabel: '.', onTap: _removeLastDot, hc: hc),
-                _actionButton(icon: Icons.clear_rounded, label: 'braille_input.clear'.tr(), keyLabel: ';', onTap: _reset, hc: hc),
+                _actionButton(icon: Icons.backspace_outlined, label: 'braille_input.remove_dot'.tr(), keyLabel: touch ? null : '.', onTap: _removeLastDot, hc: hc),
+                _actionButton(icon: Icons.clear_rounded, label: 'braille_input.clear'.tr(), keyLabel: touch ? null : ';', onTap: _reset, hc: hc),
               ],
             ),
           ],
@@ -387,7 +396,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
     );
   }
 
-  Widget _dotButton(int dot, double size, double gap, bool hc) {
+  Widget _dotButton(int dot, double size, double gap, bool hc, {bool showKey = true}) {
     final on = _dots.contains(dot);
     final label = 'braille_input.dot'.tr(args: [dot.toString()]);
     return Padding(
@@ -414,9 +423,102 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('$dot', style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w900, color: on ? (hc ? Colors.black : Colors.white) : (hc ? Colors.white : Playful.ink))),
-                  Text(_dotKeyLetter[dot]!, style: TextStyle(fontSize: size * 0.2, fontWeight: FontWeight.w700, color: (on ? (hc ? Colors.black : Playful.sun) : (hc ? Colors.white70 : Playful.ink.withValues(alpha: 0.55))))),
+                  if (showKey)
+                    Text(_dotKeyLetter[dot]!, style: TextStyle(fontSize: size * 0.2, fontWeight: FontWeight.w700, color: (on ? (hc ? Colors.black : Playful.sun) : (hc ? Colors.white70 : Playful.ink.withValues(alpha: 0.55))))),
                 ],
               ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Перкинс распоред (само на допир): точките 1-2-3 во колона на левиот
+  /// раб, 4-5-6 на десниот - за прстите на двете раце. Во средина:
+  /// знакот за број и прегледот на цифрата. Висината е од големината на
+  /// екранот (над ова секогаш има лизгање, па висината не е позната).
+  Widget _perkinsBoard({required bool hc, required double gap, required List<Widget> middle}) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    final dotH = (screenH * (widget.compact ? 0.075 : 0.095)).clamp(46.0, widget.compact ? 72.0 : 96.0);
+    final boardH = dotH * 3 + gap * 2;
+    return Container(
+      padding: EdgeInsets.all(gap / 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: hc ? Colors.black : Colors.white.withValues(alpha: 0.06),
+        border: Border.all(
+          color: _error ? const Color(0xFFDC2626) : (hc ? Colors.white : Playful.sun),
+          width: _error ? 4 : 3,
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, c) {
+          final w = c.maxWidth.isFinite ? c.maxWidth : MediaQuery.sizeOf(context).width;
+          final colW = w * 0.33;
+          Widget column(List<int> dots) => SizedBox(
+                width: colW,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < dots.length; i++) ...[
+                      if (i > 0) SizedBox(height: gap),
+                      _perkinsDot(dots[i], colW, dotH, hc),
+                    ],
+                  ],
+                ),
+              );
+          return SizedBox(
+            width: w,
+            height: boardH,
+            child: Row(
+              children: [
+                column(const [1, 2, 3]),
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: gap / 2),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Column(mainAxisSize: MainAxisSize.min, children: middle),
+                    ),
+                  ),
+                ),
+                column(const [4, 5, 6]),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// Голема точка за Перкинс распоредот - исти бои, звуци и ознаки како
+  /// [_dotButton], само без буквата од тастатурата.
+  Widget _perkinsDot(int dot, double width, double height, bool hc) {
+    final on = _dots.contains(dot);
+    final label = 'braille_input.dot'.tr(args: [dot.toString()]);
+    return Semantics(
+      label: label,
+      button: true,
+      toggled: on,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => _tapDot(dot),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: width,
+            height: height,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(height / 2),
+              color: on ? (hc ? const Color(0xFFFFFF00) : Playful.ink) : (hc ? Colors.black : const Color(0xFFE8E8F5)),
+              border: Border.all(color: hc ? Colors.white : Playful.ink.withValues(alpha: on ? 1 : 0.35), width: on ? 3 : 2),
+              boxShadow: on && !hc ? [BoxShadow(color: Playful.sun.withValues(alpha: 0.6), blurRadius: 10)] : null,
+            ),
+            child: Text(
+              '$dot',
+              style: TextStyle(fontSize: height * 0.45, fontWeight: FontWeight.w900, color: on ? (hc ? Colors.black : Colors.white) : (hc ? Colors.white : Playful.ink)),
             ),
           ),
         ),
@@ -454,7 +556,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
   Widget _actionButton({
     required IconData icon,
     required String label,
-    required String keyLabel,
+    String? keyLabel,
     required VoidCallback onTap,
     required bool hc,
     bool primary = false,
@@ -490,6 +592,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                       constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.55),
                       child: Text(label, style: Playful.title(15 * _kBdText, color: fg)),
                     ),
+                    if (keyLabel != null) ...[
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -499,6 +602,7 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
                       ),
                       child: Text(keyLabel, style: TextStyle(fontSize: 13 * _kBdText, fontWeight: FontWeight.w900, color: primary ? Playful.sun : Colors.white)),
                     ),
+                    ],
                   ],
                 ),
               ),

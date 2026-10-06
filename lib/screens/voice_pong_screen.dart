@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
@@ -59,6 +61,10 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
   bool _paddleFlash = false;
   int _hits = 0;
   bool _explanationOpen = false;
+  // Рекорд: најмногу погодоци некогаш (се чува трајно на уредот).
+  static const String _bestKey = 'pong_best_hits';
+  int _best = 0;
+  bool _newRecord = false;
 
   String get _langCode => context.locale.languageCode;
 
@@ -67,6 +73,22 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
     super.initState();
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
+    _loadBest();
+  }
+
+  Future<void> _loadBest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getInt(_bestKey) ?? 0;
+      if (mounted && v > _best) setState(() => _best = v);
+    } catch (_) {}
+  }
+
+  Future<void> _saveBest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_bestKey, _best);
+    } catch (_) {}
   }
 
   @override
@@ -154,6 +176,7 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
     setState(() {
       _playing = true;
       _gameOver = false;
+      _newRecord = false;
       _hits = 0;
       _speedFactor = 1.0;
       _ballX = 0.85;
@@ -242,15 +265,22 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
 
   Future<void> _onMiss() async {
     _gameTimer?.cancel();
+    final record = _hits > _best;
     setState(() {
       _playing = false;
       _gameOver = true;
+      _newRecord = record;
+      if (record) _best = _hits;
     });
+    if (record) unawaited(_saveBest());
 
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 250);
     }
     await _playEffect('miss.mp3');
+    if (record && mounted && _gameOver) {
+      await _playClip('new_record', 'pong.new_record'.tr(args: [_best.toString()]));
+    }
   }
 
   void _toggleExplanation() {
@@ -315,14 +345,24 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         ...header,
-                        if (_gameOver)
+                        if (_gameOver) ...[
                           Text(
                             'pong.game_over_title'.tr(),
                             textAlign: TextAlign.center,
                             style: Playful.display(26 * _kPongText, color: fg),
-                          )
-                        else
-                          Center(child: _scorePill(hc)),
+                          ),
+                          const SizedBox(height: 10),
+                          Center(child: _recordPill(hc)),
+                        ] else
+                          Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 12,
+                              runSpacing: 10,
+                              children: [_scorePill(hc), _recordPill(hc)],
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -342,6 +382,44 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+
+  /// Рекордот (најмногу погодоци некогаш). По игра со нов рекорд пишува
+  /// „Нов рекорд!“ и свети.
+  Widget _recordPill(bool hc) {
+    final text = _newRecord
+        ? 'pong.new_record'.tr(args: [_best.toString()])
+        : 'pong.record'.tr(args: [_best.toString()]);
+    final glow = _newRecord && !hc;
+    return Semantics(
+      label: text,
+      liveRegion: _newRecord,
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          decoration: BoxDecoration(
+            color: hc ? Colors.black : (glow ? Playful.sun : Colors.white.withValues(alpha: 0.12)),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(color: Colors.white, width: hc ? 2 : 2.5),
+            boxShadow: glow ? [BoxShadow(color: Playful.sun.withValues(alpha: 0.6), blurRadius: 22)] : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.emoji_events_rounded, size: 32, color: hc ? Colors.white : (glow ? Playful.ink : Playful.sun)),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  text,
+                  textAlign: TextAlign.center,
+                  style: Playful.display(20 * _kPongText, color: hc ? Colors.white : (glow ? Playful.ink : Colors.white)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -487,7 +565,7 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _startButton(hc),
+                        child: StartHotkeyListener(onTrigger: _startGame, child: _startButton(hc)),
                       ),
                     ),
                 ],

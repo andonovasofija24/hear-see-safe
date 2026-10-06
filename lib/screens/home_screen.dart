@@ -5,6 +5,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/providers/app_state_provider.dart';
 import 'package:hear_and_see_safe/voice_system/application/language_manager.dart';
@@ -521,7 +522,20 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final f in section.features) f.titleKey.tr(),
     ].join(', ');
     // (тастер или null, икона, текст)
-    final lines = <(String?, IconData, String)>[
+    // Телефон / таблет без тастатура: упатство за допир наместо копчиња.
+    final touchLines = <(String?, IconData, String)>[
+      (null, Icons.arrow_back_rounded, 'home.touch_back'.tr()),
+      (null, Icons.record_voice_over_rounded, 'home.touch_voice'.tr()),
+      (null, Icons.record_voice_over_rounded, 'home.guide_home'.tr(args: [gameNames])),
+      (null, Icons.sports_esports_rounded, 'home.touch_games'.tr()),
+      (null, Icons.lightbulb_rounded, 'home.touch_explain'.tr()),
+      (null, Icons.play_arrow_rounded, 'home.touch_start'.tr()),
+      (null, Icons.swipe_rounded, 'home.touch_swipe'.tr(args: ['features.braille'.tr(), 'features.picture_book'.tr()])),
+      (null, Icons.touch_app_rounded, 'home.touch_braille'.tr()),
+      (null, Icons.grid_3x3_rounded, 'home.touch_sudoku'.tr()),
+      (null, Icons.keyboard_rounded, 'home.touch_keyboard'.tr()),
+    ];
+    final keyLines = <(String?, IconData, String)>[
       ('ESC', Icons.keyboard_return_rounded, 'home.guide_esc'.tr()),
       (context.locale.languageCode == 'mk' ? 'Г' : 'G', Icons.mic_rounded, 'home.guide_g'.tr()),
       (null, Icons.record_voice_over_rounded, 'home.guide_home'.tr(args: [gameNames])),
@@ -529,9 +543,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ('< >', Icons.menu_book_rounded, 'home.guide_books'.tr(args: ['features.braille'.tr(), 'features.picture_book'.tr()])),
       ('↑ ↓', Icons.swap_vert_rounded, 'home.guide_scroll'.tr()),
       (context.locale.languageCode == 'mk' ? 'Е' : 'E', Icons.menu_book_rounded, 'home.guide_e'.tr()),
+      (context.locale.languageCode == 'mk' ? 'С' : 'S', Icons.play_arrow_rounded, 'home.guide_start'.tr()),
       ('8 4 6 2', Icons.dialpad_rounded, 'home.guide_numpad'.tr()),
       ('← →', Icons.grid_3x3_rounded, 'home.guide_sudoku'.tr()),
     ];
+    final lines = InputMode.touchLayout(context) ? touchLines : keyLines;
     final title = 'home.guide_title'.tr();
 
     /// „ESC – враќање...“ → без „ESC – “ кога тастерот е веќе нацртан.

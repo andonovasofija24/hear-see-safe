@@ -2045,6 +2045,7 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
@@ -2185,7 +2186,9 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   // =====================================================================
   static const int _compassTotalRounds = 4;
   static const List<double> _compassDirs = [0, 90, 180, 270];
-  static const Map<double, String> _compassDirLabelKeys = {
+  // Не const: новиот Dart не дозволува децимални (double) клучеви во
+  // константна мапа.
+  static final Map<double, String> _compassDirLabelKeys = {
     0: 'spatial.compass_north',
     90: 'spatial.compass_east',
     180: 'spatial.compass_south',
@@ -2299,7 +2302,9 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   /// почнал, инаку TTS-резервата погрешно никогаш не се активира.
   Future<void> _playClip(String key, String fallbackText) async {
     if (!mounted) return;
-    final relativePath = 'audio/spatial_orientation/$_langCode/$key.mp3';
+    // Телефон без тастатура: снимката …_touch.mp3 ако постои.
+    final relativePath = await InputMode.touchClip('audio/spatial_orientation/$_langCode/$key.mp3');
+    if (!mounted) return;
     try {
       await _voicePlayer.stop();
     } catch (_) {}
@@ -2356,7 +2361,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     final opening = !_explanationOpen;
     setState(() => _explanationOpen = opening);
     if (opening) {
-      _playClip('explanation_$_explanationKeySuffix', 'spatial.explanation_${_explanationKeySuffix}_text'.tr());
+      _playClip('explanation_$_explanationKeySuffix', _explanationTextKey(InputMode.keysVisible).tr());
     } else {
       _voiceAssistant.stop();
       _voicePlayer.stop();
@@ -2369,8 +2374,16 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     if (_explanationOpen) {
       // Панелот е веќе отворен - пушти го говорот за НОВИОТ таб веднаш,
       // наместо да остане говорот на претходниот таб.
-      _playClip('explanation_$_explanationKeySuffix', 'spatial.explanation_${_explanationKeySuffix}_text'.tr());
+      _playClip('explanation_$_explanationKeySuffix', _explanationTextKey(InputMode.keysVisible).tr());
     }
+  }
+
+  /// Објаснување за тастатура или за допир. Само Симон и Компас имаат
+  /// копчиња на тастатурата (бројките), па само тие имаат верзија „_touch“.
+  String _explanationTextKey(bool keys) {
+    final s = _explanationKeySuffix;
+    final hasTouch = s == 'simon' || s == 'compass';
+    return (!keys && hasTouch) ? 'spatial.explanation_${s}_touch_text' : 'spatial.explanation_${s}_text';
   }
 
   String get _explanationKeySuffix {
@@ -3050,7 +3063,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
 
   /// Мала ознака со бројката од тастатурата во аголот на плочката.
   Widget _withKeyBadge(Widget tile, String? key, bool hc) {
-    if (key == null) return tile;
+    if (key == null || !InputMode.showKeys(context)) return tile;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -3145,7 +3158,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     return PlayfulExplainPanel(
       icon: _tabIcons[_tab]!,
       title: 'spatial.explanation_title'.tr(),
-      text: 'spatial.explanation_${_explanationKeySuffix}_text'.tr(),
+      text: _explanationTextKey(InputMode.showKeys(context)).tr(),
       accent: _moduleAccent,
     );
   }
@@ -4147,8 +4160,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               const SizedBox(height: 8),
               Text(
                 _compassAltDemoPlaying
-                    ? 'spatial.compass_alt_prompt'.tr()
-                    : 'spatial.compass_alt_choose_prompt'.tr(),
+                    ? (InputMode.showKeys(context) ? 'spatial.compass_alt_prompt' : 'spatial.compass_alt_prompt_touch').tr()
+                    : (InputMode.showKeys(context) ? 'spatial.compass_alt_choose_prompt' : 'spatial.compass_alt_choose_prompt_touch').tr(),
                 textAlign: TextAlign.center,
                 style: Playful.body(14.5 * _kSpatialStageText, color: fg),
               ),

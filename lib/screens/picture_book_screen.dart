@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
@@ -1085,7 +1086,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
                 child: Center(
-                  child: Semantics(
+                  child: StartHotkeyListener(onTrigger: _startQuiz, child: Semantics(
                     label: 'picture_book.go_to_quiz'.tr(),
                     button: true,
                     child: RippleRings(
@@ -1120,7 +1121,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                         ),
                       ),
                     ),
-                  ),
+                  )),
                 ),
               ),
             Expanded(
@@ -1470,7 +1471,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                   ),
                                 ),
                                 if (_visited.length >= _category.items.length)
-                                  Semantics(
+                                  StartHotkeyListener(onTrigger: _startQuiz, child: Semantics(
                                     label: 'picture_book.go_to_quiz'.tr(),
                                     button: true,
                                     child: PressableScale(
@@ -1489,7 +1490,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                         ),
                                       ),
                                     ),
-                                  ),
+                                  )),
                               ],
                             ),
                           ],
@@ -2160,7 +2161,10 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                 style: GameTypography.body(context, contrast, 17 * _kPbText),
               ),
               const SizedBox(height: 12),
-              _resultButton(icon: Icons.refresh_rounded, label: _t('retry_quiz'), color: _quizGreen, onTap: _retryQuiz),
+              StartHotkeyListener(
+                onTrigger: _retryQuiz,
+                child: _resultButton(icon: Icons.refresh_rounded, label: _t('retry_quiz'), color: _quizGreen, onTap: _retryQuiz),
+              ),
               const SizedBox(height: 12),
             ],
             _resultButton(icon: Icons.grid_view_rounded, label: _t('back_to_categories'), color: const Color(0xFF2563EB), onTap: _backToCategories),

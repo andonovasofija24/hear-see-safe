@@ -1318,7 +1318,15 @@ class RoundProgress extends StatelessWidget {
 
 /// Голем жолт круг (пушти звук / почни) со бранови додека свири.
 class SoundOrb extends StatelessWidget {
-  const SoundOrb({super.key, required this.icon, required this.label, required this.onTap, this.active = false, this.size = 124});
+  const SoundOrb({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.size = 124,
+    this.startHotkey = true,
+  });
 
   final IconData icon;
   final String label;
@@ -1326,8 +1334,18 @@ class SoundOrb extends StatelessWidget {
   final bool active;
   final double size;
 
+  /// Дали копчето С (Старт) на тастатурата го притиска ова копче.
+  final bool startHotkey;
+
   @override
   Widget build(BuildContext context) {
+    return StartHotkeyListener(
+      onTrigger: startHotkey ? onTap : null,
+      child: _buildOrb(context),
+    );
+  }
+
+  Widget _buildOrb(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     return Semantics(
       label: label,
@@ -1387,6 +1405,14 @@ class PlayfulResult extends StatelessWidget {
   Widget build(BuildContext context) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    // Копчето С (Старт) = „Играј повторно“.
+    return StartHotkeyListener(
+      onTrigger: onAgain,
+      child: _buildResult(context, hc, fg),
+    );
+  }
+
+  Widget _buildResult(BuildContext context, bool hc, Color fg) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final side = ((constraints.maxWidth - 560) / 2).clamp(24.0, double.infinity);

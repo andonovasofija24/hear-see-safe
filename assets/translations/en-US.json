@@ -29,7 +29,17 @@
     "section_safe": "Stay safe online",
     "section_safe_hint": "Safety section. One activity below.",
     "fab_semantics": "Voice command. Tap and say where you want to go, for example settings or picture book.",
-    "guide_sudoku": "Sudoku (Number games): ← → ↑ ↓ – move between boxes, number keys on the right (7 8 9 / 4 5 6 / 1 2 3) – pick a cell, number keys at the top – enter a number. Braille: F D S J K L – dots, A – speak / confirm, \".\" – delete dot, \";\" – clear."
+    "guide_sudoku": "Sudoku (Number games): ← → ↑ ↓ – move between boxes, number keys on the right (7 8 9 / 4 5 6 / 1 2 3) – pick a cell, number keys at the top – enter a number. Braille: F D S J K L – dots, A – speak / confirm, \".\" – delete dot, \";\" – clear.",
+    "guide_start": "S – start: presses the button that starts the game (Start, Play sound, Play again, Open...), in any game.",
+    "touch_back": "Back – the arrow button at the top left, or the phone’s “back”.",
+    "touch_voice": "The big yellow button at the bottom – voice command: say the name of the game you want.",
+    "touch_games": "Every game has a voice command button: say the name of another game, or “back”, “main menu”.",
+    "touch_explain": "The “Explanation” button in every game reads the game’s instructions.",
+    "touch_start": "A game starts with the big yellow “Start” or “Play sound” button.",
+    "touch_swipe": "{} and {} are browsed by swiping your finger left and right.",
+    "touch_braille": "Braille: tap the dots – left 1, 2, 3, right 4, 5, 6, like on a braille writer.",
+    "touch_sudoku": "Sudoku: tap a cell, then pick a number with the buttons below the board, say it, or enter it in braille.",
+    "touch_keyboard": "You can also connect a keyboard (Bluetooth or USB) – then the key shortcuts work too."
   },
   "voice": {
     "speak_command": "Say a command. For example: Braille, picture book, number games, settings.",
@@ -56,7 +66,7 @@
    "group3": "Group 3",
    "group_special": "Special letters",
    "group_numbers": "Numbers",
-   "explored": "explored",
+   "explored": "viewed",
    "next_item": "Next letter",
    "previous_item": "Previous letter",
    "repeat": "Repeat",
@@ -78,7 +88,7 @@
    "mode_write": "Write",
    "mode_write_desc": "Write each letter without a reminder.",
    "mode_word": "Word Game",
-   "mode_word_desc": "Listen to the word, then build it cell by cell.",
+   "mode_word_desc": "Listen to the word, then build it dot by dot.",
    "mode_express": "Express Your Thought",
    "mode_express_desc": "Write your own sentences freely, letter by letter.",
    "recognize_prompt": "Which letter is this?",
@@ -147,7 +157,22 @@
    "sentence_hint": "What's next?",
    "sentence_done_text": "Well done! You wrote {} sentences. Mistakes: {}.",
    "sentence_again": "New sentences",
-   "sentence_keyboard_hint": "F D S / J K L - dots  ·  H - pair 2  ·  A - speak/confirm  ·  A, A with no dots - space  ·  G - voice command (\"what's next\", \"listen to the sentence\")  ·  . - delete dot  ·  : - delete letter  ·  P - reference"
+   "sentence_keyboard_hint": "F D S / J K L - dots  ·  H - pair 2  ·  A - speak/confirm  ·  A, A with no dots - space  ·  G - voice command (\"what's next\", \"listen to the sentence\")  ·  . - delete dot  ·  : - delete letter  ·  P - reference",
+   "touch_hint": "Tap the dots: left 1 2 3, right 4 5 6.",
+   "touch_pair_hint": "For a two-pair sign, choose \"Pair 2\" at the top.",
+   "two_pairs_touch_hint": "This sign has two pairs of dots - choose \"Pair 2\" at the top",
+   "word_touch_hint": "Tap the dots: left 1 2 3, right 4 5 6. \"Listen to the word\" plays the word again.",
+   "express_touch_hint": "Tap the dots, then \"Speak / confirm\" to hear the sign. Tap it again to confirm. With no dots, twice = space.",
+   "express_touch_more_hint": "\"Delete dot\" removes the last dot, \"Delete letter\" the whole letter. \"Reference\" shows all the signs. For @ and /, choose \"Pair 2\" at the top.",
+   "sentence_touch_hint": "Tap the dots (left 1 2 3, right 4 5 6), then \"Speak / confirm\" twice. With no dots, twice = space. \"Delete dot\" and \"Delete letter\" erase. For @ and /, choose \"Pair 2\" at the top.",
+   "touch_action_confirm": "Speak / confirm",
+   "touch_action_remove_dot": "Delete dot",
+   "touch_action_reset": "Delete letter",
+   "touch_action_reference": "Reference",
+   "intro_touch_text": "Welcome to the world of the Braille alphabet, where every letter and number is represented using 6 dots arranged in 2 columns and 3 rows, and counting goes by column (from top to bottom, the first column is 1, 2, and 3, and the second column, in the same order, is 4, 5, and 6 - as shown in the picture). On the phone the dots are arranged just like on a braille writer: dots 1, 2 and 3 run along the left edge of the screen (left hand), and dots 4, 5 and 6 along the right edge (right hand). At the top are dots 1 and 4 - for your index fingers, in the middle are dots 2 and 5 - for your middle fingers, and at the bottom are dots 3 and 6 - for your ring fingers. The phone is easiest to use held with both hands or placed on a table in front of you. When you tap a dot, it lights up and the phone vibrates.",
+   "express_explanation_touch_text": "Here you freely write your own sentences in Braille, sign by sign. You tap the dots on the screen: dots 1, 2 and 3 are on the left, and dots 4, 5 and 6 on the right. When you have chosen the dots, tap the “Speak / confirm” button to hear what you wrote. If it's right, tap it once more to confirm it. If only one dot is wrong, tap “Delete dot”; to delete the whole letter, tap “Delete letter”. If nothing is started, “Delete letter” deletes the last written sign. For a new word, choose no dots and tap “Speak / confirm” twice - that is a space. The sentence ends when you write a period, question mark or exclamation mark, and then the whole sentence is read back to you. For a capital letter, first write the capital sign (dot 6), then the letter. For a number, first write the number sign (dots 3, 4, 5 and 6); after that the dots are read as digits until the space. The at sign and the slash have two pairs of dots: first you write pair 1, then tap “Pair 2” at the top for the second pair, and “Pair 1” takes you back. The “Reference” button shows all the signs. You can save your sentence and look at your saved sentences later. The voice button turns on the voice command.",
+   "sentence_explanation_touch_text": "The app tells you a sentence, and you write it in Braille, sign by sign. You can listen to the sentence as many times as you like with “Listen to the sentence”, and with “What's next?” you hear the letter or sign that comes next. Writing works just like in “Express Your Thought”: tap the dots on the screen - dots 1, 2 and 3 are on the left, and dots 4, 5 and 6 on the right. Tap “Speak / confirm” to hear the letter, and tap it again to confirm it. For every correct sign you will hear a success sound. If you write a wrong letter, digit or sign, you will hear a mistake sound right away and can try again. A space is “Speak / confirm” twice with no dots. Remember: the sentence starts with a capital letter, so first write the capital sign (dot 6), and digits need the number sign first (dots 3, 4, 5 and 6). The sentence ends with a period, question mark or exclamation mark. “Delete dot” deletes only the last dot, and “Delete letter” the whole letter. For the at sign and the slash, choose “Pair 2” at the top. The “Reference” button shows all the signs, and the voice button turns on the voice command.",
+   "voice_cmds_title_touch": "Voice commands (the voice button):"
  },
   "features": {
     "braille": "Braille Alphabet",
@@ -332,7 +357,8 @@
   "multiply_divide": "Multiplication and division",
   "input_pad": "Numbers",
   "input_braille": "Braille",
-  "voice_answer_hint": "By voice: \"numbers\" or \"braille\", \"confirm\", \"clear\"."
+  "voice_answer_hint": "By voice: \"numbers\" or \"braille\", \"confirm\", \"clear\".",
+  "what_number_touch": "What number is this? Tap the digits or say it out loud."
 },
 "number_extra": {
   "section_title": "New touch games",
@@ -372,7 +398,8 @@
   "pos_middle_right": "in the middle right",
   "pos_bottom_center": "at the bottom center",
   "title_sudoku": "Sudoku",
-  "explanation_sudoku": "The board has 9 boxes (top 1 2 3, middle 4 5 6, bottom 7 8 9), each with 9 cells. Every row, every column and every box must contain all the numbers from 1 to 9. The same number must not repeat in the same row, in the same column, or in the same box. The arrow keys ← → ↑ ↓ change the box, and the number keys on the right of the keyboard (7 8 9 top, 4 5 6 middle, 1 2 3 bottom) pick the cell in the box. Enter a number with the number keys at the top of the keyboard, the buttons on the screen, your voice (e.g. \"seven\" or \"box five\") or Braille. A wrong number is not written and counts as a mistake."
+  "explanation_sudoku": "The board has 9 boxes (top 1 2 3, middle 4 5 6, bottom 7 8 9), each with 9 cells. Every row, every column and every box must contain all the numbers from 1 to 9. The same number must not repeat in the same row, in the same column, or in the same box. The arrow keys ← → ↑ ↓ change the box, and the number keys on the right of the keyboard (7 8 9 top, 4 5 6 middle, 1 2 3 bottom) pick the cell in the box. Enter a number with the number keys at the top of the keyboard, the buttons on the screen, your voice (e.g. \"seven\" or \"box five\") or Braille. A wrong number is not written and counts as a mistake.",
+  "explanation_sudoku_touch": "The board has 9 boxes (top 1 2 3, middle 4 5 6, bottom 7 8 9), each with 9 cells. Every row, every column and every box must contain all the numbers from 1 to 9. The same number must not repeat in the same row, in the same column, or in the same box. Tap the cell you want to fill - you will hear which box it is in and whether it is empty. Enter a number with the number buttons below the board, your voice (e.g. \"seven\" or \"box five\") or Braille. A wrong number is not written and counts as a mistake."
 },
   "camera": {
     "error_unsupported_platform": "This feature only works on a phone, not in a browser.",
@@ -598,15 +625,16 @@
     "clothing_type_bag": "Bag",
     "clothing_type_jewellery": "Jewellery",
     "clothing_type_belt": "Belt",
-    "clothing_type_uniform": "Uniform"
+    "clothing_type_uniform": "Uniform",
+    "error_web": "Camera recognition works only in the phone app (Android or iPhone), not in a web browser."
   },
 "spatial": {
   "title": "Spatial orientation",
   "explanation_title": "How to play",
-  "explanation_simon_text": "This game trains spatial memory through touch. First tap 'Start sensing' - you'll feel a sequence of vibrations, each direction (up, down, left, right) with its own distinct pattern. Count and remember them carefully, in order. Then, on the cross-shaped pad below, tap the same directions in the same order you felt them. If you want to feel the sequence again before answering, tap 'Sense again'. Each round adds one more step to the sequence - the game has 10 rounds in total.",
+  "explanation_simon_text": "This game trains spatial memory through touch. First tap 'Start sensing' - you'll feel a sequence of vibrations, each direction (up, down, left, right) with its own distinct pattern. Count and remember them carefully, in order. Then, on the cross-shaped pad below, tap the same directions in the same order you felt them. If you want to feel the sequence again before answering, tap 'Sense again'. Each round adds one more step to the sequence - the game has 10 rounds in total. You can also enter the directions with the number keys on the right of the keyboard: 8 up, 2 down, 4 left, 6 right.",
   "explanation_maze_text": "This game trains following an invisible path using only touch and vibration. Tap 'Start maze', then place your finger anywhere on the grid below and slowly move it. While your finger is on the correct path, you'll feel a light, short vibration. As soon as you step off the path (hit a 'wall'), you'll feel a stronger vibration and the border will flash red - go back to the last correct spot and keep searching from there. You must trace the path in order, from the start (green square) to the end (gold square) - you can't skip straight to the end. The game has 5 different mazes.",
   "explanation_radar_text": "This game trains finding a hidden object in space. Move your finger across the whole field - the vibrations get more frequent and stronger the closer you get to the hidden object, like a metal detector. At the start, you'll also see a faint glowing circle around the hidden object's location as a visual aid, but that circle becomes less and less visible from round to round, until by the end you'll need to rely on vibration alone. Once you find the object, a key icon appears - drag the key to the lock in the top-right corner to finish the round. The game has 10 rounds.",
-  "explanation_compass_text": "This game trains orientation using the cardinal directions. On a phone with a compass sensor: the game tells you a direction (for example 'North'), and you physically turn around in the room until you're facing that way - once you're close enough, you'll feel short vibrations and a circular progress ring will fill up until it's confirmed. On a computer, instead of physically turning, the game shows an icon that moves and rotates through a specific sequence of steps (up, down, left, right, rotate left, rotate right, stay) - watch it carefully, then use the buttons below to repeat the same sequence so the icon ends up in the same final position.",
+  "explanation_compass_text": "This game trains orientation using the cardinal directions. On a phone with a compass sensor: the game tells you a direction (for example 'North'), and you physically turn around in the room until you're facing that way - once you're close enough, you'll feel short vibrations and a circular progress ring will fill up until it's confirmed. On a computer, instead of physically turning, the game shows an icon that moves and rotates through a specific sequence of steps (up, down, left, right, rotate left, rotate right, stay) - watch it carefully, then use the buttons below to repeat the same sequence so the icon ends up in the same final position. You can also enter the moves with the number keys on the right of the keyboard: 8 up, 2 down, 4 left, 6 right, 7 and 9 rotate left and right, 5 stay.",
   "explanation_toggle_open": "Show explanation",
   "explanation_toggle_close": "Hide explanation",
   "tab_simon": "Simon - directions",
@@ -655,13 +683,17 @@
   "compass_rotate_right": "Rotate right",
   "compass_stay": "Stay",
   "compass_alt_start": "Start",
-  "compass_alt_prompt": "Watch/feel the icon's movement, then repeat the same sequence of moves with the buttons.",
-  "compass_alt_choose_prompt": "Tap the moves in the order you saw them",
+  "compass_alt_prompt": "Watch/feel the icon's movement, then repeat the same sequence of moves with the buttons or the number keys on the keyboard.",
+  "compass_alt_choose_prompt": "Press the moves in the order you saw them (buttons or number keys 7 8 9 / 4 5 6 / 1 2 3)",
   "compass_alt_replay": "Show again",
   "compass_alt_hint": "Hint",
   "compass_alt_hint_label": "Next move: {}",
   "compass_alt_progress": "Round {} of {}",
-  "compass_alt_final_summary": "You got {} correct and {} wrong out of {} rounds."
+  "compass_alt_final_summary": "You got {} correct and {} wrong out of {} rounds.",
+  "explanation_simon_touch_text": "This game trains spatial memory through touch. First tap 'Start sensing' - you'll feel a sequence of vibrations, each direction (up, down, left, right) with its own distinct pattern. Count and remember them carefully, in order. Then, on the cross-shaped pad below, tap the same directions in the same order you felt them. If you want to feel the sequence again before answering, tap 'Sense again'. Each round adds one more step to the sequence - the game has 10 rounds in total.",
+  "explanation_compass_touch_text": "This game trains orientation using the cardinal directions. On a phone with a compass sensor: the game tells you a direction (for example 'North'), and you physically turn around in the room until you're facing that way - once you're close enough, you'll feel short vibrations and a circular progress ring will fill up until it's confirmed. If the device has no compass, instead of physically turning, the game shows an icon that moves and rotates through a specific sequence of steps (up, down, left, right, rotate left, rotate right, stay) - watch it carefully, then use the buttons below to repeat the same sequence so the icon ends up in the same final position.",
+  "compass_alt_prompt_touch": "Watch/feel the icon's movement, then repeat the same sequence of moves with the buttons.",
+  "compass_alt_choose_prompt_touch": "Tap the moves in the order you saw them"
 },
   "sound": {
     "listen": "Listen carefully",
@@ -823,7 +855,9 @@
     "score": "Hits: {}",
     "game_over_title": "Game over",
     "final_summary_survival": "You got {} hits before you missed!",
-    "play_again": "Play again"
+    "play_again": "Play again",
+    "record": "Record: {}",
+    "new_record": "New record: {} hits!"
   },
   "melody": {
     "explanation_title": "How to play",
@@ -907,7 +941,9 @@
     "empty": "empty",
     "cell_label": "Box {}, {}: {}",
     "solved": "Well done! You solved the sudoku! Mistakes: {}.",
-    "keys_hint": "← → ↑ ↓ – box · 7 8 9 / 4 5 6 / 1 2 3 (right) – cell · top number keys – enter · voice: \"seven\", \"box five\""
+    "keys_hint": "← → ↑ ↓ – box · 7 8 9 / 4 5 6 / 1 2 3 (right) – cell · top number keys – enter · voice: \"seven\", \"box five\"",
+    "time": "Time: {}",
+    "touch_hint": "Tap a cell, then pick a number · by voice: “seven”, “box five”"
   },
   "braille_input": {
     "number_sign": "Number sign",
@@ -921,12 +957,14 @@
     "previous": "Previous island",
     "next": "Next island",
     "open": "Sail to the island",
-    "hint": "Turn the islands (drag, the arrows or ← →) to bring a game to the top, then choose it."
+    "hint": "Turn the islands (drag, the arrows or ← →) to bring a game to the top, then choose it.",
+    "touch_hint": "Turn the islands with your finger (drag left or right) to bring a game to the top, then tap it."
   },
   "sphere": {
     "previous": "Previous game",
     "next": "Next game",
     "open": "Start",
-    "hint": "Spin the globe with your finger or mouse in any direction (or ← →). The game at the front is chosen - tap it or press \"Start\"."
+    "hint": "Spin the globe with your finger or mouse in any direction (or ← →). The game at the front is chosen - tap it or press \"Start\".",
+    "touch_hint": "Spin the globe with your finger in any direction. The game at the front is chosen - tap it or tap \"Start\"."
   }
 }

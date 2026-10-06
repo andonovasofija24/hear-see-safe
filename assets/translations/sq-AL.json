@@ -29,7 +29,17 @@
     "section_safe": "Qëndro i sigurt në internet",
     "section_safe_hint": "Seksioni i sigurisë. Një aktivitet më poshtë.",
     "fab_semantics": "Komandë me zë. Prekni dhe thuaj ku doni të shkoni, për shembull cilësimet ose libri me figura.",
-    "guide_sudoku": "Sudoku (Lojërat me numra): ← → ↑ ↓ – kalim mes katrorëve, numrat djathtas (7 8 9 / 4 5 6 / 1 2 3) – zgjedhja e kutisë, numrat lart – futja e numrit. Shkrimi Braj: F D S J K L – pikat, A – shqipto / konfirmo, „.“ – fshi pikën, „;“ – fshi."
+    "guide_sudoku": "Sudoku (Lojërat me numra): ← → ↑ ↓ – kalim mes katrorëve, numrat djathtas (7 8 9 / 4 5 6 / 1 2 3) – zgjedhja e kutisë, numrat lart – futja e numrit. Shkrimi Braj: F D S J K L – pikat, A – shqipto / konfirmo, „.“ – fshi pikën, „;“ – fshi.",
+    "guide_start": "S – fillo: shtyp butonin që e nis lojën (Fillo, Luaj tingullin, Luaj përsëri, Hap...), në çdo lojë.",
+    "touch_back": "Prapa – butoni me shigjetë lart majtas, ose “prapa” i telefonit.",
+    "touch_voice": "Butoni i madh i verdhë poshtë – komanda zanore: thuaj emrin e lojës që dëshiron.",
+    "touch_games": "Çdo lojë ka buton për komandë zanore: thuaj emrin e një loje tjetër, ose “prapa”, “menyja kryesore”.",
+    "touch_explain": "Butoni “Shpjegimi” në çdo lojë lexon udhëzimet e lojës.",
+    "touch_start": "Loja fillon me butonin e madh të verdhë “Fillo” ose “Luaj tingullin”.",
+    "touch_swipe": "{} dhe {} shfletohen duke rrëshqitur gishtin majtas dhe djathtas.",
+    "touch_braille": "Braj: prek pikat – majtas 1, 2, 3, djathtas 4, 5, 6, si te makina e brajit.",
+    "touch_sudoku": "Sudoku: prek një kuti, pastaj zgjidh numrin me butonat poshtë tabelës, thuaje me zë ose shkruaje në braj.",
+    "touch_keyboard": "Mund të lidhet edhe tastierë (Bluetooth ose USB) – atëherë funksionojnë edhe shkurtoret e tasteve."
   },
   "voice": {
     "speak_command": "Thuaj një komandë. Për shembull: Braille, libër fotosh, lojëra me numra, cilësimet.",
@@ -56,7 +66,7 @@
   "group3": "Grupi 3",
   "group_special": "Shkronja të veçanta",
   "group_numbers": "Numrat",
-  "explored": "eksploruar",
+  "explored": "parë",
   "next_item": "Shkronja tjetër",
   "previous_item": "Shkronja e mëparshme",
   "repeat": "Përsërit",
@@ -78,7 +88,7 @@
   "mode_write": "Shkruaj",
   "mode_write_desc": "Shkruaj çdo shkronjë pa përkujtues.",
   "mode_word": "Loja me fjalë",
-  "mode_word_desc": "Dëgjo fjalën, pastaj përbëje qelizë pas qelize.",
+  "mode_word_desc": "Dëgjo fjalën, pastaj përbëje pikë pas pike.",
   "mode_express": "Shpreh mendimin tënd",
   "mode_express_desc": "Shkruaj fjali të lira, shkronjë pas shkronje.",
   "recognize_prompt": "Cila shkronjë është kjo?",
@@ -147,7 +157,22 @@
   "sentence_hint": "Çfarë vjen më pas?",
   "sentence_done_text": "Të lumtë! Shkrove {} fjali. Gabime: {}.",
   "sentence_again": "Fjali të reja",
-  "sentence_keyboard_hint": "F D S / J K L - pikat  ·  H - çifti 2  ·  A - thuaj/konfirmo  ·  A, A pa pika - hapësirë  ·  G - komandë me zë („çfarë vjen“, „dëgjo fjalinë“)  ·  . - fshi pikën  ·  : - fshi shkronjën  ·  P - përkujtues"
+  "sentence_keyboard_hint": "F D S / J K L - pikat  ·  H - çifti 2  ·  A - thuaj/konfirmo  ·  A, A pa pika - hapësirë  ·  G - komandë me zë („çfarë vjen“, „dëgjo fjalinë“)  ·  . - fshi pikën  ·  : - fshi shkronjën  ·  P - përkujtues",
+  "touch_hint": "Prek pikat: majtas 1 2 3, djathtas 4 5 6.",
+  "touch_pair_hint": "Për shenjë me dy çifte, zgjidh „Çifti 2“ lart.",
+  "two_pairs_touch_hint": "Kjo shenjë ka dy çifte pikash - zgjidh „Çifti 2“ lart",
+  "word_touch_hint": "Prek pikat: majtas 1 2 3, djathtas 4 5 6. „Dëgjo fjalën“ - e dëgjon fjalën përsëri.",
+  "express_touch_hint": "Prek pikat, pastaj „Thuaj / konfirmo“ për ta dëgjuar shenjën. Prek përsëri për konfirmim. Pa pika, dy herë = hapësirë.",
+  "express_touch_more_hint": "„Fshi pikën“ fshin pikën e fundit, „Fshi shkronjën“ gjithë shkronjën. „Përkujtues“ tregon të gjitha shenjat. Për @ dhe / zgjidh „Çifti 2“ lart.",
+  "sentence_touch_hint": "Prek pikat (majtas 1 2 3, djathtas 4 5 6), pastaj „Thuaj / konfirmo“ dy herë. Pa pika, dy herë = hapësirë. „Fshi pikën“ dhe „Fshi shkronjën“ fshijnë. Për @ dhe / zgjidh „Çifti 2“ lart.",
+  "touch_action_confirm": "Thuaj / konfirmo",
+  "touch_action_remove_dot": "Fshi pikën",
+  "touch_action_reset": "Fshi shkronjën",
+  "touch_action_reference": "Përkujtues",
+  "intro_touch_text": "Mirë se vini në botën e alfabetit Braille, ku çdo shkronjë dhe numër përfaqësohet me anë të 6 pikave të vendosura në 2 kolona dhe 3 rreshta, dhe numërimi shkon sipas kolonës (nga lart poshtë, kolona e parë është 1, 2 dhe 3, ndërsa e dyta, në të njëjtën radhë, është 4, 5 dhe 6 - siç shihet në figurë). Në telefon pikat janë renditur njësoj si te makina e brajit: pikat 1, 2 dhe 3 janë përgjatë skajit të majtë të ekranit (dora e majtë), kurse pikat 4, 5 dhe 6 përgjatë skajit të djathtë (dora e djathtë). Lart janë pikat 1 dhe 4 - për gishtat tregues, në mes janë pikat 2 dhe 5 - për gishtat e mesit, dhe poshtë janë pikat 3 dhe 6 - për gishtat unazorë. Telefoni përdoret më lehtë i mbajtur me të dyja duart ose i vendosur në tryezë para teje. Kur prek një pikë, ajo ndriçon dhe telefoni dridhet.",
+  "express_explanation_touch_text": "Këtu shkruan lirisht fjalitë e tua në Braille, shenjë pas shenje. Pikat i prek në ekran: pikat 1, 2 dhe 3 janë majtas, kurse pikat 4, 5 dhe 6 djathtas. Kur t'i zgjedhësh pikat, prek butonin „Thuaj / konfirmo“ për të dëgjuar çfarë shkrove. Nëse është e saktë, prek edhe një herë për ta konfirmuar. Nëse vetëm një pikë është gabim, prek „Fshi pikën“; për ta fshirë gjithë shkronjën, prek „Fshi shkronjën“. Nëse s'ka asgjë të filluar, „Fshi shkronjën“ fshin shenjën e fundit të shkruar. Për fjalë të re, mos zgjidh asnjë pikë dhe prek „Thuaj / konfirmo“ dy herë - kjo është hapësira. Fjalia mbaron kur shkruan pikë, pikëpyetje ose pikëçuditëse, dhe atëherë e gjithë fjalia të lexohet. Për shkronjë të madhe, shkruaj së pari shenjën e shkronjës së madhe (pikat 4 dhe 6), pastaj shkronjën. Për numër, shkruaj së pari shenjën e numrit (pikat 3, 4, 5 dhe 6); pas saj pikat lexohen si numra deri te hapësira. Shenja @ dhe vija e pjerrët kanë dy çifte pikash: së pari shkruan çiftin 1, pastaj lart prek „Çifti 2“ për çiftin e dytë, kurse „Çifti 1“ të kthen prapa. Butoni „Përkujtues“ i tregon të gjitha shenjat. Fjalinë mund ta ruash dhe më vonë t'i shikosh fjalitë e ruajtura. Butoni i zërit ndez komandën me zë.",
+  "sentence_explanation_touch_text": "Aplikacioni të thotë një fjali, dhe ti e shkruan në Braille, shenjë pas shenje. Fjalinë mund ta dëgjosh sa herë të duash me „Dëgjo fjalinë“, kurse me „Çfarë vjen më pas?“ dëgjon shkronjën ose shenjën që vjen. Shkrimi është njësoj si te „Shpreh mendimin tënd“: pikat i prek në ekran - pikat 1, 2 dhe 3 janë majtas, kurse pikat 4, 5 dhe 6 djathtas. Me „Thuaj / konfirmo“ e dëgjon shkronjën, dhe nëse e prek edhe një herë, e konfirmon. Për çdo shenjë të saktë do të dëgjosh një tingull suksesi. Nëse shkruan shkronjë, numër ose shenjë të gabuar, menjëherë do të dëgjosh tingullin e gabimit dhe mund të provosh përsëri. Hapësira është „Thuaj / konfirmo“ dy herë pa asnjë pikë. Mbaje mend: fjalia fillon me shkronjë të madhe, prandaj së pari shkruan shenjën e shkronjës së madhe (pikat 4 dhe 6), kurse para numrave vjen shenja e numrit (pikat 3, 4, 5 dhe 6). Fjalia mbaron me pikë, pikëpyetje ose pikëçuditëse. Me „Fshi pikën“ fshin vetëm pikën e fundit, kurse me „Fshi shkronjën“ gjithë shkronjën. Për shenjën @ dhe vijën e pjerrët zgjidh „Çifti 2“ lart. Butoni „Përkujtues“ i tregon të gjitha shenjat, kurse butoni i zërit ndez komandën me zë.",
+  "voice_cmds_title_touch": "Komandat me zë (butoni i zërit):"
 },
   "features": {
     "braille": "Alfabeti Braille",
@@ -332,7 +357,8 @@
   "multiply_divide": "Shumëzim dhe pjesëtim",
   "input_pad": "Numra",
   "input_braille": "Shkrimi Braj",
-  "voice_answer_hint": "Me zë: „numra“ ose „braj“, „konfirmo“, „fshi“."
+  "voice_answer_hint": "Me zë: „numra“ ose „braj“, „konfirmo“, „fshi“.",
+  "what_number_touch": "Cili është ky numër? Prekni shifrat ose thuajeni me zë."
 },
 "number_extra": {
   "section_title": "Lojëra të reja me prekje",
@@ -372,7 +398,8 @@
   "pos_middle_right": "djathtas në mes",
   "pos_bottom_center": "poshtë në mes",
   "title_sudoku": "Sudoku",
-  "explanation_sudoku": "Fusha ka 9 katrorë (lart 1 2 3, në mes 4 5 6, poshtë 7 8 9), secili me 9 kuti. Çdo rresht, çdo kolonë dhe çdo katror duhet të ketë të gjithë numrat nga 1 deri në 9. I njëjti numër nuk duhet të përsëritet në të njëjtin rresht, në të njëjtën kolonë, as në të njëjtin katror. Me shigjetat ← → ↑ ↓ ndërrohet katrori, ndërsa me numrat në anën e djathtë të tastierës (7 8 9 lart, 4 5 6 në mes, 1 2 3 poshtë) zgjidhet kutia në katror. Numri futet me numrat lart në tastierë, me butonat në ekran, me zë (p.sh. „shtatë“ ose „katror pesë“) ose me shkrimin Braj. Numri i gabuar nuk shkruhet dhe numërohet si gabim."
+  "explanation_sudoku": "Fusha ka 9 katrorë (lart 1 2 3, në mes 4 5 6, poshtë 7 8 9), secili me 9 kuti. Çdo rresht, çdo kolonë dhe çdo katror duhet të ketë të gjithë numrat nga 1 deri në 9. I njëjti numër nuk duhet të përsëritet në të njëjtin rresht, në të njëjtën kolonë, as në të njëjtin katror. Me shigjetat ← → ↑ ↓ ndërrohet katrori, ndërsa me numrat në anën e djathtë të tastierës (7 8 9 lart, 4 5 6 në mes, 1 2 3 poshtë) zgjidhet kutia në katror. Numri futet me numrat lart në tastierë, me butonat në ekran, me zë (p.sh. „shtatë“ ose „katror pesë“) ose me shkrimin Braj. Numri i gabuar nuk shkruhet dhe numërohet si gabim.",
+  "explanation_sudoku_touch": "Fusha ka 9 katrorë (lart 1 2 3, në mes 4 5 6, poshtë 7 8 9), secili me 9 kuti. Çdo rresht, çdo kolonë dhe çdo katror duhet të ketë të gjithë numrat nga 1 deri në 9. I njëjti numër nuk duhet të përsëritet në të njëjtin rresht, në të njëjtën kolonë, as në të njëjtin katror. Prek kutinë që dëshiron ta plotësosh - do të dëgjosh në cilin katror është dhe nëse është bosh. Numri futet me butonat me numra poshtë tabelës, me zë (p.sh. „shtatë“ ose „katror pesë“) ose me shkrimin Braj. Numri i gabuar nuk shkruhet dhe numërohet si gabim."
 },
   "camera": {
     "error_unsupported_platform": "Kjo veçori funksionon vetëm në telefon, jo në shfletues.",
@@ -598,15 +625,16 @@
     "clothing_type_bag": "Çantë",
     "clothing_type_jewellery": "Stoli",
     "clothing_type_belt": "Rrip",
-    "clothing_type_uniform": "Uniformë"
+    "clothing_type_uniform": "Uniformë",
+    "error_web": "Njohja me kamerë funksionon vetëm në aplikacionin e telefonit (Android ose iPhone), jo në shfletues."
   },
 "spatial": {
   "title": "Orientimi hapësinor",
   "explanation_title": "Si luhet",
-  "explanation_simon_text": "Kjo lojë stërvit kujtesën hapësinore përmes prekjes. Fillimisht prek 'Fillo të ndjesh' - do të ndjesh një sekuencë vibrimesh, secili drejtim (lart, poshtë, majtas, djathtas) me modelin e vet të veçantë. Numëroji dhe mbaji mend me kujdes, sipas radhës. Pastaj, në panelin në formë kryqi më poshtë, prek të njëjtat drejtime sipas të njëjtës radhë siç i ndjeve. Nëse do t'i ndjesh përsëri para se të përgjigjesh, prek 'Ndjeje përsëri'. Çdo raund shton edhe një hap në sekuencë - loja ka gjithsej 10 raunde.",
+  "explanation_simon_text": "Kjo lojë stërvit kujtesën hapësinore përmes prekjes. Fillimisht prek 'Fillo të ndjesh' - do të ndjesh një sekuencë vibrimesh, secili drejtim (lart, poshtë, majtas, djathtas) me modelin e vet të veçantë. Numëroji dhe mbaji mend me kujdes, sipas radhës. Pastaj, në panelin në formë kryqi më poshtë, prek të njëjtat drejtime sipas të njëjtës radhë siç i ndjeve. Nëse do t'i ndjesh përsëri para se të përgjigjesh, prek 'Ndjeje përsëri'. Çdo raund shton edhe një hap në sekuencë - loja ka gjithsej 10 raunde. Drejtimet mund t'i futësh edhe me numrat në anën e djathtë të tastierës: 8 lart, 2 poshtë, 4 majtas, 6 djathtas.",
   "explanation_maze_text": "Kjo lojë stërvit ndjekjen e një shtegu të padukshëm vetëm përmes prekjes dhe vibrimit. Prek 'Fillo labirintin', pastaj vendos gishtin kudo në rrjetën më poshtë dhe lëvize ngadalë. Ndërsa gishti është në shtegun e saktë, do të ndjesh një vibrim të lehtë e të shkurtër. Sapo del nga shtegu (prek një 'mur'), do të ndjesh një vibrim më të fortë dhe kufiri do të shkelqejë me të kuqe - kthehu te vendi i fundit i saktë dhe vazhdo kërkimin nga aty. Duhet ta ndjekësh shtegun sipas radhës, nga fillimi (katrori jeshil) deri te fundi (katrori i artë) - nuk mund të kërcesh direkt te fundi. Loja ka 5 labirinte të ndryshme.",
   "explanation_radar_text": "Kjo lojë stërvit gjetjen e një objekti të fshehur në hapësirë. Lëviz gishtin nëpër të gjithë fushën - vibrimet bëhen më të shpeshta dhe më të forta sa më afër objektit të fshehur, si një detektor metali. Në fillim, do të shohësh edhe një rreth të zbehtë ndriçues rreth vendndodhjes së objektit të fshehur si ndihmë vizuale, por ai rreth bëhet gjithnjë e më pak i dukshëm nga raundi në raund, derisa në fund do të duhet të mbështetesh vetëm te vibrimi. Sapo e gjen objektin, shfaqet një ikonë çelësi - tërhiqe çelësin te brava në cepin e sipërm djathtas për ta përfunduar raundin. Loja ka 10 raunde.",
-  "explanation_compass_text": "Kjo lojë stërvit orientimin sipas anëve të botës. Në telefon me sensor kompasi: loja të thotë një drejtim (për shembull 'Veriu'), dhe ti kthehesh fizikisht në hapësirë derisa të drejtohesh nga ai krah - kur je mjaft afër, do të ndjesh vibrime të shkurtra dhe një unazë rrethore progresi do të mbushet derisa të konfirmohet. Në kompjuter, në vend të kthimit fizik, loja shfaq një ikonë që lëviz dhe rrotullohet përmes një sekuence specifike hapash (lart, poshtë, majtas, djathtas, rrotullo majtas, rrotullo djathtas, qëndro) - vështroje me kujdes, pastaj përdor butonat më poshtë për të përsëritur të njëjtën sekuencë që ikona të përfundojë në të njëjtin pozicion final.",
+  "explanation_compass_text": "Kjo lojë stërvit orientimin sipas anëve të botës. Në telefon me sensor kompasi: loja të thotë një drejtim (për shembull 'Veriu'), dhe ti kthehesh fizikisht në hapësirë derisa të drejtohesh nga ai krah - kur je mjaft afër, do të ndjesh vibrime të shkurtra dhe një unazë rrethore progresi do të mbushet derisa të konfirmohet. Në kompjuter, në vend të kthimit fizik, loja shfaq një ikonë që lëviz dhe rrotullohet përmes një sekuence specifike hapash (lart, poshtë, majtas, djathtas, rrotullo majtas, rrotullo djathtas, qëndro) - vështroje me kujdes, pastaj përdor butonat më poshtë për të përsëritur të njëjtën sekuencë që ikona të përfundojë në të njëjtin pozicion final. Lëvizjet mund t'i futësh edhe me numrat në anën e djathtë të tastierës: 8 lart, 2 poshtë, 4 majtas, 6 djathtas, 7 dhe 9 rrotullim majtas dhe djathtas, 5 qëndro në vend.",
   "explanation_toggle_open": "Shfaq shpjegimin",
   "explanation_toggle_close": "Fshih shpjegimin",
   "tab_simon": "Simon - drejtimet",
@@ -655,13 +683,17 @@
   "compass_rotate_right": "Rrotullo djathtas",
   "compass_stay": "Qëndro",
   "compass_alt_start": "Fillo",
-  "compass_alt_prompt": "Shiko/ndjeje lëvizjen e ikonës, pastaj përsërite të njëjtën sekuencë lëvizjesh me butonat.",
-  "compass_alt_choose_prompt": "Prek lëvizjet sipas radhës si i pe",
+  "compass_alt_prompt": "Shiko/ndjeje lëvizjen e ikonës, pastaj përsërite të njëjtën sekuencë lëvizjesh me butonat ose me numrat në tastierë.",
+  "compass_alt_choose_prompt": "Shtyp lëvizjet sipas radhës si i pe (butonat ose numrat 7 8 9 / 4 5 6 / 1 2 3)",
   "compass_alt_replay": "Shfaq përsëri",
   "compass_alt_hint": "Ndihmë",
   "compass_alt_hint_label": "Lëvizja tjetër: {}",
   "compass_alt_progress": "Raundi {} nga {}",
-  "compass_alt_final_summary": "Ke {} saktë dhe {} gabim nga {} raunde."
+  "compass_alt_final_summary": "Ke {} saktë dhe {} gabim nga {} raunde.",
+  "explanation_simon_touch_text": "Kjo lojë stërvit kujtesën hapësinore përmes prekjes. Fillimisht prek 'Fillo të ndjesh' - do të ndjesh një sekuencë vibrimesh, secili drejtim (lart, poshtë, majtas, djathtas) me modelin e vet të veçantë. Numëroji dhe mbaji mend me kujdes, sipas radhës. Pastaj, në panelin në formë kryqi më poshtë, prek të njëjtat drejtime sipas të njëjtës radhë siç i ndjeve. Nëse do t'i ndjesh përsëri para se të përgjigjesh, prek 'Ndjeje përsëri'. Çdo raund shton edhe një hap në sekuencë - loja ka gjithsej 10 raunde.",
+  "explanation_compass_touch_text": "Kjo lojë stërvit orientimin sipas anëve të botës. Në telefon me sensor kompasi: loja të thotë një drejtim (për shembull 'Veriu'), dhe ti kthehesh fizikisht në hapësirë derisa të drejtohesh nga ai krah - kur je mjaft afër, do të ndjesh vibrime të shkurtra dhe një unazë rrethore progresi do të mbushet derisa të konfirmohet. Nëse pajisja nuk ka kompas, në vend të kthimit fizik, loja shfaq një ikonë që lëviz dhe rrotullohet përmes një sekuence specifike hapash (lart, poshtë, majtas, djathtas, rrotullo majtas, rrotullo djathtas, qëndro) - vështroje me kujdes, pastaj përdor butonat më poshtë për të përsëritur të njëjtën sekuencë që ikona të përfundojë në të njëjtin pozicion final.",
+  "compass_alt_prompt_touch": "Shiko/ndjeje lëvizjen e ikonës, pastaj përsërite të njëjtën sekuencë lëvizjesh me butonat.",
+  "compass_alt_choose_prompt_touch": "Prek lëvizjet sipas radhës si i pe"
 },
   "sound": {
     "listen": "Dëgjoni me kujdes",
@@ -823,7 +855,9 @@
     "score": "Goditje: {}",
     "game_over_title": "Loja mbaroi",
     "final_summary_survival": "Ke arritur {} goditje para se të humbësh!",
-    "play_again": "Luaj përsëri"
+    "play_again": "Luaj përsëri",
+    "record": "Rekordi: {}",
+    "new_record": "Rekord i ri: {} goditje!"
   },
   "melody": {
     "explanation_title": "Si luhet",
@@ -907,7 +941,9 @@
     "empty": "bosh",
     "cell_label": "Katrori {}, {}: {}",
     "solved": "Të lumtë! E zgjidhe sudokun! Gabime: {}.",
-    "keys_hint": "← → ↑ ↓ – katrori · 7 8 9 / 4 5 6 / 1 2 3 (djathtas) – kutia · numrat lart – fut numrin · me zë: „shtatë“, „katror pesë“"
+    "keys_hint": "← → ↑ ↓ – katrori · 7 8 9 / 4 5 6 / 1 2 3 (djathtas) – kutia · numrat lart – fut numrin · me zë: „shtatë“, „katror pesë“",
+    "time": "Koha: {}",
+    "touch_hint": "Prek një kuti, pastaj zgjidh numrin · me zë: “shtatë”, “katrori pesë”"
   },
   "braille_input": {
     "number_sign": "Shenja e numrit",
@@ -921,12 +957,14 @@
     "previous": "Ishulli i mëparshëm",
     "next": "Ishulli tjetër",
     "open": "Lundro te ishulli",
-    "hint": "Rrotullo ishujt (tërhiq, shigjetat ose ← →) për ta sjellë lojën lart, pastaj zgjidhe."
+    "hint": "Rrotullo ishujt (tërhiq, shigjetat ose ← →) për ta sjellë lojën lart, pastaj zgjidhe.",
+    "touch_hint": "Rrotullo ishujt me gisht (tërhiq majtas ose djathtas) për ta sjellë lojën lart, pastaj preke."
   },
   "sphere": {
     "previous": "Loja e mëparshme",
     "next": "Loja tjetër",
     "open": "Fillo",
-    "hint": "Rrotullo globin me gisht ose me mi në çdo drejtim (ose ← →). Loja përpara është e zgjedhur - preke ose shtyp „Fillo“."
+    "hint": "Rrotullo globin me gisht ose me mi në çdo drejtim (ose ← →). Loja përpara është e zgjedhur - preke ose shtyp „Fillo“.",
+    "touch_hint": "Rrotullo globin me gisht në çdo drejtim. Loja përpara është e zgjedhur - preke ose prek „Fillo“."
   }
 }

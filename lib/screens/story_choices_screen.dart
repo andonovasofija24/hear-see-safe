@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/services/voice_assistant_service.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
@@ -746,21 +747,27 @@ class _StoryChoicesScreenState extends State<StoryChoicesScreen> {
               gold: false,
               onTap: () => Navigator.of(context).pop(),
             ),
-            _bigCircleButton(
-              icon: Icons.replay_rounded,
-              label: 'story.play_again'.tr(),
-              gold: true,
-              onTap: _restart,
+            StartHotkeyListener(
+              onTrigger: _restart,
+              child: _bigCircleButton(
+                icon: Icons.replay_rounded,
+                label: 'story.play_again'.tr(),
+                gold: true,
+                onTap: _restart,
+              ),
             ),
           ],
         )
       else if (!isLastStory)
         Center(
-          child: _bigCircleButton(
-            icon: Icons.arrow_forward_rounded,
-            label: 'story.next_story'.tr(),
-            gold: true,
-            onTap: _continue,
+          child: StartHotkeyListener(
+            onTrigger: _continue,
+            child: _bigCircleButton(
+              icon: Icons.arrow_forward_rounded,
+              label: 'story.next_story'.tr(),
+              gold: true,
+              onTap: _continue,
+            ),
           ),
         )
       else
