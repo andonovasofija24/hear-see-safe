@@ -176,7 +176,8 @@
   "voice_cmds_express_v2": "„thuaj“, „konfirmo“, „fshi pikën“ (të fundit), „fshi pikën 3“ ose „anulo çiftin 2 pika 1“ (pikërisht atë pikë), „fshi shkronjën“, „përkujtues“, „ruaj fjalinë“, „shiko fjalitë“, „prapa“.",
   "voice_cmds_sentence_v2": "„çfarë vjen“ (thotë shkronjën/shenjën që vjen), „dëgjo fjalinë“, „thuaj“, „konfirmo“, „fshi pikën“ (të fundit), „fshi pikën 3“ ose „anulo çiftin 2 pika 1“ (pikërisht atë pikë), „fshi shkronjën“, „përkujtues“, „prapa“.",
   "dot_toggle_hint": "Shtyp edhe një herë tastin e një pike të ndezur dhe ajo do të fiket.",
-  "dot_toggle_touch_hint": "Prek edhe një herë një pikë të ndezur dhe ajo do të fiket."
+  "dot_toggle_touch_hint": "Prek edhe një herë një pikë të ndezur dhe ajo do të fiket.",
+  "reference_voice_hint": "Prek butonin e zërit dhe thuaj një shkronjë, numër ose shenjë (p.sh. „b“, „pesë“, „pikëpyetje“) – do të ndriçojë dhe do ta dëgjosh."
 },
   "features": {
     "braille": "Alfabeti Braille",
@@ -647,7 +648,26 @@
     "search_stop": "Ndalo",
     "search_seconds": "Edhe {} sekonda",
     "search_ready_hint": "Shtyp „Fillo kërkimin“ dhe rrotullo telefonin ngadalë përreth.",
-    "search_clear": "Fshij"
+    "search_clear": "Fshij",
+    "object_house": "Shtëpi",
+    "object_window": "Dritare",
+    "object_chimney": "Oxhak",
+    "object_sea": "Det",
+    "object_blanket": "Batanije",
+    "object_tea": "Çaj",
+    "object_comb": "Krehër",
+    "object_light_switch": "Çelës drite",
+    "object_earring": "Vath",
+    "object_toothbrush": "Furçë dhëmbësh",
+    "object_toothpaste": "Pastë dhëmbësh",
+    "object_toilet_paper": "Letër higjienike",
+    "object_bathtub": "Vaskë",
+    "object_toilet": "Tualet",
+    "object_door": "Derë",
+    "object_photo": "Fotografi",
+    "object_fence": "Gardh",
+    "object_tap": "Rubinet",
+    "online_recognition": "Njohje përmes internetit"
   },
 "spatial": {
   "title": "Orientimi hapësinor",
@@ -710,7 +730,8 @@
   "compass_alt_hint": "Ndihmë",
   "compass_alt_hint_label": "Lëvizja tjetër: {}",
   "compass_alt_progress": "Raundi {} nga {}",
-  "compass_alt_final_summary": "Ke {} saktë dhe {} gabim nga {} raunde."
+  "compass_alt_final_summary": "Ke {} saktë dhe {} gabim nga {} raunde.",
+  "compass_final_summary_rounds": "Të lumtë! U ktheve drejt anës së duhur {} herë!"
 },
   "sound": {
     "listen": "Dëgjoni me kujdes",
@@ -847,7 +868,7 @@
   },
   "sound_memory": {
     "explanation_title": "Si luhet",
-    "explanation_text": "Loja ka 6 karta - 3 çifte tingujsh të njëjtë. Prek Fillo dhe kartat do të hapen njëra pas tjetrës që t'i dëgjosh dhe t'i mbash mend tingujt. Pastaj prek nga dy karta për të gjetur çiftet me të njëjtin tingull. Çdo kartë që hap numërohet si lëvizje.",
+    "explanation_text": "Loja ka dhjetë raunde me numër të ndryshëm kartash: 6, 12 ose 18, pra 3, 6 ose 9 çifte. Pasi të shtypësh Fillo, kartat hapen njëra pas tjetrës që t’i mbash mend tingujt. Në fund duhet t’i hapësh kartat në mënyrë që t’i gjesh të gjitha çiftet.",
     "explanation_toggle_open": "Shfaq shpjegimin",
     "explanation_toggle_close": "Fshih shpjegimin",
     "start_button": "Fillo",
@@ -960,7 +981,13 @@
     "solved": "Të lumtë! E zgjidhe sudokun! Gabime: {}.",
     "keys_hint": "← → ↑ ↓ – katrori · 7 8 9 / 4 5 6 / 1 2 3 (djathtas) – kutia · numrat lart – fut numrin · me zë: „shtatë“, „katror pesë“",
     "time": "Koha: {}",
-    "touch_hint": "Prek një kuti, pastaj zgjidh numrin · me zë: “shtatë”, “katrori pesë”"
+    "touch_hint": "Prek një kuti, pastaj zgjidh numrin · me zë: “shtatë”, “katrori pesë”",
+    "record": "Rekordi: {}",
+    "new_record": "Rekord i ri!",
+    "zoom_in": "Zmadho tabelën",
+    "zoom_out": "Zvogëlo tabelën",
+    "zoom_reset": "Ktheje tabelën në madhësinë normale",
+    "digit_done": "{} - të gjitha janë vendosur"
   },
   "braille_input": {
     "number_sign": "Shenja e numrit",

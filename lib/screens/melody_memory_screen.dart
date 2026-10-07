@@ -78,6 +78,10 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
   bool _gameOver = false;
   bool _explanationOpen = false;
 
+  /// Рундата е одговорена (точно или погрешно) и се чека преминот кон
+  /// следната. Блокира секој дополнителен допир/копче до `_prepareRound`.
+  bool _answered = false;
+
   String get _langCode => context.locale.languageCode;
 
   @override
@@ -104,6 +108,8 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
       _userIndex = 0;
       _revealed = false;
       _isPlaying = false;
+      _answered = false;
+      _flashingId = null;
     });
   }
 
@@ -166,6 +172,9 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
   }
 
   Future<void> _playSequence() async {
+    // „Слушај пак“ по одговорена рунда би ја ресетирал `_userIndex` додека
+    // чека преминот - не дозволувај.
+    if (_isPlaying || _answered || _gameOver) return;
     setState(() {
       _isPlaying = true;
       _revealed = true;
@@ -189,45 +198,57 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
   }
 
   Future<void> _onTapIcon(String id) async {
-    if (_isPlaying || !_revealed || _gameOver) return;
+    if (_isPlaying || !_revealed || _gameOver || _answered) return;
     // Низата е веќе погодена (се чека следната рунда) - вишок допир.
     if (_userIndex >= _sequence.length) return;
 
-    setState(() => _flashingId = id);
+    // ВАЖНО: одговорот се проценува и состојбата се менува СИНХРОНО, пред
+    // секое `await`. Порано проверката се правеше дури по звукот/вибрацијата,
+    // па втор допир (двоен тап, тастатура + глувче, нетрпеливо дете по
+    // грешка) влегуваше повторно и `_nextRound` се викаше двапати -> рунда
+    // 15 скокаше на 17.
+    final roundAtTap = _round;
+    final isCorrectStep = id == _sequence[_userIndex];
+    final finishesRound = !isCorrectStep || _userIndex + 1 >= _sequence.length;
+
+    setState(() {
+      _flashingId = id;
+      if (isCorrectStep) _userIndex++;
+      if (finishesRound) _answered = true;
+      if (isCorrectStep && finishesRound) _hits++;
+    });
+
     await _playSoundEffect(id);
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 60);
     }
     await Future.delayed(const Duration(milliseconds: 150));
-    if (mounted) setState(() => _flashingId = null);
+    if (!mounted) return;
+    if (_flashingId == id) setState(() => _flashingId = null);
 
-    final isCorrectStep = id == _sequence[_userIndex];
+    if (!finishesRound) return;
 
-    if (!isCorrectStep) {
-      await _playClip('incorrect', 'melody.incorrect'.tr());
-      await Future.delayed(const Duration(milliseconds: 900));
-      if (!mounted) return;
-      _nextRound();
-      return;
-    }
-
-    setState(() => _userIndex++);
-
-    if (_userIndex >= _sequence.length) {
-      setState(() => _hits++);
+    if (isCorrectStep) {
       await _playClip('correct', 'melody.correct'.tr());
-      await Future.delayed(const Duration(milliseconds: 900));
-      if (!mounted) return;
-      _nextRound();
+    } else {
+      await _playClip('incorrect', 'melody.incorrect'.tr());
     }
+    await Future.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    _advanceFrom(roundAtTap);
   }
 
-  void _nextRound() {
+  /// Единствено место каде што `_round` се зголемува: точно еднаш по
+  /// одговорена рунда (точно или погрешно). Ако рундата веќе е сменета
+  /// (пр. рестарт во меѓувреме), повикот се игнорира.
+  void _advanceFrom(int answeredRound) {
+    if (!_answered || _round != answeredRound || _gameOver) return;
     final newRound = _round + 1;
     if (newRound >= _totalRounds) {
       setState(() {
-        _round = newRound;
+        _round = _totalRounds - 1;
         _gameOver = true;
+        _answered = false;
       });
     } else {
       setState(() => _round = newRound);
@@ -361,7 +382,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
                     child: PlayfulGhostButton(
                       icon: Icons.replay_rounded,
                       label: 'melody.listen_again'.tr(),
-                      onTap: _isPlaying ? null : _playSequence,
+                      onTap: (_isPlaying || _answered) ? null : _playSequence,
                     ),
                   ),
                 ],
@@ -410,7 +431,7 @@ class _MelodyMemoryScreenState extends State<MelodyMemoryScreen> {
   }
 
   Widget _buildIconGrid(double width) {
-    final interactive = _revealed && !_isPlaying && !_gameOver;
+    final interactive = _revealed && !_isPlaying && !_gameOver && !_answered;
     return PlayfulGrid(
       columns: 2,
       aspectRatio: width < 420 ? 1.0 : 1.4,

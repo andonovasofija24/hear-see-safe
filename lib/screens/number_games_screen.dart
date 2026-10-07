@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show listEquals;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
@@ -184,6 +185,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     HardwareKeyboard.instance.addHandler(_onGameKey);
     // Во судоку стрелките ↑ ↓ менуваат квадрат - не го лизгаат екранот.
     ArrowScroll.suppressWhen = _suppressArrowScroll;
+    _sdZoom.addListener(_sdOnZoomChanged);
+    _sdLoadBest();
   }
 
   bool _suppressArrowScroll() =>
@@ -201,6 +204,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _seqInputController.dispose();
     _playScroll.dispose();
     _sdTicker?.cancel();
+    _sdTicker = null;
+    _sdWatch.stop();
+    _sdZoom.removeListener(_sdOnZoomChanged);
+    _sdZoom.dispose();
     super.dispose();
   }
 
@@ -1928,30 +1935,154 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   final Stopwatch _sdWatch = Stopwatch();
   Timer? _sdTicker;
 
-  String get _sdTimeText {
-    final secs = _sdWatch.elapsed.inSeconds;
+  /// Рекорд (најбрзо решавање, во ms) по тежина (_d 0/1/2) - траен.
+  final List<int?> _sdBestMs = [null, null, null];
+  bool _sdNewRecord = false;
+
+  /// Зумирање на таблата (телефон / тесен екран).
+  final TransformationController _sdZoom = TransformationController();
+  bool _sdZoomed = false;
+  int _sdGridPointers = 0;
+
+  /// Додека прст е на зумираната табла (или се зумира со два прста) -
+  /// страницата не се лизга.
+  bool _sdGridLock = false;
+
+  static String _sdFmtMs(int ms) {
+    final secs = ms ~/ 1000;
     final h = secs ~/ 3600, m = (secs % 3600) ~/ 60, sec = secs % 60;
     String two(int v) => v.toString().padLeft(2, '0');
     return h > 0 ? '$h:${two(m)}:${two(sec)}' : '${two(m)}:${two(sec)}';
   }
 
+  String get _sdTimeText => _sdFmtMs(_sdWatch.elapsedMilliseconds);
+
+  String get _sdBestText {
+    final best = _sdBestMs[_d];
+    return best == null ? '--:--' : _sdFmtMs(best);
+  }
+
+  static String _sdBestKey(int d) => 'sudoku_best_ms_$d';
+
+  Future<void> _sdLoadBest() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
+      setState(() {
+        for (var d = 0; d < 3; d++) {
+          final v = prefs.getInt(_sdBestKey(d));
+          _sdBestMs[d] = (v != null && v > 0) ? v : null;
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _sdSaveBest(int d, int ms) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_sdBestKey(d), ms);
+    } catch (_) {}
+  }
+
+  /// По решавањето (тајмерот е веќе запрен): нов рекорд?
+  void _sdRecordSolve() {
+    final ms = _sdWatch.elapsedMilliseconds;
+    final d = _d;
+    final prev = _sdBestMs[d];
+    _sdNewRecord = ms > 0 && (prev == null || ms < prev);
+    if (_sdNewRecord) {
+      _sdBestMs[d] = ms;
+      unawaited(_sdSaveBest(d, ms));
+    }
+  }
+
+  /// Нова табла: од нула.
   void _sdStartTimer() {
     _sdTicker?.cancel();
+    _sdTicker = null;
     _sdWatch
       ..reset()
       ..start();
+    _sdStartTicker();
+  }
+
+  void _sdStartTicker() {
+    _sdTicker?.cancel();
     _sdTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && _view == _View.playing && _mode == _GameMode.sudoku) setState(() {});
     });
   }
 
+  /// Запира (и пауза) - времето останува; [_sdStartTimer] го нулира.
   void _sdStopTimer() {
     _sdWatch.stop();
     _sdTicker?.cancel();
     _sdTicker = null;
   }
 
+  /// Продолжува по пауза - само ако сè уште се игра нерешено судоку.
+  void _sdResumeTimer() {
+    if (!mounted || _view != _View.playing || _mode != _GameMode.sudoku) return;
+    if (_inputLocked || _sdExplanationOpen || _sdFilled == 81) return;
+    if (!_sdWatch.isRunning) _sdWatch.start();
+    if (_sdTicker == null) _sdStartTicker();
+  }
+
   int get _sdFilled => _sdValues.where((v) => v != 0).length;
+
+  /// Сите 9 од бројката се на таблата - копчето е заклучено.
+  bool _sdDigitDone(int d) {
+    var n = 0;
+    for (final v in _sdValues) {
+      if (v == d) n++;
+    }
+    return n >= 9;
+  }
+
+  /// Бројката во избраното поле (за истакнување на истите), или null.
+  int? get _sdHighlightDigit {
+    final v = _sdValues[_sdIndex(_sdBox, _sdPos)];
+    return v == 0 ? null : v;
+  }
+
+  void _sdOnZoomChanged() {
+    if (!mounted) return;
+    final z = _sdZoom.value.getMaxScaleOnAxis() > 1.01;
+    if (z != _sdZoomed) {
+      setState(() {
+        _sdZoomed = z;
+        _sdGridLock = _sdGridPointers > 0 && (_sdZoomed || _sdGridPointers >= 2);
+      });
+    }
+  }
+
+  void _sdGridPointer(int delta) {
+    _sdGridPointers = max(0, _sdGridPointers + delta);
+    final lock = _sdGridPointers > 0 && (_sdZoomed || _sdGridPointers >= 2);
+    if (lock != _sdGridLock && mounted) setState(() => _sdGridLock = lock);
+  }
+
+  /// Зумира околу средината на таблата (копчињата + / −).
+  void _sdZoomBy(double factor, double size) {
+    if (size <= 0) return;
+    final m = _sdZoom.value;
+    final s = m.getMaxScaleOnAxis();
+    final ns = (s * factor).clamp(1.0, 3.0).toDouble();
+    final c = size / 2;
+    // Точката од таблата што сега е во средината - останува во средината.
+    final px = (c - m.storage[12]) / s;
+    final py = (c - m.storage[13]) / s;
+    final lo = size - size * ns;
+    final nx = (c - px * ns).clamp(lo, 0.0).toDouble();
+    final ny = (c - py * ns).clamp(lo, 0.0).toDouble();
+    _sdZoom.value = Matrix4.diagonal3Values(ns, ns, 1)..setTranslationRaw(nx, ny, 0);
+    unawaited(_vib(duration: 20));
+  }
+
+  void _sdZoomReset() {
+    _sdZoom.value = Matrix4.identity();
+    unawaited(_vib(duration: 20));
+  }
 
   /// Индекс на полето (0-80) од квадрат (1-9) и позиција (1-9 како на
   /// нумеричкиот дел од тастатурата: 7 8 9 горе, 4 5 6 средина, 1 2 3 долу).
@@ -1998,6 +2129,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _sdFlashWrong = null;
     _sdFlashRight = null;
     _sdExplanationOpen = false;
+    _sdNewRecord = false;
+    _sdGridPointers = 0;
+    _sdGridLock = false;
+    _sdZoom.value = Matrix4.identity();
     _sdStartTimer();
   }
 
@@ -2080,6 +2215,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Future<void> _sdEnter(int digit) async {
     if (_inputLocked || digit < 1 || digit > 9) return;
+    // Сите 9 се веќе поставени - се игнорира (тастатура, глас, Брајово),
+    // без грешка, само краток допир.
+    if (_sdDigitDone(digit)) {
+      unawaited(_vib(duration: 35));
+      return;
+    }
     final i = _sdIndex(_sdBox, _sdPos);
     if (_sdGiven[i] || _sdValues[i] != 0) {
       unawaited(_vib(pattern: const [0, 60, 60, 60]));
@@ -2096,11 +2237,14 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       unawaited(_effect('sounds/pong/hit.mp3'));
       if (_sdFilled == 81) {
         _sdStopTimer();
+        _sdRecordSolve();
         setState(() => _inputLocked = true);
         await _playSequence(['sudoku_solved']);
         if (!mounted) return;
         setState(() => _view = _View.results);
         unawaited(_vib(pattern: const [0, 150, 100, 150, 100, 250]));
+        // Нов рекорд - аплауз (звучен ефект, без говор).
+        if (_sdNewRecord) unawaited(_effect('sounds/rhythm/clap.mp3'));
         return;
       }
       await _playSequence(_numKeys(digit));
@@ -2122,9 +2266,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   void _sdToggleExplanation() {
     final open = !_sdExplanationOpen;
     setState(() => _sdExplanationOpen = open);
+    // Додека е отворено објаснувањето - штоперицата е паузирана.
     if (open) {
+      _sdStopTimer();
       _playSequence(['explanation_sudoku']);
     } else {
+      _sdResumeTimer();
       _narrationToken++;
       _voicePlayer.stop();
     }
@@ -2187,7 +2334,39 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         final gridSize = wide
             ? max(0.0, min(c.maxHeight - 24, c.maxWidth * 0.55))
             : max(0.0, min(c.maxWidth - 24, c.maxHeight * 0.58));
-        final grid = SizedBox(width: gridSize, height: gridSize, child: _sudokuGrid(hc, gridSize));
+        // Телефон / тесен екран: таблата се зумира (два прста или + / −).
+        final zoomable = !wide && (InputMode.touchLayout(context) || c.maxWidth < 600);
+        final Widget grid;
+        if (zoomable) {
+          grid = Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Listener(
+                onPointerDown: (_) => _sdGridPointer(1),
+                onPointerUp: (_) => _sdGridPointer(-1),
+                onPointerCancel: (_) => _sdGridPointer(-1),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: SizedBox(
+                    width: gridSize,
+                    height: gridSize,
+                    child: InteractiveViewer(
+                      transformationController: _sdZoom,
+                      minScale: 1,
+                      maxScale: 3,
+                      panEnabled: _sdZoomed,
+                      child: _sudokuGrid(hc, gridSize),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              _sdZoomBar(hc, gridSize),
+            ],
+          );
+        } else {
+          grid = SizedBox(width: gridSize, height: gridSize, child: _sudokuGrid(hc, gridSize));
+        }
         final controls = Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2254,7 +2433,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                                     for (var k = 1; k <= 3; k++) ...[
                                       if (k > 1) const SizedBox(width: 8),
                                       Expanded(
-                                        child: _digitButton(context, '${r * 3 + k}', () => _sdEnter(r * 3 + k)),
+                                        child: _sdDigitKey(context, r * 3 + k),
                                       ),
                                     ],
                                   ],
@@ -2289,12 +2468,103 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         }
         return SingleChildScrollView(
           primary: false,
+          // Прст на зумираната табла - се поместува таблата, не страницата.
+          physics: _sdGridLock ? const NeverScrollableScrollPhysics() : null,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
           child: Column(
             children: [
               Center(child: grid),
               const SizedBox(height: 12),
               controls,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Копчиња за зумирање (за децата на кои им е тешко со два прста).
+  Widget _sdZoomBar(bool hc, double size) {
+    return ValueListenableBuilder<Matrix4>(
+      valueListenable: _sdZoom,
+      builder: (context, m, _) {
+        final s = m.getMaxScaleOnAxis();
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _sdZoomButton(Icons.zoom_out_rounded, 'sudoku.zoom_out'.tr(), s > 1.01 ? () => _sdZoomBy(1 / 1.5, size) : null, hc),
+            const SizedBox(width: 12),
+            _sdZoomButton(Icons.zoom_in_rounded, 'sudoku.zoom_in'.tr(), s < 2.99 ? () => _sdZoomBy(1.5, size) : null, hc),
+            const SizedBox(width: 12),
+            _sdZoomButton(Icons.fit_screen_rounded, 'sudoku.zoom_reset'.tr(), s > 1.01 ? _sdZoomReset : null, hc),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _sdZoomButton(IconData icon, String label, VoidCallback? onTap, bool hc) {
+    final fg = hc ? AccessibilityUtils.getContrastColor(context) : Colors.white;
+    return Tooltip(
+      message: label,
+      child: Semantics(
+        label: label,
+        button: true,
+        enabled: onTap != null,
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: Opacity(
+            opacity: onTap == null ? 0.4 : 1.0,
+            child: Material(
+              color: hc ? Colors.black : Colors.white.withValues(alpha: 0.12),
+              shape: CircleBorder(side: BorderSide(color: hc ? fg : Colors.white.withValues(alpha: 0.7), width: 2)),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onTap,
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: Icon(icon, size: 30, color: hc ? fg : Playful.sun),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Копче 1-9 на судоку: кога сите 9 од бројката се поставени -
+  /// заклучено, сиво, со штиклирање.
+  Widget _sdDigitKey(BuildContext context, int d) {
+    if (!_sdDigitDone(d)) return _digitButton(context, '$d', () => _sdEnter(d));
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = hc ? Colors.white60 : Playful.ink.withValues(alpha: 0.4);
+    return LayoutBuilder(
+      builder: (context, c) {
+        final fontSize = (min(c.maxWidth, c.maxHeight) * 0.5).clamp(20.0, 44.0).toDouble();
+        final iconSize = (min(c.maxWidth, c.maxHeight) * 0.3).clamp(16.0, 28.0).toDouble();
+        return _tapCard(
+          semanticsLabel: 'sudoku.digit_done'.tr(args: ['$d']),
+          onTap: null,
+          width: c.maxWidth,
+          height: c.maxHeight,
+          radius: 18,
+          color: hc ? Colors.black : const Color(0xFFD1D5DB),
+          borderColor: hc ? Colors.white38 : const Color(0xFF9CA3AF),
+          borderWidth: 2,
+          child: Stack(
+            children: [
+              Center(child: Text('$d', style: Playful.display(fontSize, color: fg))),
+              Positioned(
+                top: 4,
+                right: 6,
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: iconSize,
+                  color: hc ? const Color(0xFFFFFF00) : _green,
+                ),
+              ),
             ],
           ),
         );
@@ -2375,6 +2645,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     final selected = b == _sdBox && p == _sdPos;
     final wrong = _sdFlashWrong == i;
     final right = _sdFlashRight == i;
+    // Иста бројка како во избраното поле - истакната (тиркизно / цијан).
+    final hl = _sdHighlightDigit;
+    final same = !selected && !wrong && !right && v != 0 && v == hl;
     Color bg;
     if (wrong) {
       bg = _red;
@@ -2382,6 +2655,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       bg = _green;
     } else if (selected) {
       bg = hc ? const Color(0xFFFFFF00) : Playful.sun;
+    } else if (same) {
+      bg = hc ? Colors.black : const Color(0xFF99F6E4);
     } else {
       bg = hc ? Colors.black : Colors.white;
     }
@@ -2390,6 +2665,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       textColor = Colors.white;
     } else if (selected) {
       textColor = Playful.ink;
+    } else if (same) {
+      textColor = hc ? const Color(0xFF00FFFF) : const Color(0xFF134E4A);
     } else if (hc) {
       textColor = given ? Colors.white : const Color(0xFFFFFF00);
     } else {
@@ -2410,7 +2687,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: bg,
-              border: Border.all(color: hc ? Colors.white38 : Playful.ink.withValues(alpha: 0.18), width: 0.8),
+              border: same
+                  ? Border.all(color: hc ? const Color(0xFF00FFFF) : const Color(0xFF0F766E), width: hc ? 3 : 2.5)
+                  : Border.all(color: hc ? Colors.white38 : Playful.ink.withValues(alpha: 0.18), width: 0.8),
             ),
             child: v != 0
                 ? FittedBox(
@@ -2846,7 +3125,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                       ? [
                           _statPill('✏️ ${'sudoku.filled'.tr(args: [_sdFilled.toString(), '81'])}', hc, gold: true),
                           _statPill('❌ ${'sudoku.mistakes'.tr(args: [_sdMistakes.toString()])}', hc),
-                          _statPill('⏱️ ${'sudoku.time'.tr(args: [_sdTimeText])}', hc),
+                          // ⏸️ додека е отворено објаснувањето (паузирано).
+                          _statPill('${_sdExplanationOpen ? '⏸️' : '⏱️'} ${'sudoku.time'.tr(args: [_sdTimeText])}', hc),
+                          _statPill('🏆 ${'sudoku.record'.tr(args: [_sdBestText])}', hc),
                         ]
                       : [
                           _statPill('⭐ ${'number_games.score'.tr(args: [_score.toString()])}', hc, gold: true),
@@ -3539,7 +3820,37 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                     ),
                     const SizedBox(height: 12),
                     if (sudoku)
-                      Center(child: _statPill('⏱️ ${'sudoku.time'.tr(args: [_sdTimeText])}', hc, gold: true)),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
+                        children: [
+                          _statPill('⏱️ ${'sudoku.time'.tr(args: [_sdTimeText])}', hc, gold: true),
+                          _statPill('🏆 ${'sudoku.record'.tr(args: [_sdBestText])}', hc),
+                        ],
+                      ),
+                    if (sudoku && _sdNewRecord) ...[
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: hc ? const Color(0xFFFFFF00) : _green,
+                              borderRadius: BorderRadius.circular(22),
+                              border: Border.all(color: hc ? Colors.black : Colors.white, width: 2.5),
+                              boxShadow: hc ? null : [BoxShadow(color: _green.withValues(alpha: 0.6), blurRadius: 18)],
+                            ),
+                            child: Text(
+                              '🎉 ${'sudoku.new_record'.tr()}',
+                              textAlign: TextAlign.center,
+                              style: Playful.display(22 * _kNumText, color: hc ? Colors.black : Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                     if (!sudoku)
                       Wrap(
                         alignment: WrapAlignment.center,

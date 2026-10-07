@@ -176,7 +176,8 @@
    "voice_cmds_express_v2": "\"speak\", \"confirm\", \"delete dot\" (the last one), \"delete dot 3\" or \"undo pair 2 dot 1\" (exactly that dot), \"delete letter\", \"reference\", \"save sentence\", \"preview sentences\", \"back\".",
    "voice_cmds_sentence_v2": "\"what's next\" (says the letter/sign that comes next), \"listen to the sentence\", \"speak\", \"confirm\", \"delete dot\" (the last one), \"delete dot 3\" or \"undo pair 2 dot 1\" (exactly that dot), \"delete letter\", \"reference\", \"back\".",
    "dot_toggle_hint": "Press a lit dot's key again to turn it off.",
-   "dot_toggle_touch_hint": "Tap a lit dot again to turn it off."
+   "dot_toggle_touch_hint": "Tap a lit dot again to turn it off.",
+   "reference_voice_hint": "Tap the voice button and say a letter, number or sign (e.g. \"b\", \"five\", \"question mark\") – it lights up and you hear it."
  },
   "features": {
     "braille": "Braille Alphabet",
@@ -647,7 +648,26 @@
     "search_stop": "Stop",
     "search_seconds": "{} seconds left",
     "search_ready_hint": "Press “Start searching” and slowly turn the phone around you.",
-    "search_clear": "Clear"
+    "search_clear": "Clear",
+    "object_house": "House",
+    "object_window": "Window",
+    "object_chimney": "Chimney",
+    "object_sea": "Sea",
+    "object_blanket": "Blanket",
+    "object_tea": "Tea",
+    "object_comb": "Comb",
+    "object_light_switch": "Light switch",
+    "object_earring": "Earring",
+    "object_toothbrush": "Toothbrush",
+    "object_toothpaste": "Toothpaste",
+    "object_toilet_paper": "Toilet paper",
+    "object_bathtub": "Bathtub",
+    "object_toilet": "Toilet",
+    "object_door": "Door",
+    "object_photo": "Photograph",
+    "object_fence": "Fence",
+    "object_tap": "Tap",
+    "online_recognition": "Online recognition"
   },
 "spatial": {
   "title": "Spatial orientation",
@@ -710,7 +730,8 @@
   "compass_alt_hint": "Hint",
   "compass_alt_hint_label": "Next move: {}",
   "compass_alt_progress": "Round {} of {}",
-  "compass_alt_final_summary": "You got {} correct and {} wrong out of {} rounds."
+  "compass_alt_final_summary": "You got {} correct and {} wrong out of {} rounds.",
+  "compass_final_summary_rounds": "Well done! You turned to the right direction {} times!"
 },
   "sound": {
     "listen": "Listen carefully",
@@ -847,7 +868,7 @@
   },
   "sound_memory": {
     "explanation_title": "How to play",
-    "explanation_text": "The game has 10 rounds. Each round has 6 cards - 3 pairs of matching sounds (different sounds each round). Tap Start and the cards will open one by one so you can hear and remember the sounds. Then tap two cards at a time to find pairs with the same sound. Every card you open counts as a move.",
+    "explanation_text": "The game has ten rounds with a different number of cards: 6, 12 or 18, which means 3, 6 or 9 pairs. After you press Start, the cards open one by one so you can remember the sounds. Then open the cards so that you find all the pairs.",
     "explanation_toggle_open": "Show explanation",
     "explanation_toggle_close": "Hide explanation",
     "start_button": "Start",
@@ -960,7 +981,13 @@
     "solved": "Well done! You solved the sudoku! Mistakes: {}.",
     "keys_hint": "← → ↑ ↓ – box · 7 8 9 / 4 5 6 / 1 2 3 (right) – cell · top number keys – enter · voice: \"seven\", \"box five\"",
     "time": "Time: {}",
-    "touch_hint": "Tap a cell, then pick a number · by voice: “seven”, “box five”"
+    "touch_hint": "Tap a cell, then pick a number · by voice: “seven”, “box five”",
+    "record": "Record: {}",
+    "new_record": "New record!",
+    "zoom_in": "Make the board bigger",
+    "zoom_out": "Make the board smaller",
+    "zoom_reset": "Back to normal size",
+    "digit_done": "{} - all placed"
   },
   "braille_input": {
     "number_sign": "Number sign",

@@ -142,7 +142,8 @@ class _BrailleDigitInputState extends State<BrailleDigitInput> {
     final key = event.physicalKey;
     final dot = _keyToDot[key];
     if (dot != null) {
-      _addDot(dot);
+      // Исто како допир: веќе избрана точка се поништува (не само последната).
+      _tapDot(dot);
       return true;
     }
     if (key == PhysicalKeyboardKey.keyA) {

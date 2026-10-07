@@ -13,7 +13,6 @@ import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
-import 'package:hear_and_see_safe/voice_system/application/voice_command_orchestrator.dart';
 import 'package:hear_and_see_safe/braille/braille_data.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
 import 'package:hear_and_see_safe/utils/input_mode.dart';
@@ -231,17 +230,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   // --- Гласовна команда во потсетникот (свети + изговара избран знак) ---
   String? _referenceHighlightKey;
   int _referenceHighlightToken = 0;
-  bool _referenceListening = false;
 
-  Future<void> _onReferenceMicTap() async {
-    if (_referenceListening) return;
-    setState(() => _referenceListening = true);
-    try {
-      await _startReferenceVoiceListen();
-    } finally {
-      if (mounted) setState(() => _referenceListening = false);
-    }
-  }
+
 
   void _openSavedSentences() {
     _loadSavedSentences();
@@ -4019,42 +4009,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final contrast = _fg(context);
     return Column(
       children: [
-        _buildBackRow(contrast, onBack: _closeReference, withVoiceBack: true),
+        // Едно копче за глас (во редот со „назад“): изговори буква/број/знак
+        // за да светне и да се изговори, или „назад“ / име на игра.
+        _buildBackRow(contrast, onBack: _closeReference, withVoiceBack: true, voiceOptions: _referenceVoiceOptions()),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Semantics(
-            button: true,
-            label: _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
-            child: Material(
-              color: AccessibilityUtils.isHighContrast(context) ? (_referenceListening ? _accent.withValues(alpha: 0.6) : _accent) : (_referenceListening ? Colors.white : _gold),
-              borderRadius: BorderRadius.circular(18),
-              elevation: 4,
-              child: InkWell(
-                onTap: _referenceListening ? null : _onReferenceMicTap,
-                borderRadius: BorderRadius.circular(18),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_referenceListening && !AccessibilityUtils.isHighContrast(context))
-                        const SoundWave(color: Playful.ink, bars: 5, height: 24, barWidth: 4)
-                      else
-                        Icon(_referenceListening ? Icons.mic_rounded : Icons.record_voice_over_rounded,
-                            color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink, size: 32),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _referenceListening ? 'voice.listening'.tr() : 'voice.tap_to_speak'.tr(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 16 * _kBrailleText, fontWeight: FontWeight.w800, color: AccessibilityUtils.isHighContrast(context) ? Colors.white : Playful.ink),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            'braille.reference_voice_hint'.tr(),
+            textAlign: TextAlign.center,
+            style: GameTypography.body(context, contrast, 15 * _kBrailleText),
           ),
         ),
         const SizedBox(height: 8),
@@ -4128,21 +4091,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     'gjashtë': '6', 'gjashte': '6', 'shtatë': '7', 'shtate': '7', 'tetë': '8', 'tete': '8', 'nëntë': '9', 'nente': '9',
   };
 
-  /// Гласовна команда во потсетникот: ако корисникот ja изговори буквата
-  /// (или бројот), се пали таа ќелија и се изговара со истите мп3 (буква +
-  /// точки), исто како кога се притисне.
-  Future<void> _startReferenceVoiceListen() async {
-    final orchestrator = Provider.of<VoiceCommandOrchestrator>(context, listen: false);
-    final voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
-    final langCode = _langCode;
-
-    final transcript = await orchestrator.listenOnce();
-    if (!mounted) return;
-    if (transcript == null || transcript.trim().isEmpty) {
-      await _playVoiceFeedbackClip('not_recognized', langCode, voiceAssistant);
-      return;
-    }
-
+  /// Која буква / број / знак е изговорен во потсетникот (или null).
+  BrailleSymbol? _matchReferenceSymbol(String transcript) {
     var t = transcript.toLowerCase().trim();
     // Прво знаците: препознавањето на говор често го враќа САМИОТ знак („?“,
     // „,“, „@“) наместо зборот, па тоа се проверува пред сè друго; потоа
@@ -4175,12 +4125,27 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       }
     }
 
-    if (match != null) {
-      await _highlightAndPlayReferenceSymbol(match);
-    } else {
-      await _playVoiceFeedbackClip('not_recognized', langCode, voiceAssistant);
-    }
+    return match;
   }
+
+  /// Потсетник: едно единствено копче за гласовна команда (во редот со
+  /// „назад“). Ако се изговори буква / број / знак, таа свети и се
+  /// изговара; инаку командата оди понатаму (назад, други игри...).
+  BrailleSymbol? _pendingReferenceMatch;
+  List<VoiceCategoryOption> _referenceVoiceOptions() => [
+        VoiceCategoryOption(
+          keywords: const [],
+          beforeGlobal: true,
+          matches: (t) {
+            _pendingReferenceMatch = _matchReferenceSymbol(t);
+            return _pendingReferenceMatch != null;
+          },
+          onSelected: () {
+            final m = _pendingReferenceMatch;
+            if (m != null) _highlightAndPlayReferenceSymbol(m);
+          },
+        ),
+      ];
 
   /// Изговорени имиња на знаците (mk/en/sq) → клуч на симболот.
   static const Map<String, List<String>> _spokenSignNames = {
@@ -4248,19 +4213,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return null;
   }
 
-  Future<void> _playVoiceFeedbackClip(String key, String langCode, VoiceAssistantService voiceAssistant) async {
-    bool reachedPlaying = false;
-    try {
-      await _voicePlayer.stop();
-      await _voicePlayer.play(AssetSource('audio/voice/$langCode/$key.mp3'));
-      reachedPlaying = true;
-    } catch (_) {
-      reachedPlaying = false;
-    }
-    if (!reachedPlaying) {
-      await voiceAssistant.speakWithLanguage('voice.$key'.tr(), langCode, vibrate: false);
-    }
-  }
 
   /// Упатство под таблата (Состави / Напиши): за тастатура или за допир.
   Widget _buildKeyboardHint(Color contrast) {

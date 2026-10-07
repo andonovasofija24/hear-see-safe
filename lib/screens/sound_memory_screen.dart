@@ -14,7 +14,8 @@ import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 /// Колку пати е поголем текстот на екранот за меморија на звуци.
 const double _kSmemText = 1.6;
 
-/// Меморија на звуци: 12 картички (6 пара исти звуци), сите почетно
+/// Меморија на звуци: 10 рунди со 6, 12 или 18 картички (3, 6 или 9 пара
+/// исти звуци) по шемата 6,6 / 12,12 / 6,6 / 12,12 / 18,18. Сите почетно
 /// затворени. При старт, системот ги отвора сите картички една по една
 /// (случаен редослед) - секоја покажува икона + го пушта својот звук, па
 /// повторно се затвора. Потоа детето допира по две картички за да ги
@@ -29,7 +30,17 @@ class SoundMemoryScreen extends StatefulWidget {
 
 class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
   static const Color _moduleAccent = Color(0xFFDB2777);
-  static const int _pairCount = 3; // 6 картички вкупно
+
+  /// Број на парови во рундата [round] (од 0): по две рунди 6 картички,
+  /// две по 12, две по 6, две по 12, а последните две рунди 18 картички.
+  static int _pairsForRound(int round) {
+    if (round >= _totalRounds - 2) return 9; // 18 картички
+    return (round ~/ 2) % 2 == 0 ? 3 : 6; // 6 или 12 картички
+  }
+
+  /// Парови на ТЕКОВНОТО поле (не според _round - тој се зголемува малку
+  /// пред да се изгради новото поле).
+  int get _pairCount => _cardSound.length ~/ 2;
 
   late VoiceAssistantService _voiceAssistant;
   /// Одделен плеер за говорни клипови (објаснување, пар/не е пар, победа).
@@ -109,17 +120,26 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
     super.dispose();
   }
 
-  /// Ново поле картички за ЕДНА рунда - секоја рунда зема случајни 6 звуци
-  /// (различни од претходната рунда кога е можно), но не го ресетира бројот
-  /// на потези ниту тековната рунда.
+  /// Ново поле картички за ЕДНА рунда - бројот на парови зависи од рундата
+  /// (3, 6 или 9). Секој пар има РАЗЛИЧЕН звук; звуците од претходната
+  /// рунда се избегнуваат кога е можно. Не ги ресетира потезите ниту рундата.
   void _setupRoundBoard() {
-    final pool = List<String>.from(_allSoundIds)..shuffle(_random);
-    final chosen = pool.take(_pairCount).toList();
+    final pairs = _pairsForRound(_round);
+    final previous = _cardSound.toSet();
+    final fresh = _allSoundIds.where((s) => !previous.contains(s)).toList()..shuffle(_random);
+    final used = _allSoundIds.where(previous.contains).toList()..shuffle(_random);
+    final pool = [...fresh, ...used];
+    final chosen = <String>[];
+    // Пулот има 9 различни звуци, доволно за 9 пара. Повторување на звук
+    // (резерва) би се случило само ако пулот некогаш стане помал.
+    for (var i = 0; i < pairs; i++) {
+      chosen.add(pool[i % pool.length]);
+    }
     final cards = [...chosen, ...chosen]..shuffle(_random);
     setState(() {
       _cardSound = cards;
-      _cardRevealed = List.filled(_pairCount * 2, false);
-      _cardMatched = List.filled(_pairCount * 2, false);
+      _cardRevealed = List.filled(cards.length, false);
+      _cardMatched = List.filled(cards.length, false);
       _demoPlaying = false;
       _started = false;
       _inputLocked = false;
@@ -228,6 +248,8 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
     });
 
     final order = List<int>.generate(_cardSound.length, (i) => i)..shuffle(_random);
+    // Поголемите полиња се прикажуваат малку побрзо за демото да не трае предолго.
+    final showMs = _cardSound.length <= 6 ? 700 : (_cardSound.length <= 12 ? 600 : 550);
     for (final idx in order) {
       if (!mounted) return;
       setState(() => _cardRevealed[idx] = true);
@@ -235,7 +257,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
       if (await VibrationUtils.hasVibrator()) {
         await VibrationUtils.vibrate(duration: 40);
       }
-      await Future.delayed(const Duration(milliseconds: 700));
+      await Future.delayed(Duration(milliseconds: showMs));
       if (!mounted) return;
       setState(() => _cardRevealed[idx] = false);
       await Future.delayed(const Duration(milliseconds: 200));
@@ -301,13 +323,14 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
     }
   }
 
-  /// Сите 6 пара во оваа рунда се пронајдени. Ако имало уште рунди, се
+  /// Сите парови во оваа рунда се пронајдени. Ако имало уште рунди, се
   /// подготвува ново поле со различни (случајно избрани) звуци. Инаку
   /// играта завршува со вкупниот број потези од сите рунди.
   Future<void> _onRoundComplete() async {
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 350);
     }
+    if (!mounted) return;
     final newRound = _round + 1;
     if (newRound >= _totalRounds) {
       setState(() {
@@ -415,7 +438,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
                   extra: 'sound_memory.moves'.tr(args: [_moves.toString()]),
                 ),
                 const SizedBox(height: 14),
-                _buildPairDots(matchedPairs, hc),
+                _buildPairDots(matchedPairs, hc, constraints.maxWidth - side * 2),
                 const SizedBox(height: 18),
                 // Картичките се СЕКОГАШ видливи (затворени, затемнети,
                 // недостапни за допир) - копчето старт стои над нив.
@@ -429,7 +452,7 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                _buildBoard(constraints.maxWidth - side * 2),
+                _buildBoard(constraints.maxWidth - side * 2, constraints.maxHeight),
               ],
             );
           },
@@ -439,21 +462,28 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
   }
 
   /// Колку парови се пронајдени во рундата (срца што се палат).
-  Widget _buildPairDots(int matched, bool hc) {
+  /// Со 6 или 9 парови срцата се помали (и се прелеваат во нов ред ако
+  /// треба) за да не излезат надвор од тесен екран.
+  Widget _buildPairDots(int matched, bool hc, double width) {
+    final pairs = _pairCount;
+    const gap = 8.0;
+    final fit = (width / pairs) - gap - 4;
+    final iconSize = math.max(22.0, math.min(40.0, fit));
     return ExcludeSemantics(
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        runSpacing: 6,
         children: [
-          for (var i = 0; i < _pairCount; i++)
+          for (var i = 0; i < pairs; i++)
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              padding: const EdgeInsets.symmetric(horizontal: gap / 2),
               child: AnimatedScale(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeOutBack,
                 scale: i < matched ? 1.15 : 1.0,
                 child: Icon(
                   i < matched ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  size: 40,
+                  size: iconSize,
                   color: i < matched
                       ? (hc ? const Color(0xFFFFFF00) : Playful.sun)
                       : (hc ? Colors.white : Colors.white.withValues(alpha: 0.5)),
@@ -465,11 +495,31 @@ class _SoundMemoryScreenState extends State<SoundMemoryScreen> {
     );
   }
 
-  Widget _buildBoard(double width) {
+  /// Распоред според бројот на картички:
+  ///  6 -> 3x2;  12 -> 3x4 (телефон) или 4x3;  18 -> 3x6 (телефон) или 6x3.
+  /// Повеќе колони се користат само кога картичките и така остануваат
+  /// доволно големи за допир (>= ~100 px), или кога висината е мала.
+  Widget _buildBoard(double width, double height) {
+    final count = _cardSound.length;
+    final spacing = count <= 6 ? 14.0 : 10.0;
+    double cardW(int cols) => (width - spacing * (cols - 1)) / cols;
+
+    var columns = 3;
+    if (count > 6) {
+      final wide = count <= 12 ? 4 : 6;
+      // Ниска а широка површина (на пр. телефон легнат, мал прозорец на
+      // десктоп): помалку редови. На портрет телефон (< 480) секогаш 3.
+      final shortScreen = width >= 480 && height.isFinite && height < 520;
+      if (cardW(wide) >= 100 || (shortScreen && cardW(wide) >= 72)) {
+        columns = wide;
+      }
+    }
+    final w = cardW(columns);
+    final aspect = w >= 130 ? 1.1 : (count <= 6 ? 0.85 : 0.95);
     return PlayfulGrid(
-      columns: 3,
-      spacing: 14,
-      aspectRatio: width < 420 ? 0.85 : 1.1,
+      columns: columns,
+      spacing: spacing,
+      aspectRatio: aspect,
       children: [
         for (var i = 0; i < _cardSound.length; i++) PopIn(index: i, child: _cardWidget(i)),
       ],

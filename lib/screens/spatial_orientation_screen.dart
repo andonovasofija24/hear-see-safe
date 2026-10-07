@@ -2184,8 +2184,24 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   // =====================================================================
   // "Компас"
   // =====================================================================
-  static const int _compassTotalRounds = 4;
+  /// 8 рунди: секоја од 4-те страни на светот по двапати, по случаен ред,
+  /// без иста насока две рунди по ред.
+  static const int _compassTotalRounds = 8;
   static const List<double> _compassDirs = [0, 90, 180, 270];
+
+  /// Толеранција со хистереза: влегуваш во зоната на ±20°, а остануваш
+  /// во неа сè до ±30° - малото тресење на сензорот не го ресетира држењето.
+  static const double _compassEnterTol = 20;
+  static const double _compassStayTol = 30;
+
+  /// Колку долго треба да се држи насоката за потврда.
+  static const int _compassHoldMs = 1200;
+
+  /// Временска константа на изгладувањето (low-pass) на правецот, во секунди.
+  static const double _compassSmoothTau = 0.15;
+
+  /// Новата цел треба да е барем толку далеку од моменталниот правец.
+  static const double _compassMinTurn = 90;
   // Не const: новиот Dart не дозволува децимални (double) клучеви во
   // константна мапа.
   static final Map<double, String> _compassDirLabelKeys = {
@@ -2218,8 +2234,41 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   double _viewportH = 640;
   int _compassRound = 0;
   int _compassHits = 0;
+
+  /// Периодичен тикер (50 ms) што го полни прстенот и ја проверува
+  /// потврдата - независно од тоа колку често пристигаат настани од сензорот.
   Timer? _compassLockTimer;
   double _compassLockProgress = 0;
+
+  /// Изгладен правец: просек на sin/cos (правилно преку 359° -> 0°).
+  double _compassSmoothSin = 0;
+  double _compassSmoothCos = 1;
+  bool _compassHasSmooth = false;
+  int _compassLastEventMs = 0;
+  final Stopwatch _compassClock = Stopwatch();
+
+  /// Држење во зоната - се мери со Stopwatch, не со тајмер што се ресетира.
+  final Stopwatch _compassHold = Stopwatch();
+  bool _compassInZone = false;
+
+  /// Само ЕДНА рунда напредува по потврда; додека трае пофалбата и
+  /// подготовката на следната цел, сензорот се игнорира.
+  bool _compassAdvancing = false;
+
+  /// Чекаме прво читање од сензорот за да ја избереме првата цел далеку
+  /// од тоа каде детето веќе гледа.
+  bool _compassAwaitingTarget = false;
+  int _compassAwaitStartMs = 0;
+
+  /// Колку пати уште може да се појави секоја насока (по 2 на почеток).
+  final Map<double, int> _compassRemaining = {};
+  double? _compassPrevTarget;
+  bool _compassCanVibrate = false;
+  int _compassTickCount = 0;
+
+  /// Се зголемува при секој (ре)старт - старите async продолженија
+  /// (по пофалбата) се откажуваат ако играта е рестартирана во меѓувреме.
+  int _compassSession = 0;
 
   /// Дали да се користи верзијата со копчиња (движење + ротација) наместо
   /// физичкиот сензор - секогаш true на веб/десктоп каде нема компас.
@@ -2756,83 +2805,240 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       } catch (_) {}
       if (!mounted) return;
     }
+    // Еднаш при старт (не на секој тик) - платформскиот повик е бавен.
+    try {
+      _compassCanVibrate = await VibrationUtils.hasVibrator();
+    } catch (_) {
+      _compassCanVibrate = false;
+    }
+    if (!mounted) return;
+
+    _compassSession++;
+    _compassLockTimer?.cancel();
+    _compassSub?.cancel();
+    if (!_compassClock.isRunning) _compassClock.start();
+
+    _compassRemaining
+      ..clear()
+      ..addEntries(_compassDirs.map((d) => MapEntry(d, _compassTotalRounds ~/ _compassDirs.length)));
+    _compassPrevTarget = null;
+    _compassAdvancing = false;
+    // Старото читање (од претходна игра) може да е застарено.
+    _compassHasSmooth = false;
+    _compassResetHold();
+
     setState(() {
       _compassPermissionDenied = false;
       _compassRound = 0;
       _compassHits = 0;
       _compassGameOver = false;
+      _compassStarted = true;
+      _compassLockProgress = 0;
+      // Првата цел се избира штом стигне читање од сензорот (за да не е
+      // веќе „погодена“ без вртење).
+      _compassAwaitingTarget = true;
+      _compassAwaitStartMs = _compassClock.elapsedMilliseconds;
     });
-    _compassSub?.cancel();
+
     _compassSub = FlutterCompass.events?.listen(_onCompassEvent);
-    _pickCompassTarget();
+    _compassLockTimer = Timer.periodic(const Duration(milliseconds: 50), (_) => _onCompassTick());
   }
 
+  /// Изгладениот правец во [0, 360), или null ако уште нема читање.
+  double? get _compassSmoothHeading {
+    if (!_compassHasSmooth) return null;
+    final deg = atan2(_compassSmoothSin, _compassSmoothCos) * 180 / pi;
+    return (deg % 360 + 360) % 360;
+  }
+
+  void _compassResetHold() {
+    _compassHold
+      ..stop()
+      ..reset();
+    _compassInZone = false;
+  }
+
+  /// Дали насоките може да се наредат без иста насока две по ред, ако
+  /// претходната е [prev]. Мали бројки (најмногу 8), па рекурзијата е брза.
+  bool _compassCanArrange(Map<double, int> counts, double? prev) {
+    var left = 0;
+    for (final c in counts.values) {
+      left += c;
+    }
+    if (left == 0) return true;
+    for (final d in _compassDirs) {
+      final c = counts[d] ?? 0;
+      if (c <= 0 || d == prev) continue;
+      counts[d] = c - 1;
+      final ok = _compassCanArrange(counts, d);
+      counts[d] = c;
+      if (ok) return true;
+    }
+    return false;
+  }
+
+  /// Нова цел: различна од претходната, барем 90° од моменталниот правец
+  /// (детето навистина мора да се сврти), и таква што остатокот од рундите
+  /// може да заврши без повторување по ред.
   void _pickCompassTarget() {
-    _compassLockTimer?.cancel();
-    _compassLockTimer = null;
+    final heading = _compassSmoothHeading;
+    final valid = <double>[];
+    for (final d in _compassDirs) {
+      final c = _compassRemaining[d] ?? 0;
+      if (c <= 0 || d == _compassPrevTarget) continue;
+      _compassRemaining[d] = c - 1;
+      final ok = _compassCanArrange(_compassRemaining, d);
+      _compassRemaining[d] = c;
+      if (ok) valid.add(d);
+    }
+    final far = heading == null
+        ? valid
+        : valid.where((d) => _angleDiff(heading, d).abs() >= _compassMinTurn).toList();
+    var pool = far.isNotEmpty ? far : valid;
+    if (pool.isEmpty) {
+      // Не би требало да се случи - резерва: било која преостаната/различна.
+      pool = _compassDirs.where((d) => d != _compassPrevTarget).toList();
+    }
+    final target = pool[_random.nextInt(pool.length)];
+    final c = _compassRemaining[target] ?? 0;
+    if (c > 0) _compassRemaining[target] = c - 1;
+    _compassPrevTarget = target;
+    _compassResetHold();
     setState(() {
-      _compassTargetHeading = _compassDirs[_random.nextInt(_compassDirs.length)];
-      _compassStarted = true;
+      _compassTargetHeading = target;
+      _compassAwaitingTarget = false;
       _compassLockProgress = 0;
     });
   }
 
+  /// Аголна разлика a-b во [-180, 180] (правилно преку 359° -> 0°).
   double _angleDiff(double a, double b) {
-    var d = (a - b) % 360;
+    var d = (a - b) % 360; // Dart: резултатот е секогаш во [0, 360)
     if (d > 180) d -= 360;
-    if (d < -180) d += 360;
     return d;
   }
 
+  /// Настан од сензорот: САМО го ажурира изгладениот правец. Не прави
+  /// setState и не одлучува за потврда - тоа го прави тикерот, за да
+  /// ретките или „нагомилани“ настани не го блокираат/забрзуваат прогресот.
   void _onCompassEvent(CompassEvent event) {
     final heading = event.heading;
-    if (heading == null || !mounted || _compassGameOver) return;
-    setState(() => _compassHeading = heading);
-    final diff = _angleDiff(heading, _compassTargetHeading);
-
-    if (diff.abs() <= 15) {
-      _compassLockTimer ??= Timer.periodic(const Duration(milliseconds: 100), (t) async {
-        if (!mounted) {
-          t.cancel();
-          return;
-        }
-        setState(() => _compassLockProgress = (_compassLockProgress + 0.1).clamp(0.0, 1.0));
-        if (await VibrationUtils.hasVibrator()) {
-          await VibrationUtils.vibrate(duration: 25);
-        }
-        if (_compassLockProgress >= 1.0) {
-          t.cancel();
-          _compassLockTimer = null;
-          _onCompassLocked();
-        }
-      });
+    if (heading == null || heading.isNaN || !mounted) return;
+    final rad = heading * pi / 180;
+    final s = sin(rad);
+    final c = cos(rad);
+    final now = _compassClock.elapsedMilliseconds;
+    if (!_compassHasSmooth) {
+      _compassSmoothSin = s;
+      _compassSmoothCos = c;
+      _compassHasSmooth = true;
     } else {
-      _compassLockTimer?.cancel();
-      _compassLockTimer = null;
-      if (_compassLockProgress != 0) setState(() => _compassLockProgress = 0);
+      final dt = ((now - _compassLastEventMs) / 1000).clamp(0.0, 1.0);
+      final alpha = 1 - exp(-dt / _compassSmoothTau);
+      _compassSmoothSin += (s - _compassSmoothSin) * alpha;
+      _compassSmoothCos += (c - _compassSmoothCos) * alpha;
+    }
+    _compassLastEventMs = now;
+  }
+
+  /// Тик на 50 ms: го освежува приказот, ја води хистерезата и го мери
+  /// држењето со Stopwatch. Потврдата е во точно 1.2 s држење.
+  void _onCompassTick() {
+    if (!mounted) return;
+    final heading = _compassSmoothHeading;
+
+    if (_compassGameOver || !_compassStarted) return;
+
+    if (_compassAwaitingTarget) {
+      // Чекај прво читање од сензорот (најмногу 1.5 s), па избери цел.
+      final waited = _compassClock.elapsedMilliseconds - _compassAwaitStartMs;
+      if (heading != null || waited > 1500) {
+        _pickCompassTarget();
+      }
+      return;
+    }
+
+    if (_compassAdvancing) {
+      // За време на пофалбата само го ажурираме приказот на стрелката.
+      if (_tab == _SpatialTab.compass && heading != _compassHeading) {
+        setState(() => _compassHeading = heading);
+      }
+      return;
+    }
+
+    final onTab = _tab == _SpatialTab.compass;
+    if (heading == null || !onTab) {
+      if (_compassInZone) _compassResetHold();
+    } else {
+      final diff = _angleDiff(heading, _compassTargetHeading).abs();
+      if (!_compassInZone && diff <= _compassEnterTol) {
+        _compassInZone = true;
+        _compassHold
+          ..reset()
+          ..start();
+      } else if (_compassInZone && diff > _compassStayTol) {
+        _compassResetHold();
+      }
+    }
+
+    final progress = _compassInZone
+        ? (_compassHold.elapsedMilliseconds / _compassHoldMs).clamp(0.0, 1.0)
+        : 0.0;
+
+    // Кратка вибрација на секои 200 ms додека е во зоната (без await).
+    _compassTickCount++;
+    if (_compassInZone && progress < 1.0 && _compassCanVibrate && _compassTickCount % 4 == 0) {
+      unawaited(VibrationUtils.vibrate(duration: 25));
+    }
+
+    // На друг таб не го градиме екранот 20 пати во секунда.
+    if (onTab && (progress != _compassLockProgress || heading != _compassHeading)) {
+      setState(() {
+        _compassHeading = heading;
+        _compassLockProgress = progress;
+      });
+    }
+
+    if (progress >= 1.0) {
+      _onCompassLocked();
     }
   }
 
   Future<void> _onCompassLocked() async {
-    setState(() => _compassHits++);
-    if (await VibrationUtils.hasVibrator()) {
-      await VibrationUtils.vibrate(duration: 500);
-    }
-    await _playClip('correct', 'spatial.correct'.tr());
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
+    // Чувар: само една потврда = само една рунда.
+    if (_compassAdvancing || _compassGameOver) return;
+    _compassAdvancing = true;
+    final session = _compassSession;
+    _compassResetHold();
+    setState(() {
+      _compassHits++;
+      _compassLockProgress = 1.0;
+    });
+    if (_compassCanVibrate) unawaited(VibrationUtils.vibrate(duration: 500));
+    // Пофалбата не смее да ја блокира играта предолго ако аудиото заглави.
+    await Future.any([
+      _playClip('correct', 'spatial.correct'.tr()),
+      Future.delayed(const Duration(milliseconds: 2500)),
+    ]);
+    await Future.delayed(const Duration(milliseconds: 500));
+    if (!mounted || session != _compassSession) return;
 
     final newRound = _compassRound + 1;
     if (newRound >= _compassTotalRounds) {
+      _compassLockTimer?.cancel();
+      _compassLockTimer = null;
+      _compassSub?.cancel();
+      _compassSub = null;
       setState(() {
         _compassRound = newRound;
         _compassGameOver = true;
+        _compassLockProgress = 0;
       });
-      _compassSub?.cancel();
     } else {
       setState(() => _compassRound = newRound);
       _pickCompassTarget();
     }
+    _compassAdvancing = false;
   }
 
   // =====================================================================
@@ -4126,7 +4332,10 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     }
 
     final fg = _fg(hc);
-    final targetLabel = _compassDirLabelKeys[_compassTargetHeading]!.tr();
+    // Додека се чека првото читање од сензорот, целта уште не е избрана.
+    final targetLabel = _compassAwaitingTarget
+        ? '…'
+        : (_compassDirLabelKeys[_compassTargetHeading] ?? 'spatial.compass_north').tr();
     final headingText = _compassHeading != null ? _compassHeading!.round().toString() : '--';
     final arrowColor = hc ? const Color(0xFFFFFF00) : Playful.sun;
 
@@ -4229,7 +4438,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   Widget _buildCompassEndScreen(Color contrast) {
     return _buildSummaryScreen(
       contrast,
-      'spatial.compass_final_summary'.tr(args: [_compassTotalRounds.toString()]),
+      // Нов клуч: со 8 рунди (4 насоки x 2) старото „сите 8 насоки“ не е точно.
+      'spatial.compass_final_summary_rounds'.tr(args: [_compassHits.toString()]),
       _startCompass,
       stars: _compassHits,
       total: _compassTotalRounds,
