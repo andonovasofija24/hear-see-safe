@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -16,15 +15,19 @@ import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
 import 'package:flutter/services.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/scene_contract.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/nature_tree_scene.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/objects_belt_scene.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/orbit_scenes.dart';
 
 /// Колку пати поголем текст (како на почетниот екран).
 const double _kPbText = 1.6;
 
 /// Мултимедијална сликовница за слабовиди/наглуви (модул „Учи и Слушај“).
-/// Тек: категории -> мрежа од картички (по категорија) -> поединечна
-/// сликовница по предмет -> назад ја означува картичката како прегледана ->
-/// штом сите картички во категоријата се прегледани, автоматски почнува
-/// мини-квиз.
+/// Тек: категории -> сцена на категоријата (дрво, лента, планета, уво, лав)
+/// со 10 поими и стрелки ← → -> поединечна сликовница по поим -> назад се
+/// враќа на сцената со истиот поим избран. Квизот е СЕКОГАШ достапен (дел
+/// од сцената, копче С).
 class PictureBookScreen extends StatefulWidget {
   const PictureBookScreen({super.key});
 
@@ -32,7 +35,7 @@ class PictureBookScreen extends StatefulWidget {
   State<PictureBookScreen> createState() => _PictureBookScreenState();
 }
 
-enum _View { categorySelect, itemGrid, itemDetail, quiz, quizResult }
+enum _View { categorySelect, stage, itemDetail, quiz, quizResult }
 
 class _PictureBookScreenState extends State<PictureBookScreen> {
   late VoiceAssistantService _voiceAssistant;
@@ -53,6 +56,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         PictureBookItem(id: 'dog', nameKey: 'picture_book.dog', descriptionKey: 'picture_book.dog_desc', learnKey: 'picture_book.dog_learn', emoji: '🐶'),
         PictureBookItem(id: 'bird', nameKey: 'picture_book.bird', descriptionKey: 'picture_book.bird_desc', learnKey: 'picture_book.bird_learn', emoji: '🐦'),
         PictureBookItem(id: 'cow', nameKey: 'picture_book.cow', descriptionKey: 'picture_book.cow_desc', learnKey: 'picture_book.cow_learn', emoji: '🐄'),
+        PictureBookItem(id: 'horse', nameKey: 'picture_book.horse', descriptionKey: 'picture_book.horse_desc', learnKey: 'picture_book.horse_learn', emoji: '🐴'),
+        PictureBookItem(id: 'sheep', nameKey: 'picture_book.sheep', descriptionKey: 'picture_book.sheep_desc', learnKey: 'picture_book.sheep_learn', emoji: '🐑'),
+        PictureBookItem(id: 'pig', nameKey: 'picture_book.pig', descriptionKey: 'picture_book.pig_desc', learnKey: 'picture_book.pig_learn', emoji: '🐷'),
+        PictureBookItem(id: 'duck', nameKey: 'picture_book.duck', descriptionKey: 'picture_book.duck_desc', learnKey: 'picture_book.duck_learn', emoji: '🦆'),
+        PictureBookItem(id: 'frog', nameKey: 'picture_book.frog', descriptionKey: 'picture_book.frog_desc', learnKey: 'picture_book.frog_learn', emoji: '🐸'),
+        PictureBookItem(id: 'rooster', nameKey: 'picture_book.rooster', descriptionKey: 'picture_book.rooster_desc', learnKey: 'picture_book.rooster_learn', emoji: '🐓'),
       ],
     ),
     PictureBookCategory(
@@ -67,6 +76,10 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         PictureBookItem(id: 'water', nameKey: 'picture_book.water', descriptionKey: 'picture_book.water_desc', learnKey: 'picture_book.water_learn', learn2Key: 'picture_book.water_learn2', emoji: '💧'),
         PictureBookItem(id: 'fire', nameKey: 'picture_book.fire', descriptionKey: 'picture_book.fire_desc', learnKey: 'picture_book.fire_learn', learn2Key: 'picture_book.fire_learn2', emoji: '🔥'),
         PictureBookItem(id: 'wind', nameKey: 'picture_book.wind', descriptionKey: 'picture_book.wind_desc', learnKey: 'picture_book.wind_learn', emoji: '🌬️'),
+        PictureBookItem(id: 'thunder', nameKey: 'picture_book.thunder', descriptionKey: 'picture_book.thunder_desc', learnKey: 'picture_book.thunder_learn', emoji: '⛈️'),
+        PictureBookItem(id: 'snow', nameKey: 'picture_book.snow', descriptionKey: 'picture_book.snow_desc', learnKey: 'picture_book.snow_learn', emoji: '❄️', hasSound: false),
+        PictureBookItem(id: 'flower', nameKey: 'picture_book.flower', descriptionKey: 'picture_book.flower_desc', learnKey: 'picture_book.flower_learn', emoji: '🌸', hasSound: false),
+        PictureBookItem(id: 'sea', nameKey: 'picture_book.sea', descriptionKey: 'picture_book.sea_desc', learnKey: 'picture_book.sea_learn', learn2Key: 'picture_book.sea_learn2', emoji: '🌊'),
       ],
     ),
     PictureBookCategory(
@@ -80,6 +93,11 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         PictureBookItem(id: 'book', nameKey: 'picture_book.book', descriptionKey: 'picture_book.book_desc', learnKey: 'picture_book.book_learn', emoji: '📖'),
         PictureBookItem(id: 'phone', nameKey: 'picture_book.phone', descriptionKey: 'picture_book.phone_desc', learnKey: 'picture_book.phone_learn', learn2Key: 'picture_book.phone_learn2', emoji: '📱'),
         PictureBookItem(id: 'clock', nameKey: 'picture_book.clock', descriptionKey: 'picture_book.clock_desc', learnKey: 'picture_book.clock_learn', emoji: '⏰'),
+        PictureBookItem(id: 'door', nameKey: 'picture_book.door', descriptionKey: 'picture_book.door_desc', learnKey: 'picture_book.door_learn', learn2Key: 'picture_book.door_learn2', emoji: '🚪'),
+        PictureBookItem(id: 'key', nameKey: 'picture_book.key', descriptionKey: 'picture_book.key_desc', learnKey: 'picture_book.key_learn', learn2Key: 'picture_book.key_learn2', emoji: '🔑'),
+        PictureBookItem(id: 'scissors', nameKey: 'picture_book.scissors', descriptionKey: 'picture_book.scissors_desc', learnKey: 'picture_book.scissors_learn', learn2Key: 'picture_book.scissors_learn2', emoji: '✂️'),
+        PictureBookItem(id: 'toothbrush', nameKey: 'picture_book.toothbrush', descriptionKey: 'picture_book.toothbrush_desc', learnKey: 'picture_book.toothbrush_learn', emoji: '🪥'),
+        PictureBookItem(id: 'glass', nameKey: 'picture_book.glass', descriptionKey: 'picture_book.glass_desc', learnKey: 'picture_book.glass_learn', emoji: '🥛'),
       ],
     ),
     PictureBookCategory(
@@ -92,6 +110,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         PictureBookItem(id: 'moon', nameKey: 'picture_book.moon', descriptionKey: 'picture_book.moon_desc', learnKey: 'picture_book.moon_learn', emoji: '🌙', hasSound: false),
         PictureBookItem(id: 'rocket', nameKey: 'picture_book.rocket', descriptionKey: 'picture_book.rocket_desc', learnKey: 'picture_book.rocket_learn', emoji: '🚀'),
         PictureBookItem(id: 'planet', nameKey: 'picture_book.planet', descriptionKey: 'picture_book.planet_desc', learnKey: 'picture_book.planet_learn', emoji: '🪐', hasSound: false),
+        PictureBookItem(id: 'earth', nameKey: 'picture_book.earth', descriptionKey: 'picture_book.earth_desc', learnKey: 'picture_book.earth_learn', emoji: '🌍', hasSound: false),
+        PictureBookItem(id: 'astronaut', nameKey: 'picture_book.astronaut', descriptionKey: 'picture_book.astronaut_desc', learnKey: 'picture_book.astronaut_learn', emoji: '🧑‍🚀', hasSound: false),
+        PictureBookItem(id: 'comet', nameKey: 'picture_book.comet', descriptionKey: 'picture_book.comet_desc', learnKey: 'picture_book.comet_learn', emoji: '☄️', hasSound: false),
+        PictureBookItem(id: 'satellite', nameKey: 'picture_book.satellite', descriptionKey: 'picture_book.satellite_desc', learnKey: 'picture_book.satellite_learn', emoji: '🛰️'),
+        PictureBookItem(id: 'ufo', nameKey: 'picture_book.ufo', descriptionKey: 'picture_book.ufo_desc', learnKey: 'picture_book.ufo_learn', emoji: '🛸'),
+        PictureBookItem(id: 'telescope', nameKey: 'picture_book.telescope', descriptionKey: 'picture_book.telescope_desc', learnKey: 'picture_book.telescope_learn', emoji: '🔭', hasSound: false),
       ],
     ),
     PictureBookCategory(
@@ -103,6 +127,13 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
         PictureBookItem(id: 'drum', nameKey: 'picture_book.drum', descriptionKey: 'picture_book.drum_desc', learnKey: 'picture_book.drum_learn', emoji: '🥁'),
         PictureBookItem(id: 'guitar', nameKey: 'picture_book.guitar', descriptionKey: 'picture_book.guitar_desc', learnKey: 'picture_book.guitar_learn', emoji: '🎸'),
         PictureBookItem(id: 'bell', nameKey: 'picture_book.bell', descriptionKey: 'picture_book.bell_desc', learnKey: 'picture_book.bell_learn', emoji: '🔔'),
+        PictureBookItem(id: 'piano', nameKey: 'picture_book.piano', descriptionKey: 'picture_book.piano_desc', learnKey: 'picture_book.piano_learn', emoji: '🎹'),
+        PictureBookItem(id: 'violin', nameKey: 'picture_book.violin', descriptionKey: 'picture_book.violin_desc', learnKey: 'picture_book.violin_learn', emoji: '🎻'),
+        PictureBookItem(id: 'trumpet', nameKey: 'picture_book.trumpet', descriptionKey: 'picture_book.trumpet_desc', learnKey: 'picture_book.trumpet_learn', emoji: '🎺'),
+        PictureBookItem(id: 'saxophone', nameKey: 'picture_book.saxophone', descriptionKey: 'picture_book.saxophone_desc', learnKey: 'picture_book.saxophone_learn', emoji: '🎷'),
+        PictureBookItem(id: 'accordion', nameKey: 'picture_book.accordion', descriptionKey: 'picture_book.accordion_desc', learnKey: 'picture_book.accordion_learn', emoji: '🪗'),
+        PictureBookItem(id: 'banjo', nameKey: 'picture_book.banjo', descriptionKey: 'picture_book.banjo_desc', learnKey: 'picture_book.banjo_learn', emoji: '🪕'),
+        PictureBookItem(id: 'microphone', nameKey: 'picture_book.microphone', descriptionKey: 'picture_book.microphone_desc', learnKey: 'picture_book.microphone_learn', emoji: '🎤'),
       ],
     ),
   ];
@@ -117,14 +148,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   /// Кои предмети (по id) се веќе прегледани, по категорија (по id).
   final Map<String, Set<String>> _visitedByCategory = {};
 
-  /// Кои категории се веќе целосно завршени (прегледано + квиз) во оваа
-  /// сесија - остануваат заклучени до следно вклучување на апликацијата.
-  final Set<String> _completedCategories = {};
-
-  /// Колку пати е притиснато "Обиди се повторно" по категорија - максимум 2,
-  /// потоа категоријата останува трајно заклучена до следно вклучување.
-  final Map<String, int> _quizRetriesUsed = {};
-  static const int _maxQuizRetries = 2;
+  /// Избраниот поим на сцената на категоријата (светнат, се отвора на
+  /// допир / Enter). Се ресетира на 0 при влез во категорија.
+  int _stageIndex = 0;
 
   /// Се зголемува секогаш кога почнува нова секвенца на говор - спречува
   /// преклопување ако детето брзо навигира/допира додека сè уште трае
@@ -164,6 +190,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_onBookKey);
+    _loadSoundAssets();
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
     // Никакво автоматско објаснување - целосно опционално, преку копчето
@@ -179,10 +206,13 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   /// < > (и стрелките) за листање кога е отворена страница од сликовницата.
+  /// На сцената на категоријата: ← / → (и < >) го менуваат избраниот поим,
+  /// Enter / Space го отвораат.
   bool _onBookKey(KeyEvent event) {
-    if (!mounted || _view != _View.itemDetail) return false;
+    if (!mounted || (_view != _View.itemDetail && _view != _View.stage)) return false;
     final route = ModalRoute.of(context);
     if (route != null && !route.isCurrent) return false;
+    if (_view == _View.stage) return _onStageKey(event);
     final dir = bookPageDirection(event);
     if (dir < 0) {
       _goToPrevItem();
@@ -190,6 +220,35 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     }
     if (dir > 0) {
       _goToNextItem();
+      return true;
+    }
+    return false;
+  }
+
+  bool _onStageKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return false;
+    // Додека се пишува во поле - копчињата се за полето.
+    final focus = FocusManager.instance.primaryFocus;
+    final focusCtx = focus?.context;
+    if (focusCtx != null &&
+        (focusCtx.widget is EditableText || focusCtx.findAncestorWidgetOfExactType<EditableText>() != null)) {
+      return false;
+    }
+    final key = event.physicalKey;
+    if (key == PhysicalKeyboardKey.arrowLeft || key == PhysicalKeyboardKey.comma) {
+      _stageStep(-1);
+      return true;
+    }
+    if (key == PhysicalKeyboardKey.arrowRight || key == PhysicalKeyboardKey.period) {
+      _stageStep(1);
+      return true;
+    }
+    if (event is KeyDownEvent &&
+        (key == PhysicalKeyboardKey.enter || key == PhysicalKeyboardKey.numpadEnter || key == PhysicalKeyboardKey.space)) {
+      // Ако е фокусирано конкретно копче (Tab), Enter / Space го притиска
+      // него (на пр. стрелката или квизот) - не го отвораме поимот двапати.
+      if (focus != null && focus is! FocusScopeNode) return false;
+      _openStageItem();
       return true;
     }
     return false;
@@ -276,10 +335,30 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   static const Map<String, String> _soundFileById = {
     'cat': 'meow',
     'dog': 'bark',
-    // Сите останати го користат сопственото id како име на датотека:
-    // rain, bird, water, wind, car, cow, tree, fire, bicycle, book, phone,
-    // clock, rocket, drum, guitar, bell.
+    // Сите останати го користат сопственото id како име на датотека
+    // (rain, bird, horse, door, glass, satellite, piano, microphone...).
   };
+
+  /// Кои звучни ефекти навистина постојат во апликацијата. Поим без своја
+  /// датотека се однесува како „без звук“ (нема копче за звук и нема
+  /// тивко прашање „Погоди го звукот“) додека не се додаде снимката.
+  Set<String>? _soundAssets;
+
+  Future<void> _loadSoundAssets() async {
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      final set = manifest.listAssets().where((a) => a.startsWith('assets/sounds/sound_identification/')).toSet();
+      if (mounted) setState(() => _soundAssets = set);
+    } catch (_) {}
+  }
+
+  bool _hasSound(PictureBookItem item) {
+    if (!item.hasSound) return false;
+    final assets = _soundAssets;
+    if (assets == null) return true; // уште се вчитува - како порано
+    final file = _soundFileById[item.id] ?? item.id;
+    return assets.contains('assets/sounds/sound_identification/$file.mp3');
+  }
 
   Future<void> _playEffect(String itemId) async {
     final fileName = _soundFileById[itemId] ?? itemId;
@@ -292,22 +371,38 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   // =====================================================================
-  // Категории -> мрежа од картички.
+  // Категории -> сцена на категоријата.
   // =====================================================================
-
-  void _onLockedCategoryTap() {
-    VibrationUtils.hasVibrator().then((ok) {
-      if (ok) VibrationUtils.vibrate(duration: 60);
-    });
-  }
 
   void _enterCategory(int index) {
     _narrationToken++;
     _visitedByCategory.putIfAbsent(_categories[index].id, () => {});
     setState(() {
       _categoryIndex = index;
-      _view = _View.itemGrid;
+      _stageIndex = 0;
+      _view = _View.stage;
     });
+  }
+
+  /// Избор на поим на сцената (допир на неизбран поим во сцената).
+  void _selectStageItem(int index) {
+    final n = _category.items.length;
+    if (n == 0) return;
+    final next = ((index % n) + n) % n;
+    if (next == _stageIndex) return;
+    setState(() => _stageIndex = next);
+    HapticFeedback.selectionClick();
+    _playFlipSound();
+  }
+
+  /// ← / → (стрелките под сцената и на тастатура) - кружно.
+  void _stageStep(int delta) => _selectStageItem(_stageIndex + delta);
+
+  /// Го отвора избраниот поим од сцената.
+  void _openStageItem() {
+    final n = _category.items.length;
+    if (n == 0) return;
+    _openItem(_stageIndex.clamp(0, n - 1));
   }
 
   /// Избор на категорија со глас (од `CategoryVoiceCommandButton`) - сите
@@ -324,6 +419,14 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _voiceAssistant.stop();
     _voicePlayer.stop();
     setState(() => _view = _View.categorySelect);
+  }
+
+  /// Од резултатот на квизот назад на сцената на категоријата.
+  void _backToStage() {
+    _narrationToken++;
+    _voiceAssistant.stop();
+    _voicePlayer.stop();
+    setState(() => _view = _View.stage);
   }
 
   // =====================================================================
@@ -377,6 +480,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 150);
     }
+    if (!mounted) return;
     setState(() => _itemSoundPlaying = true);
     await _playEffect(_item.id);
   }
@@ -395,10 +499,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   bool get _hasPrevItem => _itemIndex > 0;
   bool get _hasNextItem => _itemIndex < _category.items.length - 1;
 
-  /// Го означува тековниот предмет како прегледан (без да се враќа во
-  /// мрежата). Веќе НЕ го стартува квизот автоматски - наместо тоа, копче
-  /// "Оди на квиз" се појавува на секоја сликовница штом сите ќе бидат
-  /// прегледани (без разлика на редоследот).
+  /// Го означува тековниот предмет како прегледан. Квизот НЕ зависи од
+  /// ова - секогаш е достапен (на сцената и на секоја сликовница).
   void _markCurrentVisitedAndMaybeQuiz() {
     final catId = _category.id;
     _visitedByCategory.putIfAbsent(catId, () => {}).add(_item.id);
@@ -429,9 +531,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _itemPageController!.previousPage(duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
   }
 
-  /// Затворање на сликовницата за предметот - се означува како прегледано.
-  /// Ако сите предмети од категоријата сега се прегледани, автоматски
-  /// почнува квизот.
+  /// Затворање на сликовницата за предметот - се означува како прегледано и
+  /// се враќа на сцената на категоријата.
   void _closeItemDetail() {
     _narrationToken++;
     // Веднаш прекини секаков говор/звук за предметот - не смее да продолжи
@@ -441,7 +542,11 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _effectsPlayer.stop();
 
     _markCurrentVisitedAndMaybeQuiz();
-    setState(() => _view = _View.itemGrid);
+    // Назад на сцената - со истиот поим избран.
+    setState(() {
+      _stageIndex = _itemIndex;
+      _view = _View.stage;
+    });
   }
 
   void _toggleExplanation() {
@@ -456,33 +561,37 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   // =====================================================================
-  // Мини-квиз (се активира кога сите картички од категоријата се прегледани).
+  // Мини-квиз - СЕКОГАШ достапен (од сцената, од сликовницата, копче С),
+  // без услов сите поими да се прегледани и без ограничување на обидите.
   // =====================================================================
 
-  /// "Обиди се повторно" - дозволено најмногу _maxQuizRetries пати по
-  /// категорија. Категоријата останува заклучена во меѓувреме и понатаму.
-  void _retryQuiz() {
-    final used = _quizRetriesUsed[_category.id] ?? 0;
-    if (used >= _maxQuizRetries) return;
-    _quizRetriesUsed[_category.id] = used + 1;
-    _startQuiz();
-  }
+  /// Најмногу толку понудени одговори по прашање (точниот + 3 од истата
+  /// категорија) - со 10 поими, сите 10 како одговори би било премногу.
+  static const int _kQuizChoices = 4;
+
+  /// Се зголемува при секој нов квиз - одговор од претходен квиз (што сè
+  /// уште чека) не смее да го помести новиот.
+  int _quizSession = 0;
 
   void _startQuiz() {
+    if (!mounted) return;
     _narrationToken++;
+    _voiceAssistant.stop();
+    _voicePlayer.stop();
+    _effectsPlayer.stop();
     final items = List<PictureBookItem>.from(_category.items);
+    if (items.isEmpty) return;
 
-    // Секој предмет добива описно прашање - само првата реченица од
-    // сликовницата (<id>_desc), која никаде не го спомнува името. Предметите
-    // СО звук добиваат и прашање „погоди го звукот“. (Реченицата „Научи“ не
-    // се користи - речиси секогаш го содржи името и го издава одговорот.)
-    final questions = <_QuizQuestion>[];
-    for (final i in items) {
-      if (i.hasSound) questions.add(_QuizQuestion(i, _ClueType.sound));
-      questions.add(_QuizQuestion(i, _ClueType.description));
-    }
-    questions.shuffle(_random);
+    // По едно прашање за секој поим (10 прашања): описно - само првата
+    // реченица (<id>_quiz_desc / <id>_desc), без името - или, за поимите СО
+    // звук, по случаен избор „погоди го звукот“. (Реченицата „Научи“ не се
+    // користи - речиси секогаш го содржи името и го издава одговорот.)
+    final questions = <_QuizQuestion>[
+      for (final i in items)
+        _QuizQuestion(i, _hasSound(i) && _random.nextBool() ? _ClueType.sound : _ClueType.description),
+    ]..shuffle(_random);
 
+    _quizSession++;
     setState(() {
       _quizQuestions = questions;
       _quizQuestionIndex = 0;
@@ -495,8 +604,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   void _prepareQuizQuestion() {
     final q = _quizQuestions[_quizQuestionIndex];
-    // Сите предмети од категоријата се опции за одговор.
-    final choices = List<PictureBookItem>.from(_category.items)..shuffle(_random);
+    // Точниот одговор + до 3 погрешни од истата категорија, измешани.
+    final distractors = _category.items.where((i) => i.id != q.item.id).toList()..shuffle(_random);
+    final choices = <PictureBookItem>[q.item, ...distractors.take(_kQuizChoices - 1)]..shuffle(_random);
     setState(() {
       _quizTarget = q.item;
       _quizChoices = choices;
@@ -683,6 +793,34 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     'drum': ['тапан', 'тапанот', 'drum', 'daulle', 'daullja', 'daulja'],
     'guitar': ['гитара', 'guitar', 'kitarë', 'kitare', 'kitara'],
     'bell': ['ѕвонче', 'звонче', 'ѕвоно', 'звоно', 'bell', 'zile', 'zilja'],
+    'horse': ['коњ', 'коњот', 'коњче', 'horse', 'pony', 'kalë', 'kale', 'kali'],
+    'sheep': ['овца', 'овцата', 'овче', 'јагне', 'sheep', 'lamb', 'dele', 'delja', 'qengj'],
+    'pig': ['свиња', 'свињата', 'прасе', 'pig', 'piggy', 'derr', 'derri'],
+    'duck': ['патка', 'патката', 'пајка', 'duck', 'rosë', 'rose', 'rosa'],
+    'frog': ['жаба', 'жабата', 'жапче', 'frog', 'bretkosë', 'bretkose', 'bretkosa'],
+    'rooster': ['петел', 'петелот', 'rooster', 'cock', 'gjel', 'gjeli', 'këndes', 'kendes'],
+    'thunder': ['гром', 'громот', 'грмотевица', 'бура', 'thunder', 'storm', 'bubullimë', 'bubullime', 'stuhi'],
+    'snow': ['снег', 'снегот', 'snow', 'borë', 'bore', 'bora'],
+    'flower': ['цвет', 'цветот', 'цвеќе', 'flower', 'lule', 'lulja'],
+    'sea': ['море', 'морето', 'sea', 'ocean', 'det', 'deti'],
+    'door': ['врата', 'вратата', 'door', 'derë', 'dere', 'dera'],
+    'key': ['клуч', 'клучот', 'key', 'çelës', 'celes', 'çelësi', 'celesi'],
+    'scissors': ['ножици', 'ножиците', 'scissors', 'gërshërë', 'gershere', 'gërshërët'],
+    'toothbrush': ['четка', 'четкичка', 'четката', 'toothbrush', 'brush', 'furçë', 'furce', 'furça'],
+    'glass': ['чаша', 'чашата', 'glass', 'cup', 'gotë', 'gote', 'gota'],
+    'earth': ['земја', 'земјата', 'earth', 'globe', 'tokë', 'toke', 'toka'],
+    'astronaut': ['астронаут', 'космонаут', 'astronaut', 'astronauti'],
+    'comet': ['комета', 'кометата', 'comet', 'kometë', 'komete', 'kometa'],
+    'satellite': ['сателит', 'сателитот', 'satellite', 'satelit', 'sateliti'],
+    'ufo': ['нло', 'летечка', 'ufo', 'nlo', 'spaceship'],
+    'telescope': ['телескоп', 'телескопот', 'telescope', 'teleskop', 'teleskopi'],
+    'piano': ['пијано', 'клавир', 'piano', 'pianoja'],
+    'violin': ['виолина', 'виолината', 'violin', 'fiddle', 'violinë', 'violine', 'violina'],
+    'trumpet': ['труба', 'трубата', 'trumpet', 'trumbë', 'trumbe', 'trumbeta'],
+    'saxophone': ['саксофон', 'саксофонот', 'saxophone', 'sax', 'saksofon', 'saksofoni'],
+    'accordion': ['хармоника', 'хармониката', 'harmonika', 'accordion', 'fizarmonikë', 'fizarmonike', 'fizarmonika'],
+    'banjo': ['бенџо', 'банџо', 'banjo', 'banxho'],
+    'microphone': ['микрофон', 'микрофонот', 'microphone', 'mic', 'mikrofon', 'mikrofoni'],
   };
 
   /// Дали транскриптот го содржи името (како посебен збор, со дозволени
@@ -720,6 +858,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _voicePlayer.stop();
     _effectsPlayer.stop();
     _voiceAssistant.stop();
+    final session = _quizSession;
     final correct = chosen.id == _quizTarget!.id;
     setState(() {
       _quizLocked = true;
@@ -745,21 +884,11 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
     // Подолго кај погрешен одговор - да се види кој бил точниот.
     await Future.delayed(Duration(milliseconds: correct ? 1100 : 1900));
-    if (!mounted || _view != _View.quiz) return;
+    if (!mounted || _view != _View.quiz || session != _quizSession) return;
 
     final nextIndex = _quizQuestionIndex + 1;
     if (nextIndex >= _quizQuestions.length) {
-      final isPerfect = _quizScore >= _quizQuestions.length;
-      final retriesUsed = _quizRetriesUsed[_category.id] ?? 0;
-      final noRetriesLeft = retriesUsed >= _maxQuizRetries;
-      setState(() {
-        _view = _View.quizResult;
-        // Категоријата се заклучува само ако е совршен резултат ИЛИ ако веќе
-        // се искористени сите дозволени обиди.
-        if (isPerfect || noRetriesLeft) {
-          _completedCategories.add(_category.id);
-        }
-      });
+      setState(() => _view = _View.quizResult);
       await _speak('quiz_done', '', allowTtsFallback: false);
     } else {
       setState(() => _quizQuestionIndex = nextIndex);
@@ -791,7 +920,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
             ),
       // Менито со категории, сликовницата и квизот имаат свое копче.
       voiceCommand: _view != _View.categorySelect && _view != _View.itemDetail && _view != _View.quiz,
-      voiceOptions: _categoryVoiceOptions(),
+      voiceOptions: _view == _View.stage ? _stageVoiceOptions() : _categoryVoiceOptions(),
       onVoiceBack: _backToCategories,
       child: SafeArea(
         child: Builder(
@@ -799,8 +928,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
             switch (_view) {
               case _View.categorySelect:
                 return _buildCategorySelect(context);
-              case _View.itemGrid:
-                return _buildItemGrid(context);
+              case _View.stage:
+                return _buildStage(context);
               case _View.itemDetail:
                 return _buildItemDetail(context);
               case _View.quiz:
@@ -1042,121 +1171,293 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     );
   }
 
-  // --- Мрежа од картички ---
+  // --- Сцена на категоријата ---
+  //
+  // Горе: назад + насловот на категоријата. Во средина: тематската сцена
+  // (дрво / лента / планета / уво / лав) со 10-те поими и копчето за квиз.
+  // Долу: големи стрелки ← → и меѓу нив големата слика на избраниот поим
+  // со името под неа (допир -> се отвора).
 
-  Widget _buildItemGrid(BuildContext context) {
+  /// Гласовни команди на сцената: „квиз“, името на кој било поим (го
+  /// отвора), па категориите.
+  List<VoiceCategoryOption> _stageVoiceOptions() => [
+        VoiceCategoryOption(
+          keywords: const ['квиз', 'quiz', 'kuiz'],
+          onSelected: _startQuiz,
+        ),
+        for (var i = 0; i < _category.items.length; i++)
+          VoiceCategoryOption(
+            keywords: const [],
+            matches: (t) => _saysItem(t, _category.items[i]),
+            onSelected: () {
+              if (!mounted || _view != _View.stage) return;
+              setState(() => _stageIndex = i);
+              _openItem(i);
+            },
+          ),
+        ..._categoryVoiceOptions(),
+      ];
+
+  /// Тематската сцена според категоријата.
+  Widget _sceneFor(PictureBookCategory cat, List<PbSceneItem> items, int selected, bool hc, bool reduce) {
+    final quizLabel = 'picture_book.go_to_quiz'.tr();
+    final key = ValueKey('pb-scene-${cat.id}');
+    switch (cat.id) {
+      case 'nature':
+        return NatureTreeScene(
+          key: key,
+          items: items,
+          selected: selected,
+          onSelect: _selectStageItem,
+          onOpen: _openStageItem,
+          onQuiz: _startQuiz,
+          quizLabel: quizLabel,
+          highContrast: hc,
+          reduceMotion: reduce,
+        );
+      case 'objects':
+        return ObjectsBeltScene(
+          key: key,
+          items: items,
+          selected: selected,
+          onSelect: _selectStageItem,
+          onOpen: _openStageItem,
+          onQuiz: _startQuiz,
+          quizLabel: quizLabel,
+          highContrast: hc,
+          reduceMotion: reduce,
+        );
+      case 'space':
+        return SpaceOrbitScene(
+          key: key,
+          items: items,
+          selected: selected,
+          onSelect: _selectStageItem,
+          onOpen: _openStageItem,
+          onQuiz: _startQuiz,
+          quizLabel: quizLabel,
+          highContrast: hc,
+          reduceMotion: reduce,
+        );
+      case 'music':
+        return MusicEarScene(
+          key: key,
+          items: items,
+          selected: selected,
+          onSelect: _selectStageItem,
+          onOpen: _openStageItem,
+          onQuiz: _startQuiz,
+          quizLabel: quizLabel,
+          highContrast: hc,
+          reduceMotion: reduce,
+        );
+      case 'animals':
+      default:
+        return AnimalsLionScene(
+          key: key,
+          items: items,
+          selected: selected,
+          onSelect: _selectStageItem,
+          onOpen: _openStageItem,
+          onQuiz: _startQuiz,
+          quizLabel: quizLabel,
+          highContrast: hc,
+          reduceMotion: reduce,
+        );
+    }
+  }
+
+  Widget _buildStage(BuildContext context) {
     final contrast = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final reduce = Playful.reduceMotion(context);
     final cat = _category;
-    final reviewedNotLocked = _visited.length >= cat.items.length && !_completedCategories.contains(cat.id);
+    final visited = _visited;
+    final count = cat.items.length;
+    final selected = count == 0 ? 0 : _stageIndex.clamp(0, count - 1);
+    final sceneItems = [
+      for (final i in cat.items) PbSceneItem(id: i.id, emoji: i.emoji, label: i.nameKey.tr(), visited: visited.contains(i.id)),
+    ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Низ целиот екран: мрежа од сликички (2 колони на телефон, 3 на
-        // широк екран - помалку колони, за поголеми картички и букви).
         final width = constraints.maxWidth;
-        final columns = width >= 1000 ? 3 : 2;
-        return Column(
-          children: [
-            _buildBackRow(contrast, onBack: _backToCategories),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : cat.color, border: Border.all(color: Colors.white, width: 2)),
-                    child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: 36),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(cat.titleKey.tr(), style: GameTypography.heading(context, _onBg(hc, contrast), 26 * _kPbText)),
-                        Text('${_visited.length} / ${cat.items.length} ${_t('seen')}',
-                            style: GameTypography.body(context, _onBg(hc, contrast).withValues(alpha: 0.9), 16 * _kPbText)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (reviewedNotLocked)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
-                child: Center(
-                  child: StartHotkeyListener(onTrigger: _startQuiz, child: Semantics(
-                    label: 'picture_book.go_to_quiz'.tr(),
-                    button: true,
-                    child: RippleRings(
-                      color: hc ? const Color(0xFFFFFF00) : Playful.sun,
-                      spread: 12,
-                      child: PressableScale(
-                        child: Material(
-                          color: hc ? const Color(0xFFFFFF00) : Playful.sun,
-                          borderRadius: BorderRadius.circular(20),
-                          elevation: hc ? 0 : 4,
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(20),
-                            onTap: _startQuiz,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.quiz_rounded, size: 38, color: Playful.ink),
-                                  const SizedBox(width: 10),
-                                  Flexible(
-                                    child: Text(
-                                      'picture_book.go_to_quiz'.tr(),
-                                      textAlign: TextAlign.center,
-                                      style: Playful.title(17 * _kPbText, color: Playful.ink),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
+        // Висина на сцената: колку ширината (300-520), но на низок екран
+        // помалку, за стрелките и избраниот поим да се гледаат без лизгање.
+        const reserved = 330.0; // заглавје + стрелки + избраниот поим
+        final base = width.clamp(300.0, 520.0);
+        final fit = constraints.maxHeight.isFinite ? constraints.maxHeight - reserved : base;
+        final sceneH = min(base, max(260.0, fit));
+        // Само вертикално лизгање - хоризонталните потези одат до сцената.
+        return StartHotkeyListener(
+          onTrigger: _startQuiz,
+          child: SingleChildScrollView(
+            primary: false,
+            padding: const EdgeInsets.only(bottom: 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(alignment: Alignment.centerLeft, child: _buildBackRow(contrast, onBack: _backToCategories)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : cat.color, border: Border.all(color: Colors.white, width: 2)),
+                        child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: 36),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(cat.titleKey.tr(), style: GameTypography.heading(context, _onBg(hc, contrast), 26 * _kPbText)),
+                            Text('${visited.length} / $count ${_t('seen')}',
+                                style: GameTypography.body(context, _onBg(hc, contrast).withValues(alpha: 0.9), 16 * _kPbText)),
+                          ],
                         ),
                       ),
-                    ),
-                  )),
+                    ],
+                  ),
                 ),
-              ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: cat.items.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 0.95,
-                ),
-                itemBuilder: (context, index) => PopIn(index: index, child: _itemCard(context, cat.items[index], index, contrast, hc)),
-              ),
+                if (count > 0) ...[
+                  SizedBox(
+                    width: width,
+                    height: sceneH,
+                    child: _sceneFor(cat, sceneItems, selected, hc, reduce),
+                  ),
+                  const SizedBox(height: 10),
+                  _stageControls(cat.items[selected], visited.contains(cat.items[selected].id), contrast, hc, reduce),
+                ],
+              ],
             ),
-          ],
+          ),
         );
       },
     );
   }
 
-  Widget _itemCard(BuildContext context, PictureBookItem item, int index, Color contrast, bool hc) {
-    final visited = _visited.contains(item.id);
-    final catColor = _category.color;
-    return Semantics(
-      label: '${item.nameKey.tr()}${visited ? '. ${_t('seen')}' : ''}',
+  /// Под сцената: ← [голема слика на избраниот поим + име] →.
+  Widget _stageControls(PictureBookItem item, bool seen, Color contrast, bool hc, bool reduce) {
+    const yellow = Color(0xFFFFFF00);
+    final cat = _category;
+    final name = item.nameKey.tr();
+    final glow = hc ? yellow : Color.lerp(cat.color, Colors.white, 0.35)!;
+    final tile = Semantics(
       button: true,
-      child: PressableScale(
-        child: _GlassItemCard(
-          tint: catColor,
-          highContrast: hc,
-          onTap: () => _openItem(index),
-          emoji: item.emoji,
-          name: item.nameKey.tr(),
-          visited: visited,
+      label: '$name${seen ? '. ${_t('seen')}' : ''}',
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: _openStageItem,
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: reduce ? 0 : 260),
+                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: FadeTransition(opacity: anim, child: child)),
+                child: Stack(
+                  key: ValueKey('pb-stage-tile-${item.id}'),
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 124,
+                      height: 124,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: hc ? Colors.black : Colors.white,
+                        border: Border.all(color: hc ? yellow : glow, width: hc ? 4 : 5),
+                        boxShadow: hc
+                            ? null
+                            : [
+                                BoxShadow(color: glow.withValues(alpha: 0.75), blurRadius: 28, spreadRadius: 4),
+                                BoxShadow(color: cat.color.withValues(alpha: 0.5), blurRadius: 10),
+                              ],
+                      ),
+                      child: Text(item.emoji, style: const TextStyle(fontSize: 76)),
+                    ),
+                    if (seen)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: hc ? Colors.black : const Color(0xFF16A34A),
+                            border: Border.all(color: hc ? yellow : Colors.white, width: 2),
+                          ),
+                          child: Icon(Icons.check_rounded, color: hc ? yellow : Colors.white, size: 22),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _stageArrow(Icons.arrow_back_rounded, 'picture_book.previous_item'.tr(), () => _stageStep(-1), hc),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                tile,
+                const SizedBox(height: 8),
+                ExcludeSemantics(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: GameTypography.heading(context, _onBg(hc, contrast), 24 * _kPbText),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _stageArrow(Icons.arrow_forward_rounded, 'picture_book.next_item'.tr(), () => _stageStep(1), hc),
+        ],
+      ),
+    );
+  }
+
+  /// Голема тркалезна стрелка (68 px) под сцената.
+  Widget _stageArrow(IconData icon, String label, VoidCallback onTap, bool hc) {
+    const yellow = Color(0xFFFFFF00);
+    return Semantics(
+      button: true,
+      label: label,
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            color: hc ? Colors.black : Playful.sun,
+            shape: CircleBorder(side: BorderSide(color: hc ? yellow : Colors.white, width: 3)),
+            elevation: hc ? 0 : 4,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 68,
+                height: 68,
+                child: Icon(icon, size: 40, color: hc ? yellow : Playful.ink),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -1470,8 +1771,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                     ),
                                   ),
                                 ),
-                                if (_visited.length >= _category.items.length)
-                                  StartHotkeyListener(onTrigger: _startQuiz, child: Semantics(
+                                // Квизот е секогаш достапен (без услов).
+                                StartHotkeyListener(onTrigger: _startQuiz, child: Semantics(
                                     label: 'picture_book.go_to_quiz'.tr(),
                                     button: true,
                                     child: PressableScale(
@@ -1503,7 +1804,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
             ),
           ),
           // Копчето за звук - СЕКОГАШ горе десно на страницата.
-          if (item.hasSound)
+          if (_hasSound(item))
             Positioned(
               top: 12,
               right: 12,
@@ -2096,8 +2397,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     final hc = AccessibilityUtils.isHighContrast(context);
     final contrast = _onQuizBg(hc, AccessibilityUtils.getContrastColor(context));
     final isPerfect = _quizScore >= _quizQuestions.length;
-    final retriesUsed = _quizRetriesUsed[_category.id] ?? 0;
-    final retriesLeft = isPerfect ? 0 : (_maxQuizRetries - retriesUsed);
     final sun = hc ? const Color(0xFFFFFF00) : Playful.sun;
     // Широка колку екранот (лизгачот скроз десно), содржината во средина.
     return LayoutBuilder(
@@ -2154,19 +2453,14 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               ],
             ),
             const SizedBox(height: 26),
-            if (retriesLeft > 0) ...[
-              Text(
-                'picture_book.retries_left'.tr(args: [retriesLeft.toString()]),
-                textAlign: TextAlign.center,
-                style: GameTypography.body(context, contrast, 17 * _kPbText),
-              ),
-              const SizedBox(height: 12),
-              StartHotkeyListener(
-                onTrigger: _retryQuiz,
-                child: _resultButton(icon: Icons.refresh_rounded, label: _t('retry_quiz'), color: _quizGreen, onTap: _retryQuiz),
-              ),
-              const SizedBox(height: 12),
-            ],
+            // Нов квиз - секогаш, без ограничување на обидите.
+            StartHotkeyListener(
+              onTrigger: _startQuiz,
+              child: _resultButton(icon: Icons.refresh_rounded, label: _t('retry_quiz'), color: _quizGreen, onTap: _startQuiz),
+            ),
+            const SizedBox(height: 12),
+            _resultButton(icon: Icons.auto_stories_rounded, label: _t('back_to_items'), color: _category.color, onTap: _backToStage),
+            const SizedBox(height: 12),
             _resultButton(icon: Icons.grid_view_rounded, label: _t('back_to_categories'), color: const Color(0xFF2563EB), onTap: _backToCategories),
           ],
         );
@@ -2332,158 +2626,6 @@ class _NavZoneState extends State<_NavZone> {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// Стаклена картичка за предмет во мрежата: проѕирна нијанса во бојата на
-/// категоријата, бел раб, замаглена позадина. Сликата малку се зголемува и
-/// еднаш се „заниша“ при лебдење / фокус / допир. Во HC: рамна, црна, бел раб.
-class _GlassItemCard extends StatefulWidget {
-  final Color tint;
-  final bool highContrast;
-  final VoidCallback onTap;
-  final String emoji;
-  final String name;
-  final bool visited;
-
-  const _GlassItemCard({
-    required this.tint,
-    required this.highContrast,
-    required this.onTap,
-    required this.emoji,
-    required this.name,
-    required this.visited,
-  });
-
-  @override
-  State<_GlassItemCard> createState() => _GlassItemCardState();
-}
-
-class _GlassItemCardState extends State<_GlassItemCard> with SingleTickerProviderStateMixin {
-  bool _hover = false;
-  bool _focus = false;
-  bool _pressed = false;
-  late final AnimationController _wiggle = AnimationController(vsync: this, duration: const Duration(milliseconds: 450));
-
-  bool get _active => _hover || _focus || _pressed;
-
-  void _update({bool? hover, bool? focus, bool? pressed}) {
-    if (!mounted) return;
-    final wasActive = _active;
-    setState(() {
-      if (hover != null) _hover = hover;
-      if (focus != null) _focus = focus;
-      if (pressed != null) _pressed = pressed;
-    });
-    if (!wasActive && _active && !Playful.reduceMotion(context)) {
-      _wiggle.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _wiggle.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final hc = widget.highContrast;
-    final reduce = Playful.reduceMotion(context);
-    final radius = BorderRadius.circular(24);
-    final active = _active;
-
-    final icon = AnimatedScale(
-      scale: active && !reduce ? 1.08 : 1.0,
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeOut,
-      child: AnimatedBuilder(
-        animation: _wiggle,
-        builder: (context, child) => Transform.rotate(
-          angle: sin(_wiggle.value * pi * 2) * 0.06,
-          child: child,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: hc ? Colors.black : Colors.white.withValues(alpha: 0.16),
-            border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.4), width: hc ? 2 : 1.5),
-          ),
-          child: FittedBox(child: Text(widget.emoji, style: const TextStyle(fontSize: 70))),
-        ),
-      ),
-    );
-
-    final content = Stack(
-      children: [
-        Center(
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Flexible(child: icon),
-                const SizedBox(height: 10),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Text(
-                    widget.name,
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.lexend(fontSize: 22 * _kPbText, fontWeight: FontWeight.w800, color: Colors.white),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        if (widget.visited)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: const Color(0xFF16A34A), border: Border.all(color: Colors.white, width: 2)),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 22),
-            ),
-          ),
-      ],
-    );
-
-    final face = Color.alphaBlend(Colors.white.withValues(alpha: 0.08), widget.tint.withValues(alpha: 0.18));
-    final card = Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        borderRadius: radius,
-        onTap: widget.onTap,
-        onHover: (v) => _update(hover: v),
-        onFocusChange: (v) => _update(focus: v),
-        onHighlightChanged: (v) => _update(pressed: v),
-        child: Ink(
-          decoration: BoxDecoration(
-            color: hc ? Colors.black : face,
-            borderRadius: radius,
-            border: Border.all(
-              color: hc ? (active ? const Color(0xFFFFFF00) : Colors.white) : Colors.white.withValues(alpha: active ? 0.85 : 0.5),
-              width: hc ? 2 : 1.75,
-            ),
-          ),
-          child: content,
-        ),
-      ),
-    );
-
-    if (hc) {
-      return ClipRRect(borderRadius: radius, child: card);
-    }
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ui.ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: card,
       ),
     );
   }

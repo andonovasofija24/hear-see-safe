@@ -1,0 +1,49 @@
+cat_desc	A pet that catches mice.
+cat_name	Cat
+dog_desc	A pet that is people's loyal friend and has a strong sense of smell.
+dog_name	Dog
+bird_desc	A small animal that flies and sings.
+bird_name	Bird
+cow_desc	A farm animal that gives milk.
+cow_name	Cow
+rain_desc	Drops of water falling from the sky.
+rain_name	Rain
+sun_desc	It gives light and warmth.
+sun_name	Sun
+tree_desc	It produces oxygen.
+tree_name	Tree
+water_desc	We need it to stay hydrated and focused.
+water_name	Water
+fire_desc	It can burn down houses and forests.
+fire_name	Fire
+wind_desc	Moving air that can be a gentle breeze or a strong storm.
+wind_name	Wind
+car_desc	It has four wheels and must stop at a crosswalk.
+car_name	Car
+bicycle_desc	Riding it is healthy and eco-friendly. It has two wheels and moves with pedals.
+bicycle_name	Bicycle
+book_desc	It spreads knowledge.
+book_name	Book
+phone_desc	It is used for communication.
+phone_name	Phone
+clock_desc	It shows the time.
+clock_name	Clock
+star_desc	Huge balls of light far away in space.
+star_name	Star
+moon_desc	We see it as a bright ball at night.
+moon_name	Moon
+rocket_desc	A vehicle that flies into space.
+rocket_name	Rocket
+planet_desc	A big ball that goes around a star.
+planet_name	Planet
+drum_desc	You hit it with your hands or sticks to make a rhythm.
+drum_name	Drum
+guitar_desc	A musical instrument with strings.
+guitar_name	Guitar
+bell_desc	A small object that rings when you shake or hit it.
+bell_name	Bell
+cat_extra	Remember: When you hear meow outside, it may be a cat. Do not touch unknown animals without permission.
+water_extra	Remember: Tap water is healthy to drink. If you feel thirsty, your body is reminding you: drink water.
+fire_extra	Remember: If your clothes catch fire, stop, drop and roll. Call for help.
+phone_extra	Remember: 112 emergency. Call only when there is real danger. Say your name and where you are.
+quiz_done	Well done! You finished the quiz!

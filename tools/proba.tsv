@@ -1,0 +1,5 @@
+msg_ready	Kamera është gati
+msg_analyzing	Duke analizuar...
+msg_uncertain	Nuk jam i sigurt, provo përsëri
+msg_error	Ndodhi një gabim, provo përsëri
+msg_error_permission	Leja për kamerë u refuzua. Lejo qasjen në cilësime.

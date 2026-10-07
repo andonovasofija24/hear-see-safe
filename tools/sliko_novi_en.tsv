@@ -1,0 +1,88 @@
+horse_explanation	Horse. A big, fast animal that neighs. A horse has strong legs and hard hooves. It loves to eat hay, oats and apples.
+horse_desc	A big, fast animal that neighs.
+horse_name	Horse
+sheep_explanation	Sheep. A farm animal with soft wool that says baa. Sheep wool is used to make warm sweaters and socks. Sheep live together in a flock.
+sheep_desc	A farm animal with soft wool that says baa.
+sheep_name	Sheep
+pig_explanation	Pig. A pink farm animal with a snout that says oink. A pig digs in the ground with its snout to find food. When it is hot, it rolls in mud to cool down.
+pig_desc	A pink farm animal with a snout that says oink.
+pig_name	Pig
+duck_explanation	Duck. A bird that swims and says quack-quack. A duck has webbed feet, so it swims very well. Its feathers stay dry in the water.
+duck_desc	A bird that swims and says quack-quack.
+duck_name	Duck
+frog_explanation	Frog. A small green animal that jumps and croaks. A frog lives both in water and on land. It catches flies with its long, sticky tongue.
+frog_desc	A small green animal that jumps and croaks.
+frog_name	Frog
+rooster_explanation	Rooster. A farm bird that crows cock-a-doodle-doo in the morning. A rooster crows early in the morning and wakes people up. It lives in a henhouse with the hens.
+rooster_desc	A farm bird that crows cock-a-doodle-doo in the morning.
+rooster_name	Rooster
+thunder_explanation	Thunder. A loud rumble in the sky during a storm. We see the lightning first and hear the thunder later, because light travels faster than sound.
+thunder_desc	A loud rumble in the sky during a storm.
+thunder_name	Thunder
+snow_explanation	Snow. Soft white flakes that fall in winter. Snow is frozen water. Every snowflake has six points and is different from all the others.
+snow_desc	Soft white flakes that fall in winter.
+snow_name	Snow
+flower_explanation	Flower. A colorful part of a plant that smells nice. Bees fly from flower to flower to collect nectar for honey. Later, fruits grow from flowers.
+flower_desc	A colorful part of a plant that smells nice.
+flower_name	Flower
+sea_explanation	Sea. A big body of salty water with splashing waves. Fish, crabs and dolphins live in the sea. Seas and oceans cover most of the Earth.
+sea_desc	A big body of salty water with splashing waves.
+sea_name	Sea
+sea_extra	Remember: Swim only with an adult and only where there is a lifeguard.
+door_explanation	Door. We open and close it to go into a house or a room. A door can creak when it opens. Before you enter someone else's room, knock first.
+door_desc	We open and close it to go into a house or a room.
+door_name	Door
+door_extra	Remember: Do not open the door to strangers. Call an adult first.
+key_explanation	Key. A small metal object that unlocks a door. Every key has its own special teeth and opens only its own lock.
+key_desc	A small metal object that unlocks a door.
+key_name	Key
+key_extra	Remember: Keep your house key in a safe place and do not show it to strangers.
+scissors_explanation	Scissors. A tool with two sharp blades for cutting paper. Scissors cut when their two blades slide past each other. There are also children's scissors with rounded tips.
+scissors_desc	A tool with two sharp blades for cutting paper.
+scissors_name	Scissors
+scissors_extra	Remember: Carry scissors with the points facing down and use them only with an adult.
+toothbrush_explanation	Toothbrush. We use it with toothpaste every morning and evening to clean our mouth. Brush your teeth twice a day, in the morning and in the evening, for two minutes. This keeps your teeth healthy.
+toothbrush_desc	We use it with toothpaste every morning and evening to clean our mouth.
+toothbrush_name	Toothbrush
+glass_explanation	Glass. A cup we drink water or milk from. A glass can be made of glass or plastic. Hold a glass cup carefully so it does not break.
+glass_desc	A cup we drink water or milk from.
+glass_name	Glass
+earth_explanation	Earth. The blue planet we live on. The Earth goes around the Sun once every year. It is the only planet we know that has life.
+earth_desc	The blue planet we live on.
+earth_name	Earth
+astronaut_explanation	Astronaut. A person who travels into space in a special suit. An astronaut wears a spacesuit with air to breathe. In space, astronauts float like feathers.
+astronaut_desc	A person who travels into space in a special suit.
+astronaut_name	Astronaut
+comet_explanation	Comet. An icy space object with a long bright tail. A comet is made of ice, dust and rock. When it comes close to the Sun, it grows a bright tail.
+comet_desc	An icy space object with a long bright tail.
+comet_name	Comet
+satellite_explanation	Satellite. A machine that circles the Earth and sends signals. Satellites help us watch TV, check the weather forecast and find our way.
+satellite_desc	A machine that circles the Earth and sends signals.
+satellite_name	Satellite
+ufo_explanation	UFO. A flying saucer from stories about aliens. These letters stand for unidentified flying object. In stories and cartoons, aliens travel in it.
+ufo_desc	A flying saucer from stories about aliens.
+ufo_name	UFO
+telescope_explanation	Telescope. A tool for looking at faraway stars and planets. A telescope makes faraway things look close. Scientists use it to explore space.
+telescope_desc	A tool for looking at faraway stars and planets.
+telescope_name	Telescope
+piano_explanation	Piano. A big musical instrument with black and white keys. When you press a key, a small hammer hits a string and makes a note. A piano has 88 keys.
+piano_desc	A big musical instrument with black and white keys.
+piano_name	Piano
+violin_explanation	Violin. A small wooden instrument with strings, played with a bow. A violin is held under the chin. When the bow slides across the strings, it sings softly.
+violin_desc	A small wooden instrument with strings, played with a bow.
+violin_name	Violin
+trumpet_explanation	Trumpet. A shiny metal instrument you blow into loudly. The player buzzes their lips while blowing and changes the notes with three buttons.
+trumpet_desc	A shiny metal instrument you blow into loudly.
+trumpet_name	Trumpet
+saxophone_explanation	Saxophone. A curved golden instrument you blow into, loved in jazz music. The saxophone was invented by Adolphe Sax. It is made of metal, but a small piece of reed makes its sound.
+saxophone_desc	A curved golden instrument you blow into, loved in jazz music.
+saxophone_name	Saxophone
+accordion_explanation	Accordion. An instrument with keys and bellows that squeeze and stretch. An accordion plays when its bellows pull in and push out air. It is often played at weddings and folk celebrations.
+accordion_desc	An instrument with keys and bellows that squeeze and stretch.
+accordion_name	Accordion
+banjo_explanation	Banjo. A string instrument with a round body like a little drum. A banjo has a bright, cheerful sound. It is most often played in American country music.
+banjo_desc	A string instrument with a round body like a little drum.
+banjo_name	Banjo
+microphone_explanation	Microphone. A device we sing or talk into so we can be heard louder. A microphone catches our voice and sends it to the speakers. Singers use it at concerts.
+microphone_desc	A device we sing or talk into so we can be heard louder.
+microphone_name	Microphone
