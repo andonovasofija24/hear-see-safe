@@ -30,9 +30,40 @@ abstract class ImageRecognitionService {
     required String mode,
   });
 
+  /// Режим „Барај“: СИТЕ поими (клучеви за превод на предмети И облека)
+  /// што моделот ги гледа на сликата, со најголемата доверба за секој.
+  /// За разлика од [recognize], не се враќа само најдобриот резултат - за
+  /// бараниот предмет да се најде и кога не е најгоре во листата на ML Kit.
+  /// Праг не се применува тука; екранот го споредува со
+  /// [defaultConfidenceThreshold].
+  Future<Map<String, double>> recognizeConcepts({required XFile image});
+
   /// Се повикува кога екранот се уништува, за да се ослободат ресурсите на
   /// моделот (на пр. затворање на ML Kit labeler-от).
   void dispose();
+}
+
+/// Речникот на сервисот, отворен за режимот „Барај“: кои предмети и облека
+/// постојат (клучеви за превод) и кои англиски ML Kit имиња водат до нив.
+abstract final class RecognitionVocabulary {
+  static List<String> _unique(Iterable<String> values) {
+    final seen = <String>{};
+    return [for (final v in values) if (seen.add(v)) v];
+  }
+
+  /// Сите клучеви за предмети ('camera.object_X'), по редот во речникот.
+  static final List<String> objectKeys = _unique(_objectToKey.values);
+
+  /// Сите клучеви за облека ('camera.clothing_type_X').
+  static final List<String> clothingKeys = _unique(_clothingTypeToKey.values);
+
+  /// Англиските ML Kit имиња што водат до [key] (во двата речника).
+  static List<String> rawLabelsFor(String key) => [
+        for (final e in _objectToKey.entries)
+          if (e.value == key) e.key,
+        for (final e in _clothingTypeToKey.entries)
+          if (e.value == key) e.key,
+      ];
 }
 
 /// Имплементација преку Google ML Kit "Image Labeling" - модел кој работи
@@ -72,6 +103,40 @@ class MlKitRecognitionService implements ImageRecognitionService {
       return _recognizeDominantColor(image);
     }
     return _recognizeViaMlKit(image: image, mode: mode);
+  }
+
+  @override
+  Future<Map<String, double>> recognizeConcepts({required XFile image}) async {
+    final labels = await _processLabels(image);
+    final found = <String, double>{};
+    void note(String? key, double confidence) {
+      if (key == null) return;
+      final prev = found[key];
+      if (prev == null || confidence > prev) found[key] = confidence;
+    }
+
+    for (final label in labels) {
+      final description = label.label.toLowerCase();
+      note(_matchLabel(description, _objectToKey), label.confidence);
+      note(_matchLabel(description, _clothingTypeToKey), label.confidence);
+    }
+    return found;
+  }
+
+  /// ML Kit ознаки за сликата; грешките се претвораат во [RecognitionException].
+  Future<List<ImageLabel>> _processLabels(XFile image) async {
+    try {
+      final inputImage = InputImage.fromFilePath(image.path);
+      return await _labeler.processImage(inputImage);
+    } on RecognitionException {
+      rethrow;
+    } catch (e) {
+      final message = e.toString().toLowerCase();
+      if (message.contains('missingplugin') || message.contains('not implemented')) {
+        throw const RecognitionException('camera.error_unsupported_platform');
+      }
+      throw const RecognitionException('camera.error');
+    }
   }
 
   // ---------------------------------------------------------------------

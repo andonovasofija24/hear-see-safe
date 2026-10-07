@@ -2047,7 +2047,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -2201,6 +2201,21 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   bool _compassStarted = false;
   bool _compassGameOver = false;
   bool _compassPermissionDenied = false;
+
+  // --- Распоред на телефон: целата содржина се лизга, а сцените се големи ---
+  /// Прстот е врз сцената (лавиринт / радар) - лизгањето на страницата е
+  /// исклучено, за влечењето да оди во играта (како SphereMenu во броевите).
+  bool _sceneTouched = false;
+
+  /// Тесен / допирен екран: една страница што се лизга, со фиксни големини
+  /// на сцените (се поставува во build).
+  bool _scrollLayout = false;
+
+  /// Достапна ширина за сцената (без страничните маргини).
+  double _stageW = 360;
+
+  /// Висина на видливиот дел - за крајните екрани во режимот со лизгање.
+  double _viewportH = 640;
   int _compassRound = 0;
   int _compassHits = 0;
   Timer? _compassLockTimer;
@@ -2361,7 +2376,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     final opening = !_explanationOpen;
     setState(() => _explanationOpen = opening);
     if (opening) {
-      _playClip('explanation_$_explanationKeySuffix', _explanationTextKey(InputMode.keysVisible).tr());
+      _playClip('explanation_$_explanationKeySuffix', 'spatial.explanation_${_explanationKeySuffix}_text'.tr());
     } else {
       _voiceAssistant.stop();
       _voicePlayer.stop();
@@ -2374,16 +2389,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     if (_explanationOpen) {
       // Панелот е веќе отворен - пушти го говорот за НОВИОТ таб веднаш,
       // наместо да остане говорот на претходниот таб.
-      _playClip('explanation_$_explanationKeySuffix', _explanationTextKey(InputMode.keysVisible).tr());
+      _playClip('explanation_$_explanationKeySuffix', 'spatial.explanation_${_explanationKeySuffix}_text'.tr());
     }
-  }
-
-  /// Објаснување за тастатура или за допир. Само Симон и Компас имаат
-  /// копчиња на тастатурата (бројките), па само тие имаат верзија „_touch“.
-  String _explanationTextKey(bool keys) {
-    final s = _explanationKeySuffix;
-    final hasTouch = s == 'simon' || s == 'compass';
-    return (!keys && hasTouch) ? 'spatial.explanation_${s}_touch_text' : 'spatial.explanation_${s}_text';
   }
 
   String get _explanationKeySuffix {
@@ -2736,10 +2743,18 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       _startCompassAlt();
       return;
     }
-    final status = await Permission.locationWhenInUse.request();
-    if (!status.isGranted) {
-      setState(() => _compassPermissionDenied = true);
-      return;
+    // Android: flutter_compass го чита магнетометарот (сензор за ротација) -
+    // НЕ бара дозвола за локација. Порано тука се бараше локација, а таа не е
+    // ни наведена во AndroidManifest, па Android секогаш враќаше „одбиено“ и
+    // компасот никогаш не тргнуваше.
+    // iOS: правецот (heading) доаѓа од CoreLocation; Apple не бара дозвола за
+    // самиот правец, но за сигурност ја прашуваме - и продолжуваме и ако е
+    // одбиена, наместо да ја блокираме играта.
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      try {
+        await Permission.locationWhenInUse.request();
+      } catch (_) {}
+      if (!mounted) return;
     }
     setState(() {
       _compassPermissionDenied = false;
@@ -3112,6 +3127,40 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final side = ((constraints.maxWidth - 860) / 2).clamp(16.0, double.infinity);
+            _stageW = max(200.0, constraints.maxWidth - 2 * side);
+            _viewportH = constraints.maxHeight;
+            _scrollLayout = constraints.maxWidth < 600 ||
+                (InputMode.touchLayout(context) && constraints.maxWidth < 900);
+            if (_scrollLayout) {
+              // Телефон: сè е во една страница што се лизга надолу; сцените
+              // имаат голема фиксна висина. Додека прстот е врз сцената,
+              // страницата не се лизга.
+              return SingleChildScrollView(
+                primary: false,
+                physics: _sceneTouched ? const NeverScrollableScrollPhysics() : null,
+                padding: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(side, 12, side, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildExplanationButton(contrast),
+                          if (_explanationOpen) _buildExplanationPanel(contrast),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: side),
+                      child: _buildTabBar(contrast),
+                    ),
+                    _buildTabContent(contrast, hc, side),
+                  ],
+                ),
+              );
+            }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -3158,7 +3207,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     return PlayfulExplainPanel(
       icon: _tabIcons[_tab]!,
       title: 'spatial.explanation_title'.tr(),
-      text: _explanationTextKey(InputMode.showKeys(context)).tr(),
+      text: 'spatial.explanation_${_explanationKeySuffix}_text'.tr(),
       accent: _moduleAccent,
     );
   }
@@ -3344,7 +3393,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     required Widget child,
   }) {
     return Stack(
-      fit: StackFit.expand,
+      // На телефон (лизгање) висината ја дава самата сцена.
+      fit: _scrollLayout ? StackFit.loose : StackFit.expand,
       children: [
         AnimatedOpacity(
           duration: const Duration(milliseconds: 250),
@@ -3401,18 +3451,53 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           padding: EdgeInsets.symmetric(horizontal: side),
           child: child,
         );
+    // Во режимот со лизгање висината е неограничена - крајниот екран добива
+    // висина колку видливиот дел.
+    Widget end(Widget child) =>
+        _scrollLayout ? SizedBox(height: max(460.0, _viewportH), child: child) : child;
     switch (_tab) {
       case _SpatialTab.simon:
-        return _simonGameOver ? _buildSimonEndScreen(contrast) : padded(_buildSimonRound(contrast, hc));
+        return _simonGameOver ? end(_buildSimonEndScreen(contrast)) : padded(_buildSimonRound(contrast, hc));
       case _SpatialTab.maze:
-        return _mazeGameOver ? _buildMazeEndScreen(contrast) : padded(_buildMazeRound(contrast, hc));
+        return _mazeGameOver ? end(_buildMazeEndScreen(contrast)) : padded(_buildMazeRound(contrast, hc));
       case _SpatialTab.radar:
-        return _radarGameOver ? _buildRadarEndScreen(contrast) : padded(_buildRadarRound(contrast, hc));
+        return _radarGameOver ? end(_buildRadarEndScreen(contrast)) : padded(_buildRadarRound(contrast, hc));
       case _SpatialTab.compass:
         return _useCompassAlt
-            ? (_compassAltGameOver ? _buildCompassAltEndScreen(contrast) : padded(_buildCompassAltRound(contrast, hc)))
-            : (_compassGameOver ? _buildCompassEndScreen(contrast) : padded(_buildCompassRound(contrast, hc)));
+            ? (_compassAltGameOver
+                ? end(_buildCompassAltEndScreen(contrast))
+                : padded(_buildCompassAltRound(contrast, hc)))
+            : (_compassGameOver ? end(_buildCompassEndScreen(contrast)) : padded(_buildCompassRound(contrast, hc)));
     }
+  }
+
+  /// Простор за сцената: на широк екран го зема остатокот од висината
+  /// (Expanded); на телефон има фиксна, голема висина (страницата се лизга).
+  /// Без [height] (на телефон) сцената е висока колку својата содржина.
+  Widget _stage({double? height, required Widget child}) {
+    if (!_scrollLayout) return Expanded(child: child);
+    return height == null ? child : SizedBox(height: height, child: child);
+  }
+
+  /// Висина на сцена на телефон: колку ширината пати [factor], најмалку 420.
+  double _sceneHeight(double factor) => min(760.0, max(420.0, _stageW * factor));
+
+  /// Додека прстот е врз отклучената сцена, страницата не се лизга - влечењето
+  /// (лавиринт, радар) оди во играта, а не во лизгачот.
+  Widget _sceneTouchGuard({required bool active, required Widget child}) {
+    if (!_scrollLayout) return child;
+    void set(bool v) {
+      if (_sceneTouched != v && mounted) setState(() => _sceneTouched = v);
+    }
+
+    return Listener(
+      onPointerDown: (_) {
+        if (active) set(true);
+      },
+      onPointerUp: (_) => set(false),
+      onPointerCancel: (_) => set(false),
+      child: child,
+    );
   }
 
   // --- Заеднички резиме-екран ---
@@ -3512,7 +3597,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           trailing: _voiceButton(hc),
         ),
         const SizedBox(height: 10),
-        Expanded(
+        _stage(
+          // На телефон: текст + копче „пак“ + крстот (квадрат колку ширината).
           child: _lockedStage(
             locked: !_simonRevealed,
             contrast: contrast,
@@ -3537,13 +3623,23 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                     hc: hc,
                   ),
                 ),
-                Expanded(child: _buildDPad(contrast, hc)),
+                if (_scrollLayout)
+                  SizedBox(height: _dpadHeight(), child: _buildDPad(contrast, hc))
+                else
+                  Expanded(child: _buildDPad(contrast, hc)),
               ],
             ),
           ),
         ),
       ],
     );
+  }
+
+  /// Висина на крстот на телефон: квадратни копчиња колку 1/3 од ширината.
+  double _dpadHeight() {
+    final w = min(_stageW, 520.0) - 8; // хоризонтален padding 4+4
+    final cell = (w - 20) / 3;
+    return 3 * cell + 20 + 28; // 2 празнини по 10 + padding 12+16
   }
 
   /// Големиот златен круг за започнување (над заклучената игра).
@@ -3682,7 +3778,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           textAlign: TextAlign.center,
           style: Playful.body(14.5 * _kSpatialText, color: fg),
         ),
-        Expanded(
+        _stage(
+          height: _sceneHeight(1.3) + 26,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(0, 10, 0, 16),
             child: _lockedStage(
@@ -3692,7 +3789,9 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               startLabel: 'spatial.maze_start'.tr(),
               startIcon: Icons.route_rounded,
               onStart: _startMaze,
-              child: LayoutBuilder(
+              child: _sceneTouchGuard(
+                active: _mazeStarted,
+                child: LayoutBuilder(
                 builder: (context, constraints) {
                   final size = Size(constraints.maxWidth, constraints.maxHeight);
                   return GestureDetector(
@@ -3778,6 +3877,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                   );
                 },
               ),
+              ),
             ),
           ),
         ),
@@ -3817,7 +3917,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
           textAlign: TextAlign.center,
           style: Playful.body(14.5 * _kSpatialText, color: fg),
         ),
-        Expanded(
+        _stage(
+          height: _sceneHeight(1.1) + 26,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(0, 10, 0, 16),
             child: _lockedStage(
@@ -3827,7 +3928,9 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               startLabel: 'spatial.radar_start'.tr(),
               startIcon: Icons.radar_rounded,
               onStart: _startRadar,
-              child: LayoutBuilder(
+              child: _sceneTouchGuard(
+                active: _radarStarted,
+                child: LayoutBuilder(
                 builder: (context, constraints) {
                   final size = Size(constraints.maxWidth, constraints.maxHeight);
                   // Визуелен пулс околу прстот - расте како што се приближуваш
@@ -3928,6 +4031,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
                     ),
                   );
                 },
+              ),
               ),
             ),
           ),
@@ -4038,7 +4142,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
         trailing: _voiceButton(hc),
       ),
         const SizedBox(height: 4),
-        Expanded(
+        _stage(
+          height: _sceneHeight(1.1) + 120,
           child: _lockedStage(
           locked: !_compassStarted,
           contrast: contrast,
@@ -4146,7 +4251,9 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
         trailing: _voiceButton(hc),
       ),
         const SizedBox(height: 4),
-        Expanded(
+        _stage(
+          // Текст, копчиња и хинт (~170) + сцена + копчиња со насоки.
+          height: max(640.0, _stageW * 1.8),
           child: _lockedStage(
           locked: !_compassAltRevealed,
           contrast: contrast,
@@ -4160,8 +4267,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               const SizedBox(height: 8),
               Text(
                 _compassAltDemoPlaying
-                    ? (InputMode.showKeys(context) ? 'spatial.compass_alt_prompt' : 'spatial.compass_alt_prompt_touch').tr()
-                    : (InputMode.showKeys(context) ? 'spatial.compass_alt_choose_prompt' : 'spatial.compass_alt_choose_prompt_touch').tr(),
+                    ? 'spatial.compass_alt_prompt'.tr()
+                    : 'spatial.compass_alt_choose_prompt'.tr(),
                 textAlign: TextAlign.center,
                 style: Playful.body(14.5 * _kSpatialStageText, color: fg),
               ),

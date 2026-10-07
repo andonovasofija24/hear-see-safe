@@ -398,6 +398,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Отвора поставки. Без TTS: само однапред снимен клип
+  /// (assets/audio/settings/<јазик>/settings_opening.mp3); ако го нема - тишина.
+  void _openSettings() {
+    _voiceAssistant.stop();
+    final langCode = context.locale.languageCode;
+    AccessibilityUtils.provideFeedback(
+      context: context,
+      clipAssetPath: 'audio/settings/$langCode/settings_opening.mp3',
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SettingsScreen()),
+    );
+  }
+
   /// За игри со подготвена снимка на името (f.audioKey != null), се пушта
   /// таа снимка наместо системскиот TTS. За другите игри (audioKey == null)
   /// однесувањето останува исто како порано.
@@ -794,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen> {
             tooltip: 'settings.title'.tr(),
             onPressed: _welcomeLocked
                 ? null
-                : () => _navigateToScreen(const SettingsScreen(), 'settings.opening'.tr()),
+                : _openSettings,
           ),
         ],
       ),

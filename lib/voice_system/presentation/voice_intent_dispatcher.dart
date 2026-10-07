@@ -88,11 +88,16 @@ Future<void> dispatchVoiceIntent({
   void go(Widget screen, String announcement) {
     final langCode = context.locale.languageCode;
     final audioKey = audioKeyByAction[intent.action];
+    // Поставки: само снимка (assets/audio/settings/<јазик>/settings_opening.mp3),
+    // без TTS-резерва - ако клипот го нема, тишина.
+    final isSettings = intent.action == 'open_settings';
     AccessibilityUtils.provideFeedback(
       context: context,
-      audioFeedback: announcement,
-      voiceAssistant: voiceAssistant,
-      clipAssetPath: audioKey != null ? 'audio/home/$langCode/$audioKey.mp3' : null,
+      audioFeedback: isSettings ? null : announcement,
+      voiceAssistant: isSettings ? null : voiceAssistant,
+      clipAssetPath: isSettings
+          ? 'audio/settings/$langCode/settings_opening.mp3'
+          : (audioKey != null ? 'audio/home/$langCode/$audioKey.mp3' : null),
     );
     Navigator.push(
       context,

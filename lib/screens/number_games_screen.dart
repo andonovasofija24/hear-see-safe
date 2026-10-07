@@ -73,6 +73,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   final TextEditingController _inputController = TextEditingController();
   final TextEditingController _seqInputController = TextEditingController();
+  /// Лизгање на делот за игра на ниски (телефонски) екрани - на ново
+  /// прашање се враќа горе, за сцената/задачата да се гледа.
+  final ScrollController _playScroll = ScrollController();
   final Random _random = Random();
 
   _View _view = _View.modeSelect;
@@ -196,6 +199,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _effectsPlayer.dispose();
     _inputController.dispose();
     _seqInputController.dispose();
+    _playScroll.dispose();
     _sdTicker?.cancel();
     super.dispose();
   }
@@ -330,6 +334,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           break;
       }
     });
+    // Ново прашање - назад на врвот (сцената / задачата пак е видлива).
+    if (_playScroll.hasClients && _playScroll.positions.length == 1) _playScroll.jumpTo(0);
   }
 
   Future<void> _announceQuestion() async {
@@ -1376,138 +1382,168 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     final valueColor = hc ? contrast : Playful.ink;
     final arrowColor = hc ? Colors.white : _moduleAccent;
     final fieldFg = hc ? Colors.white : Playful.ink;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Column(
-        children: [
-          LayoutBuilder(
-            builder: (context, c) {
-              final len = _seq.length;
-              final w = ((c.maxWidth - (len - 1) * 8) / len).clamp(40.0, 76.0).toDouble();
-              return Row(
+    final tiles = LayoutBuilder(
+      builder: (context, c) {
+        final len = _seq.length;
+        final w = ((c.maxWidth - (len - 1) * 8) / len).clamp(40.0, 76.0).toDouble();
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            for (var i = 0; i < len; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              _seqTile(i, w, contrast, hc),
+            ],
+          ],
+        );
+      },
+    );
+    final card = Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: (_) => _seqDragAcc = 0,
+            onVerticalDragUpdate: (d) {
+              _seqDragAcc -= d.delta.dy;
+              const stepPx = 28.0;
+              while (_seqDragAcc >= stepPx) {
+                _seqDragAcc -= stepPx;
+                _seqChange(1);
+              }
+              while (_seqDragAcc <= -stepPx) {
+                _seqDragAcc += stepPx;
+                _seqChange(-1);
+              }
+            },
+            child: Container(
+              decoration: _whiteCardDecoration(hc, radius: 24, border: 4, glow: true),
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  for (var i = 0; i < len; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    _seqTile(i, w, contrast, hc),
-                  ],
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onVerticalDragStart: (_) => _seqDragAcc = 0,
-                    onVerticalDragUpdate: (d) {
-                      _seqDragAcc -= d.delta.dy;
-                      const stepPx = 28.0;
-                      while (_seqDragAcc >= stepPx) {
-                        _seqDragAcc -= stepPx;
-                        _seqChange(1);
-                      }
-                      while (_seqDragAcc <= -stepPx) {
-                        _seqDragAcc += stepPx;
-                        _seqChange(-1);
-                      }
-                    },
-                    child: Container(
-                      decoration: _whiteCardDecoration(hc, radius: 24, border: 4, glow: true),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.keyboard_arrow_up_rounded, size: 40, color: arrowColor),
-                          Flexible(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                _seqAnswer.toString(),
-                                style: Playful.display(110, color: valueColor),
-                              ),
-                            ),
-                          ),
-                          Icon(Icons.keyboard_arrow_down_rounded, size: 40, color: arrowColor),
-                        ],
+                  Icon(Icons.keyboard_arrow_up_rounded, size: 40, color: arrowColor),
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        _seqAnswer.toString(),
+                        style: Playful.display(110, color: valueColor),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _seqArrowButton(Icons.keyboard_arrow_up_rounded, 'number_extra.seq_up'.tr(), 1, hc),
-                    const SizedBox(height: 14),
-                    _seqArrowButton(Icons.keyboard_arrow_down_rounded, 'number_extra.seq_down'.tr(), -1, hc),
-                  ],
-                ),
+                  Icon(Icons.keyboard_arrow_down_rounded, size: 40, color: arrowColor),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _seqArrowButton(Icons.keyboard_arrow_up_rounded, 'number_extra.seq_up'.tr(), 1, hc),
+            const SizedBox(height: 14),
+            _seqArrowButton(Icons.keyboard_arrow_down_rounded, 'number_extra.seq_down'.tr(), -1, hc),
+          ],
+        ),
+      ],
+    );
+    final controls = <Widget>[
+      const SizedBox(height: 14),
+      Semantics(
+        label: 'number_extra.seq_type_label'.tr(),
+        textField: true,
+        child: TextField(
+          controller: _seqInputController,
+          enabled: !_inputLocked,
+          keyboardType: TextInputType.number,
+          textAlign: TextAlign.center,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          onChanged: _seqTypedChange,
+          onSubmitted: (_) => _seqConfirm(),
+          style: Playful.title(24 * _kNumText, color: fieldFg),
+          decoration: InputDecoration(
+            labelText: 'number_extra.seq_type_label'.tr(),
+            labelStyle: Playful.body(16 * _kNumText, color: hc ? Colors.white : Playful.ink.withValues(alpha: 0.75)),
+            floatingLabelStyle: Playful.title(16 * _kNumText, color: hc ? Colors.white : Playful.ink),
+            filled: true,
+            fillColor: hc ? Colors.black : Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: hc ? Colors.white54 : Playful.sun.withValues(alpha: 0.6), width: 2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: hc ? const Color(0xFFFFFF00) : _moduleAccent, width: 4),
+            ),
+          ),
+        ),
+      ),
+      _inputMethodToggle(hc),
+      if (_brailleInput)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.32),
+            child: SingleChildScrollView(
+              primary: false,
+              child: BrailleDigitInput(
+                controller: _brailleCtl,
+                onDigit: _seqBrailleDigit,
+                onBackspace: _seqBrailleBackspace,
+                enabled: !_inputLocked,
+                compact: true,
+              ),
+            ),
+          ),
+        ),
+      const SizedBox(height: 14),
+      _extraConfirmButton(_seqConfirm, hc),
+    ];
+    return LayoutBuilder(
+      builder: (context, c) {
+        // Проценка (намерно поголема) за сè освен картичката со одговорот.
+        final screenH = MediaQuery.of(context).size.height;
+        final fixedEst = 24.0 + 70 + 14 + 14 + 72 + _inputToggleEstimate(c.maxWidth) +
+            (_brailleInput ? screenH * 0.32 + 8 : 0) + 14 + 80;
+        if (c.maxHeight - fixedEst >= 200) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Column(
+              children: [
+                tiles,
+                const SizedBox(height: 14),
+                Expanded(child: card),
+                ...controls,
               ],
             ),
+          );
+        }
+        // Телефон: низата и картичката го полнат видливиот дел, а полето,
+        // „Бројки / Брајово писмо“, гласовниот совет и „Потврди“ се
+        // стигнуваат со лизгање - ништо не се сече на дното.
+        final cardH = (c.maxHeight - 24 - 70 - 14).clamp(180.0, 360.0).toDouble();
+        return SingleChildScrollView(
+          controller: _playScroll,
+          primary: false,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          child: Column(
+            children: [
+              tiles,
+              const SizedBox(height: 14),
+              SizedBox(height: cardH, child: card),
+              ...controls,
+            ],
           ),
-          const SizedBox(height: 14),
-          Semantics(
-            label: 'number_extra.seq_type_label'.tr(),
-            textField: true,
-            child: TextField(
-              controller: _seqInputController,
-              enabled: !_inputLocked,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              onChanged: _seqTypedChange,
-              onSubmitted: (_) => _seqConfirm(),
-              style: Playful.title(24 * _kNumText, color: fieldFg),
-              decoration: InputDecoration(
-                labelText: 'number_extra.seq_type_label'.tr(),
-                labelStyle: Playful.body(16 * _kNumText, color: hc ? Colors.white : Playful.ink.withValues(alpha: 0.75)),
-                floatingLabelStyle: Playful.title(16 * _kNumText, color: hc ? Colors.white : Playful.ink),
-                filled: true,
-                fillColor: hc ? Colors.black : Colors.white,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: hc ? Colors.white : Playful.sun, width: 3),
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: hc ? Colors.white54 : Playful.sun.withValues(alpha: 0.6), width: 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: hc ? const Color(0xFFFFFF00) : _moduleAccent, width: 4),
-                ),
-              ),
-            ),
-          ),
-          _inputMethodToggle(hc),
-          if (_brailleInput)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.32),
-                child: SingleChildScrollView(
-                  primary: false,
-                  child: BrailleDigitInput(
-                    controller: _brailleCtl,
-                    onDigit: _seqBrailleDigit,
-                    onBackspace: _seqBrailleBackspace,
-                    enabled: !_inputLocked,
-                    compact: true,
-                  ),
-                ),
-              ),
-            ),
-          const SizedBox(height: 14),
-          _extraConfirmButton(_seqConfirm, hc),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -2819,32 +2855,83 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                 ),
               ),
               if (_lastAnswerCorrect != null) _buildFeedbackBanner(context),
+              Expanded(
+                child: _hasNumberInput
+                    ? _buildNumberInputLayout(context, contrast, hc, constraints.maxHeight)
+                    : _buildMainContent(context, contrast),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Груба (намерно поголема) проценка за висината на копчињата
+  /// „Бројки / Брајово писмо“ + гласовниот совет. На тесен екран
+  /// копчињата и советот се во повеќе редови.
+  double _inputToggleEstimate(double width) => width >= 600 ? 120.0 : 230.0;
+
+  /// Задачата + внесот на број (бројки / Брајово + поле + „Потврди“).
+  /// Ако сè собира - како порано (задачата го зема остатокот). Инаку
+  /// (телефон) - сè лизга: задачата / сцената е горе, а внесот и гласовниот
+  /// совет се стигнуваат со лизгање надолу, без сечење на дното.
+  Widget _buildNumberInputLayout(BuildContext context, Color contrast, bool hc, double screenH) {
+    final inputH = _inputAreaHeight(screenH);
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _inputMethodToggle(hc),
+        // Бројките и Брајовата клетка заземаат ИСТА висина - при
+        // префрлање екранот не „скока“.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+          child: SizedBox(
+            height: inputH,
+            child: _brailleInput
+                // На ниски екрани - лизгање наместо прелевање.
+                ? SingleChildScrollView(
+                    primary: false,
+                    child: BrailleDigitInput(
+                      controller: _brailleCtl,
+                      onDigit: _appendBrailleDigit,
+                      onBackspace: _backspaceInput,
+                      enabled: !_inputLocked,
+                      compact: true,
+                    ),
+                  )
+                : _buildNumberPad(context),
+          ),
+        ),
+        _buildInputRow(context, contrast),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, c) {
+        final isCount = _mode == _GameMode.countObjects;
+        final controlsEst = _inputToggleEstimate(c.maxWidth) + inputH + 14 + 80;
+        final minMain = isCount ? 260.0 : 200.0;
+        if (c.maxHeight - controlsEst >= minMain) {
+          return Column(
+            children: [
               Expanded(child: _buildMainContent(context, contrast)),
-              if (_hasNumberInput) ...[
-                _inputMethodToggle(hc),
-                // Бројките и Брајовата клетка заземаат ИСТА висина - при
-                // префрлање екранот не „скока“.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                  child: SizedBox(
-                    height: _inputAreaHeight(constraints.maxHeight),
-                    child: _brailleInput
-                        // На ниски екрани - лизгање наместо прелевање.
-                        ? SingleChildScrollView(
-                            primary: false,
-                            child: BrailleDigitInput(
-                              controller: _brailleCtl,
-                              onDigit: _appendBrailleDigit,
-                              onBackspace: _backspaceInput,
-                              enabled: !_inputLocked,
-                              compact: true,
-                            ),
-                          )
-                        : _buildNumberPad(context),
-                  ),
-                ),
-                _buildInputRow(context, contrast),
-              ],
+              controls,
+            ],
+          );
+        }
+        // Броење предмети: сцената е висока колку целиот видлив дел (како
+        // кај тактилниот бројач); останатите задачи - колку што останува
+        // над внесот, но не помалку од 180.
+        final mainH = isCount ? max(minMain, c.maxHeight) : max(180.0, c.maxHeight - controlsEst);
+        return SingleChildScrollView(
+          controller: _playScroll,
+          primary: false,
+          // Доволно место под советот „Со глас: …“ (и над системската лента).
+          padding: const EdgeInsets.only(bottom: 28),
+          child: Column(
+            children: [
+              SizedBox(height: mainH, child: _buildMainContent(context, contrast)),
+              controls,
             ],
           ),
         );
@@ -3091,13 +3178,36 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   // ---------------------------------------------------------------------
 
   _CountLayout _countLayout(Size area) {
-    final count = _shapeCount;
-    final perRow = count <= 4 ? max(count, 1) : (count <= 9 ? 3 : 5);
+    final count = max(_shapeCount, 1);
+    // Облиците се во мрежа (редови, центрирани), како порано, но бројот на
+    // колони се бира според обликот на таблата: на висока (телефонска)
+    // табла - помалку колони и повеќе редови, за облиците да се поголеми.
+    // Растојанието расте со големината: и при „светкањето“ (×1,3) облиците
+    // не се допираат меѓу себе, ниту со работ на таблата.
+    const pad = 18.0;
+    const gapRatio = 0.4;
+    final innerW = max(1.0, area.width - 2 * pad);
+    final innerH = max(1.0, area.height - 2 * pad);
+    double fit(int per) {
+      final rows = (count / per).ceil();
+      final byW = innerW / (per + gapRatio * (per - 1));
+      final byH = innerH / (rows + gapRatio * (rows - 1));
+      return min(byW, byH);
+    }
+
+    var perRow = count <= 4 ? count : (count <= 9 ? 3 : 5);
+    var size = fit(perRow);
+    for (var per = 1; per <= min(count, 6); per++) {
+      final s = fit(per);
+      // Поинаков распоред само ако облиците се осетно поголеми.
+      if (s > size * 1.08) {
+        size = s;
+        perRow = per;
+      }
+    }
+    size = min(size, 96.0);
+    final gap = size * gapRatio;
     final rows = (count / perRow).ceil();
-    const gap = 16.0;
-    final byW = (area.width - 32 - (perRow - 1) * gap) / perRow;
-    final byH = (area.height - 24 - (rows - 1) * gap) / rows;
-    final size = max(24.0, min(64.0, min(byW, byH)));
     final gridH = rows * size + (rows - 1) * gap;
     final y0 = (area.height - gridH) / 2;
     final centers = <Offset>[];
@@ -3109,6 +3219,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         centers.add(Offset(x0 + i * (size + gap) + size / 2, y0 + r * (size + gap) + size / 2));
       }
     }
+    if (_shapeCount <= 0) centers.clear();
     return _CountLayout(centers, size);
   }
 
@@ -3161,23 +3272,33 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: LayoutBuilder(
               builder: (context, c) {
-                final area = Size(c.maxWidth, c.maxHeight);
+                // Висока табла како кај тактилниот бројач; на широк екран
+                // (десктоп) не пошироко од 560, за да остане „исправена“.
+                final w = min(c.maxWidth, 560.0);
+                final area = Size(w, c.maxHeight);
                 final lay = _countLayout(area);
-                return Listener(
-                  behavior: HitTestBehavior.opaque,
-                  onPointerDown: (e) => _countPointer(e.localPosition, lay),
-                  onPointerMove: (e) => _countPointer(e.localPosition, lay),
-                  child: Container(
-                    decoration: _boardDecoration(hc),
-                    child: Stack(
-                      children: [
-                        for (var i = 0; i < lay.centers.length; i++)
-                          Positioned(
-                            left: lay.centers[i].dx - lay.size / 2,
-                            top: lay.centers[i].dy - lay.size / 2,
-                            child: IgnorePointer(child: _countShape(i, lay.size, shapeColor, hc)),
-                          ),
-                      ],
+                return Center(
+                  child: SizedBox(
+                    width: area.width,
+                    height: area.height,
+                    child: Listener(
+                      behavior: HitTestBehavior.opaque,
+                      onPointerDown: (e) => _countPointer(e.localPosition, lay),
+                      onPointerMove: (e) => _countPointer(e.localPosition, lay),
+                      child: Container(
+                        decoration: _boardDecoration(hc),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            for (var i = 0; i < lay.centers.length; i++)
+                              Positioned(
+                                left: lay.centers[i].dx - lay.size / 2,
+                                top: lay.centers[i].dy - lay.size / 2,
+                                child: IgnorePointer(child: _countShape(i, lay.size, shapeColor, hc)),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 );

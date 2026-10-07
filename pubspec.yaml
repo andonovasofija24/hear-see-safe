@@ -47,6 +47,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -102,6 +103,12 @@ flutter:
     - assets/audio/voice/mk/
     - assets/audio/voice/en/
     - assets/audio/voice/sq/
+    - assets/audio/settings/mk/
+    - assets/audio/settings/en/
+    - assets/audio/settings/sq/
+    - assets/audio/camera/mk/
+    - assets/audio/camera/en/
+    - assets/audio/camera/sq/
     - assets/sounds/
     - assets/models/
     - assets/translations/
@@ -113,3 +120,19 @@ flutter:
 #   - family: Accessibility
 #      fonts:
 #       - asset: assets/fonts/Accessibility-Regular.ttf
+
+# Иконата на апликацијата. По промена на сликите изврши:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/icon/app_icon.png"
+  min_sdk_android: 26
+  adaptive_icon_background: "#1C1A63"
+  adaptive_icon_foreground: "assets/icon/app_icon_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/app_icon.png"
+    background_color: "#14134A"
+    theme_color: "#14134A"

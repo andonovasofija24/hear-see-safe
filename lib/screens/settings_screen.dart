@@ -211,10 +211,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 await context.setLocale(_localeForCode(code));
                 Provider.of<AppStateProvider>(context, listen: false).setLanguage(code);
                 Provider.of<LanguageManager>(context, listen: false).setUserUiLanguageCode(code);
+                // Без TTS: само однапред снимен клип на НОВИОТ јазик
+                // (assets/audio/settings/<јазик>/language_changed.mp3).
+                // Ако клипот го нема - тишина (само вибрација).
+                _voiceAssistant.stop();
+                if (!context.mounted) return;
                 await AccessibilityUtils.provideFeedback(
                   context: context,
-                  audioFeedback: 'settings.language_changed'.tr(),
-                  voiceAssistant: _voiceAssistant,
+                  clipAssetPath: 'audio/settings/$code/language_changed.mp3',
                 );
               },
               child: AnimatedContainer(

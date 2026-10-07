@@ -720,6 +720,16 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (pairs[pair].add(dot)) _dotOrder[pair].add(dot);
   }
 
+  /// Отстранува ОДРЕДЕНА точка од парот (не мора да е последната) и ја
+  /// вади и од редоследот, така што „.“ (поништи точка) потоа ја брише
+  /// последната ПРЕОСТАНАТА точка. Враќа true ако точката била избрана.
+  bool _removeDot(List<Set<int>> pairs, int pair, int dot) {
+    if (pair < 0 || pair >= pairs.length) return false;
+    final removed = pairs[pair].remove(dot);
+    _dotOrder[pair].remove(dot);
+    return removed;
+  }
+
   /// Ја вади последната притисната точка - прво од активниот пар, па од
   /// другиот. Враќа (пар, точка) или null ако нема точки.
   (int, int)? _popLastDot(List<Set<int>> pairs) {
@@ -1133,9 +1143,21 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// Секое притискање регистрира точка и ја изговара. Ако веќе има преглед
   /// (по А) кој не е потврден, новата точка го поништува прегледот -
   /// корисникот очигледно сака да го коригира знакот.
+  /// Допир / клик / копче (F D S J K L) на ВЕЌЕ избрана точка ја
+  /// поништува (кус звук за грешка + која точка е тргната), без разлика
+  /// дали била последната притисната.
   Future<void> _tapWritingDot(int pair, int dotIndex) async {
     if (!_isWritingView) return;
     if (_view == _View.sentenceGame && (_sentence == null || _sentenceStep >= _sentenceTokens.length)) return;
+    if (_writingDots[pair].contains(dotIndex)) {
+      setState(() {
+        _preview = null;
+        _activePair = pair;
+        _removeDot(_writingDots, pair, dotIndex);
+      });
+      await _afterDotRemoved((pair, dotIndex));
+      return;
+    }
     setState(() {
       _preview = null;
       _activePair = pair;
@@ -1211,6 +1233,80 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     await _afterDotRemoved(removed);
   }
 
+  /// Гласовно „поништи (пар P) точка N“ - ја тргнува токму таа точка,
+  /// и кога е активен другиот пар. Звук: кус звук за грешка + dot_N; ако
+  /// точката не била избрана - само звукот за грешка.
+  Future<void> _removeSpecificWritingDot(int pair, int dotIndex) async {
+    if (!_isWritingView) return;
+    var removed = false;
+    setState(() {
+      removed = _removeDot(_writingDots, pair, dotIndex);
+      if (removed) _preview = null;
+    });
+    await _afterDotRemoved(removed ? (pair, dotIndex) : null);
+  }
+
+  /// Последната препознаена команда „поништи пар P точка N“ (ја поставува
+  /// `matches`, ја користи `onSelected` веднаш потоа).
+  (int, int)? _voiceDotTarget;
+
+  static const Set<String> _vwRemoveVerbs = {
+    'поништи', 'избриши', 'бриши', 'тргни', 'отстрани',
+    'undo', 'delete', 'remove', 'erase', 'clear',
+    'anulo', 'fshi', 'hiq',
+  };
+
+  static const Map<String, int> _vwNumbers = {
+    'еден': 1, 'една': 1, 'едно': 1, 'прва': 1, 'прв': 1, 'први': 1,
+    'два': 2, 'две': 2, 'втора': 2, 'втор': 2, 'втори': 2,
+    'три': 3, 'трета': 3, 'четири': 4, 'четврта': 4, 'пет': 5, 'петта': 5, 'шест': 6, 'шеста': 6,
+    'one': 1, 'won': 1, 'first': 1, 'two': 2, 'to': 2, 'too': 2, 'second': 2,
+    'three': 3, 'third': 3, 'four': 4, 'for': 4, 'fourth': 4, 'five': 5, 'fifth': 5, 'six': 6, 'sixth': 6,
+    'një': 1, 'nje': 1, 'dy': 2, 'tre': 3, 'tri': 3, 'katër': 4, 'kater': 4,
+    'pesë': 5, 'pese': 5, 'gjashtë': 6, 'gjashte': 6,
+  };
+
+  static bool _isDotWord(String w) => w.startsWith('точк') || w == 'dot' || w == 'dots' || w.startsWith('pik');
+
+  static bool _isPairWord(String w) =>
+      w == 'пар' || w == 'парот' || w == 'пара' || w == 'pair' || w.startsWith('çift') || w.startsWith('cift') || w.startsWith('qift');
+
+  /// Број од збор („три“, „three“, „tre“) или цифра („3“).
+  static int? _voiceNumber(String w) => int.tryParse(w) ?? _vwNumbers[w];
+
+  /// Го парсира „поништи пар 1 точка 1“ / „delete dot 3“ / „fshi pikën 3“.
+  /// Без пар - активниот пар. Враќа (пар 0-1, точка 0-5) или null.
+  (int, int)? _parseRemoveDotCommand(String transcript) {
+    final words = transcript
+        .toLowerCase()
+        .split(RegExp(r'[^\p{L}\p{N}]+', unicode: true))
+        .where((w) => w.isNotEmpty)
+        .toList();
+    // Препознавањето понекогаш спојува збор и цифра („точка3“, „pair1“).
+    final tokens = <String>[];
+    for (final w in words) {
+      final m = RegExp(r'^(\D+?)(\d+)$').firstMatch(w);
+      if (m != null) {
+        tokens..add(m.group(1)!)..add(m.group(2)!);
+      } else {
+        tokens.add(w);
+      }
+    }
+    if (!tokens.any(_vwRemoveVerbs.contains)) return null;
+
+    int? dot;
+    int? pair;
+    for (var i = 0; i < tokens.length - 1; i++) {
+      final n = _voiceNumber(tokens[i + 1]);
+      if (n == null) continue;
+      if (dot == null && _isDotWord(tokens[i]) && n >= 1 && n <= 6) dot = n;
+      if (pair == null && _isPairWord(tokens[i]) && (n == 1 || n == 2)) pair = n;
+    }
+    if (dot == null) return null;
+    final p = pair != null ? pair - 1 : (_activePair < 2 ? _activePair : 0);
+    return (p, dot - 1);
+  }
+
   /// Гласовно „изговори“ - секогаш одново го изговара знакот од точките.
   Future<void> _voiceSpeak() async {
     if (!_isWritingView) return;
@@ -1235,6 +1331,21 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// „поништи точка“ е пред „поништи буква“ бидејќи второто содржи и само
   /// „поништи“.
   List<VoiceCategoryOption> _writingVoiceOptions() => [
+        // „поништи (пар 1) точка 3“ - пред сите други, за „поништи точка“
+        // без број да остане „последната точка“.
+        VoiceCategoryOption(
+          keywords: const [],
+          beforeGlobal: true,
+          matches: (t) {
+            _voiceDotTarget = _parseRemoveDotCommand(t);
+            return _voiceDotTarget != null;
+          },
+          onSelected: () {
+            final target = _voiceDotTarget;
+            _voiceDotTarget = null;
+            if (target != null) _removeSpecificWritingDot(target.$1, target.$2);
+          },
+        ),
         VoiceCategoryOption(keywords: _kwRemoveDot, onSelected: _removeLastWritingDot),
         VoiceCategoryOption(keywords: _kwRemoveLetter, onSelected: _onResetKey),
         VoiceCategoryOption(keywords: _kwSpeak, onSelected: _voiceSpeak),
@@ -2093,10 +2204,16 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         _buildBackRow(contrast, onBack: _backToCategories, withVoiceBack: true),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          child: Text('${_group.titleKey.tr()}  ·  ${_symbolIndex + 1} / ${_group.symbols.length}', style: GameTypography.heading(context, contrast, 22 * _kBrailleText)),
+          child: Text(
+            '${_group.titleKey.tr()}  ·  ${_symbolIndex + 1} / ${_group.symbols.length}',
+            textAlign: TextAlign.center,
+            style: GameTypography.heading(context, contrast, (MediaQuery.sizeOf(context).width < 600 ? 14 : 22) * _kBrailleText),
+          ),
         ),
         Expanded(
+          // Листање лево/десно (хоризонтално), како сликовница.
           child: PageView.builder(
+            scrollDirection: Axis.horizontal,
             controller: _explorePageController,
             itemCount: _group.symbols.length,
             onPageChanged: _onExplorePageChanged,
@@ -2115,9 +2232,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
     final groupColor = _groupColors[_groupIndex % _groupColors.length];
 
+    // Тесен екран (телефон): потесни зони за листање (свајп и онака
+    // работи), повеќе место за средината.
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+
     // Темна „плоча“ во бојата на групата, со бел раб и сјај.
     return Container(
-      margin: const EdgeInsets.all(12),
+      margin: EdgeInsets.all(narrow ? 6 : 12),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(30),
@@ -2136,8 +2257,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            flex: 2,
-            child: _NavZone(enabled: hasPrev, icon: Icons.chevron_left_rounded, onTap: _goPrevExplore, label: 'braille.previous_item'.tr(), highContrast: hc),
+            flex: narrow ? 1 : 2,
+            child: _NavZone(enabled: hasPrev, icon: Icons.chevron_left_rounded, onTap: _goPrevExplore, label: 'braille.previous_item'.tr(), highContrast: hc, iconSize: narrow ? 36 : 64),
           ),
           Expanded(
             flex: 6,
@@ -2153,8 +2274,18 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                     // Средната зона на телефон е тесна (~200 px) - таму
                     // помало зголемување, за долгите зборови да не се кршат.
                     final k = constraints.maxWidth < 420 ? 1.2 : (constraints.maxWidth < 640 ? 1.4 : _kBrailleText);
+                    // Телефон (тесно или ниско): сè се смалува - името и
+                    // точките и онака се изговараат. Клетката се собира во
+                    // ширината (една клетка ≈ 152 × scale px широка) и
+                    // зафаќа најмногу ~40% од висината; ако пак не собере,
+                    // страницата се лизга нагоре-надолу (без преклопување).
+                    final compact = constraints.maxWidth < 420 || constraints.maxHeight < 560;
+                    final textK = compact ? 0.75 : k;
+                    final widthScale = (constraints.maxWidth - 24) / 160;
+                    final heightScale = constraints.maxHeight.isFinite ? constraints.maxHeight * 0.4 / 214 : 2.0;
+                    final cellScale = compact ? min(2.0, max(0.7, min(widthScale, heightScale))) : 2.0;
                     return SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                      padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 12, vertical: compact ? 8 : 16),
                       child: ConstrainedBox(
                         constraints: BoxConstraints(minHeight: constraints.maxHeight),
                         child: Center(
@@ -2162,24 +2293,27 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              _bigCellsDisplay(s.cells, hc, scale: 2.0),
-                              const SizedBox(height: 26),
-                              Text(s.displayChar, style: TextStyle(fontSize: 110, fontWeight: FontWeight.w900, color: hc ? textColor : _gold, height: 1.0)),
+                              FittedBox(fit: BoxFit.scaleDown, child: _bigCellsDisplay(s.cells, hc, scale: cellScale)),
+                              SizedBox(height: compact ? 10 : 26),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(s.displayChar, style: TextStyle(fontSize: compact ? 64 : 110, fontWeight: FontWeight.w900, color: hc ? textColor : _gold, height: 1.0)),
+                              ),
                               if (s.kind != BrailleKind.letter && s.kind != BrailleKind.digit) ...[
                                 const SizedBox(height: 6),
                                 Text(
                                   _symbolName(s),
                                   textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 30 * k, fontWeight: FontWeight.w800, color: textColor),
+                                  style: TextStyle(fontSize: 30 * textK, fontWeight: FontWeight.w800, color: textColor),
                                 ),
                               ],
-                              const SizedBox(height: 18),
+                              SizedBox(height: compact ? 8 : 18),
                               Text(
                                 _explanationFor(s),
                                 textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 28 * k, fontWeight: FontWeight.w600, color: textColor),
+                                style: TextStyle(fontSize: 28 * textK, fontWeight: FontWeight.w600, color: textColor),
                               ),
-                              const SizedBox(height: 22),
+                              SizedBox(height: compact ? 12 : 22),
                               Semantics(
                                 label: 'braille.repeat'.tr(),
                                 button: true,
@@ -2192,8 +2326,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                                       customBorder: const CircleBorder(),
                                       onTap: () => _playCharExplanationSequence(s),
                                       child: Padding(
-                                        padding: const EdgeInsets.all(18),
-                                        child: Icon(Icons.replay_rounded, size: 36, color: hc ? Colors.white : Playful.ink),
+                                        padding: EdgeInsets.all(compact ? 12 : 18),
+                                        child: Icon(Icons.replay_rounded, size: compact ? 28 : 36, color: hc ? Colors.white : Playful.ink),
                                       ),
                                     ),
                                   ),
@@ -2210,8 +2344,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
             ),
           ),
           Expanded(
-            flex: 2,
-            child: _NavZone(enabled: hasNext, icon: Icons.chevron_right_rounded, onTap: _goNextExplore, label: 'braille.next_item'.tr(), highContrast: hc),
+            flex: narrow ? 1 : 2,
+            child: _NavZone(enabled: hasNext, icon: Icons.chevron_right_rounded, onTap: _goNextExplore, label: 'braille.next_item'.tr(), highContrast: hc, iconSize: narrow ? 36 : 64),
           ),
         ],
       ),
@@ -2416,6 +2550,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     required Widget board,
     List<Widget> bottom = const [],
     double gridFraction = 0.5,
+    bool pinTop = false,
   }) {
     return LayoutBuilder(
       builder: (context, viewport) {
@@ -2425,6 +2560,44 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         final boardHeight = touch
             ? max(300.0, viewport.maxHeight * max(gridFraction, 0.55))
             : max(240.0, viewport.maxHeight * gridFraction);
+        // Нормално: горниот дел (знакот / задачата) стои ФИКСНО горе, а
+        // таблата и упатството под него се лизгаат во преостанатиот простор.
+        // Само на многу низок екран (пр. телефон положен) - целиот екран се
+        // лизга, за горниот дел да не излезе надвор.
+        if (pinTop && viewport.maxHeight >= 460) {
+          return Column(
+            children: [
+              // Сигурносна граница: ако горниот дел е невообичаено висок,
+              // тој (само тој) се лизга наместо да ја истисне таблата.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: viewport.maxHeight * 0.55),
+                child: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: top)),
+              ),
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, area) {
+                    // Таблата го зема поголемиот дел од преостанатиот простор
+                    // (барем колку што треба за точките), упатството под неа.
+                    final minBoard = touch ? 280.0 : 220.0;
+                    final areaBoard = max(minBoard, area.maxHeight * (touch ? 0.86 : 0.78));
+                    return SingleChildScrollView(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(minHeight: area.maxHeight),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            SizedBox(height: areaBoard, child: Center(child: board)),
+                            Column(mainAxisSize: MainAxisSize.min, children: bottom),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          );
+        }
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: viewport.maxHeight),
@@ -2454,6 +2627,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       board: _dotPairsGrid(pairCount: _practiceTarget!.cells.length, onTap: _tapComposeDot, hits: _correctDotsHit),
       bottom: [_buildKeyboardHint(contrast)],
       gridFraction: 0.55,
+      pinTop: true,
     );
   }
 
@@ -2473,6 +2647,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       ),
       bottom: [_buildKeyboardHint(contrast)],
       gridFraction: 0.5,
+      pinTop: true,
     );
   }
 
@@ -2481,11 +2656,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   Widget _practiceTargetHeader(Color contrast) {
     final t = _practiceTarget!;
     final isSign = t.kind != BrailleKind.letter && t.kind != BrailleKind.digit;
+    // Низок екран (телефон): помал знак - горниот дел стои фиксно, па
+    // треба да остави место за таблата под него.
+    final shortScreen = MediaQuery.sizeOf(context).height < 760;
+    final charSize = shortScreen ? (isSign ? 56.0 : 70.0) : (isSign ? 80.0 : 100.0);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: shortScreen ? 6 : 12),
       child: Column(
         children: [
-          Text(t.displayChar, style: TextStyle(fontSize: isSign ? 80 : 100, fontWeight: FontWeight.w900, color: AccessibilityUtils.isHighContrast(context) ? contrast : _gold, height: 1.05)),
+          Text(t.displayChar, style: TextStyle(fontSize: charSize, fontWeight: FontWeight.w900, color: AccessibilityUtils.isHighContrast(context) ? contrast : _gold, height: 1.05)),
           if (isSign)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2897,64 +3076,77 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       children: [
         _buildBackRow(contrast, onBack: _openPracticeModeSelect, voiceOptions: _practiceVoiceOptions()),
         _practiceProgressLine(contrast),
-        Expanded(
-          flex: 5,
-          // Ако горниот дел не собере (мал екран / големи букви) - се лизга
-          // наместо да излезе надвор; ако собере - стои во средина.
-          child: LayoutBuilder(
-            builder: (context, constraints) => SingleChildScrollView(
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                child: Center(
+        // Сликата со точките (и задачата) стои ФИКСНО горе - не се лизга;
+        // само одговорите под неа се лизгаат. На низок екран (телефон)
+        // клетката е помала, а копчето „повтори“ стои до неа.
+        Builder(builder: (context) {
+          final screenH = MediaQuery.sizeOf(context).height;
+          final shortScreen = screenH < 760;
+          final cellScale = shortScreen ? 0.8 : (screenH < 950 ? 1.05 : 1.3);
+          final cell = AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            padding: EdgeInsets.all(shortScreen ? 5 : 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: !_recognizeDotsDone ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B)) : Colors.transparent,
+                width: 4,
+              ),
+            ),
+            child: _bigCellsDisplay(_practiceTarget!.cells, hc, scale: cellScale),
+          );
+          final replay = Semantics(
+            label: 'braille.repeat'.tr(),
+            button: true,
+            child: PressableScale(
+              child: Material(
+                color: hc ? Colors.black : _gold,
+                shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
+                elevation: 4,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _playRecognizeDotsSequence(_practiceTarget!),
+                  child: Padding(
+                    padding: EdgeInsets.all(shortScreen ? 12 : 16),
+                    child: Icon(Icons.replay_rounded, size: shortScreen ? 28 : 32, color: hc ? Colors.white : Playful.ink),
+                  ),
+                ),
+              ),
+            ),
+          );
+          return Padding(
+            padding: EdgeInsets.symmetric(vertical: shortScreen ? 4 : 8),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text('braille.recognize_prompt'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 24 * _kBrailleText)),
-                ),
-                const SizedBox(height: 14),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: !_recognizeDotsDone ? (hc ? const Color(0xFFFFFF00) : const Color(0xFFF59E0B)) : Colors.transparent,
-                      width: 4,
-                    ),
-                  ),
-                  child: _bigCellsDisplay(_practiceTarget!.cells, hc, scale: 1.3),
-                ),
-                const SizedBox(height: 18),
-                Semantics(
-                  label: 'braille.repeat'.tr(),
-                  button: true,
-                  child: PressableScale(
-                    child: Material(
-                      color: hc ? Colors.black : _gold,
-                      shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
-                      elevation: 4,
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: () => _playRecognizeDotsSequence(_practiceTarget!),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Icon(Icons.replay_rounded, size: 32, color: hc ? Colors.white : Playful.ink),
-                        ),
-                      ),
-                    ),
+                  child: Text(
+                    'braille.recognize_prompt'.tr(),
+                    textAlign: TextAlign.center,
+                    style: GameTypography.heading(context, contrast, (shortScreen ? 17 : 24) * _kBrailleText),
                   ),
                 ),
+                SizedBox(height: shortScreen ? 6 : 14),
+                if (shortScreen)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: cell)),
+                      const SizedBox(width: 14),
+                      replay,
+                    ],
+                  )
+                else ...[
+                  FittedBox(fit: BoxFit.scaleDown, child: cell),
+                  const SizedBox(height: 18),
+                  replay,
+                ],
               ],
             ),
-                ),
-              ),
-            ),
-          ),
-        ),
+          );
+        }),
         Expanded(
-          flex: 5,
           child: LayoutBuilder(
             builder: (context, viewport) => ListView(
             padding: _brailleSidePad(viewport.maxWidth),
@@ -3319,7 +3511,13 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           _buildWritingDotGrid(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Text((InputMode.showKeys(context) ? 'braille.express_hint' : 'braille.express_touch_hint').tr(), textAlign: TextAlign.center, style: GameTypography.body(context, contrast, 13 * _kBrailleText)),
+            child: Text(
+              InputMode.showKeys(context)
+                  ? '${'braille.express_hint'.tr()} ${'braille.dot_toggle_hint'.tr()}'
+                  : '${'braille.express_touch_hint'.tr()} ${'braille.dot_toggle_touch_hint'.tr()}',
+              textAlign: TextAlign.center,
+              style: GameTypography.body(context, contrast, 13 * _kBrailleText),
+            ),
           ),
           _buildWritingActions(),
           // Полето за пишување - ограничена висина, со скрол и расте нагоре
@@ -3499,7 +3697,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           const SizedBox(height: 12),
           _buildVoiceCommandsBox(
             contrast,
-            _view == _View.sentenceGame ? 'braille.voice_cmds_sentence' : 'braille.voice_cmds_express',
+            _view == _View.sentenceGame ? 'braille.voice_cmds_sentence_v2' : 'braille.voice_cmds_express_v2',
           ),
         ],
       ),
@@ -4136,7 +4334,9 @@ class _NavZone extends StatefulWidget {
   final String label;
   final bool highContrast;
 
-  const _NavZone({required this.enabled, required this.icon, required this.onTap, required this.label, required this.highContrast});
+  final double iconSize;
+
+  const _NavZone({required this.enabled, required this.icon, required this.onTap, required this.label, required this.highContrast, this.iconSize = 64});
 
   @override
   State<_NavZone> createState() => _NavZoneState();
@@ -4167,7 +4367,7 @@ class _NavZoneState extends State<_NavZone> {
             if (_pressed) Container(color: Colors.white.withValues(alpha: 0.15)),
             Opacity(
               opacity: widget.enabled ? 1.0 : 0.25,
-              child: Center(child: Icon(widget.icon, size: 64, color: Colors.white.withValues(alpha: widget.highContrast ? 1.0 : 0.9))),
+              child: Center(child: Icon(widget.icon, size: widget.iconSize, color: Colors.white.withValues(alpha: widget.highContrast ? 1.0 : 0.9))),
             ),
           ],
         ),
