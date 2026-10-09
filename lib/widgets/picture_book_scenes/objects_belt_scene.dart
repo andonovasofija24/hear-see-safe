@@ -28,7 +28,11 @@ class ObjectsBeltScene extends PbScene {
     required super.quizLabel,
     required super.highContrast,
     super.reduceMotion,
+    this.focusMode = false,
   });
+
+  /// Во деталниот приказ ја задржува сцената и го зголемува централниот поим.
+  final bool focusMode;
 
   @override
   State<ObjectsBeltScene> createState() => _ObjectsBeltSceneState();
@@ -190,8 +194,8 @@ class _ObjectsBeltSceneState extends State<ObjectsBeltScene> with TickerProvider
         final sc = (math.min(slotW * 0.95, h * 0.32)).clamp(60.0, 150.0).toDouble();
         final ss = sc * 0.72;
 
-        final mW = (w * 0.28).clamp(100.0, 190.0).toDouble();
-        final mH = (beltTop - ss - 22).clamp(60.0, 140.0).toDouble();
+        final mW = (w * 0.35).clamp(118.0, 210.0).clamp(0.0, w - 28).toDouble();
+        final mH = (beltTop - ss - 22).clamp(76.0, 155.0).toDouble();
 
         final n = _n;
         final children = <Widget>[];
@@ -220,7 +224,13 @@ class _ObjectsBeltSceneState extends State<ObjectsBeltScene> with TickerProvider
                 top: beltTop - s + beltH * 0.08,
                 width: s,
                 height: s,
-                child: _box(j, idx, s, t, isCenter, duplicate, hc),
+                child: widget.focusMode && isCenter
+                    ? Transform.scale(
+                        scale: 1.22,
+                        alignment: Alignment.bottomCenter,
+                        child: _box(j, idx, s, t, isCenter, duplicate, hc),
+                      )
+                    : _box(j, idx, s, t, isCenter, duplicate, hc),
               ),
             );
           }
@@ -275,7 +285,7 @@ class _ObjectsBeltSceneState extends State<ObjectsBeltScene> with TickerProvider
                     ),
                   ),
                   Positioned(
-                    right: 10,
+                    right: 14,
                     top: 10,
                     width: mW,
                     height: mH,
@@ -450,7 +460,7 @@ class _ObjectsBeltSceneState extends State<ObjectsBeltScene> with TickerProvider
                             Text(
                               widget.quizLabel,
                               maxLines: 1,
-                              style: Playful.title(mH * 0.2, color: Colors.white),
+                              style: Playful.title((mH * 0.24).clamp(20.0, 32.0).toDouble(), color: Colors.white),
                             ),
                           ],
                         ),

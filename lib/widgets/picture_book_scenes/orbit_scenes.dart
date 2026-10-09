@@ -523,7 +523,7 @@ class _SpaceOrbitSceneState extends _OrbitState<SpaceOrbitScene> {
   List<Widget> buildCenter(_OrbitGeom g, double t, bool hc) {
     final c = g.c;
     final pulse = (t * 4) % 1.0;
-    final badge = math.max(34.0, c * 0.26);
+    final badge = math.max(43.0, c * 0.31);
     final badgeScale = 1 + 0.07 * math.sin(_tau * t * 4);
     // Значката горе-десно, целосно во кругот на планетата.
     final bOff = c / 2 + c * 0.22 - badge / 2;
@@ -944,7 +944,7 @@ class _MusicEarSceneState extends _OrbitState<MusicEarScene> {
     );
     final hook = math.max(5.0, g.c * 0.045);
     final chain = math.max(4.0, g.c * 0.05);
-    final pr = math.max(15.0, g.c * 0.11);
+    final pr = math.max(20.0, g.c * 0.13);
     final drawH = hook * 2 + chain + pr * 2;
     final boxW = math.max(48.0, pr * 2 + 12);
     final boxH = math.max(48.0, drawH);
@@ -1272,7 +1272,7 @@ class _AnimalsLionSceneState extends _OrbitState<AnimalsLionScene> {
   @override
   List<Widget> buildOverlay(_OrbitGeom g, double t, bool hc) {
     final c = g.c;
-    final sw = math.max(48.0, c * 0.36);
+    final sw = math.max(58.0, c * 0.42);
     final sh = sw * 1.15;
     final pulse = 1 + 0.05 * math.sin(_tau * t * 4);
     final center = Offset(g.cx + c * 0.27, g.cy0 + c * 0.27);

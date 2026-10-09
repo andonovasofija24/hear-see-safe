@@ -522,12 +522,20 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   }
 
   void _goToNextItem() {
-    if (!_hasNextItem || _itemPageController == null) return;
+    if (!_hasNextItem) return;
+    if (_view == _View.itemDetail) {
+      _onItemPageChanged(_itemIndex + 1);
+      return;
+    }
     _itemPageController!.nextPage(duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
   }
 
   void _goToPrevItem() {
-    if (!_hasPrevItem || _itemPageController == null) return;
+    if (!_hasPrevItem) return;
+    if (_view == _View.itemDetail) {
+      _onItemPageChanged(_itemIndex - 1);
+      return;
+    }
     _itemPageController!.previousPage(duration: const Duration(milliseconds: 320), curve: Curves.easeInOut);
   }
 
@@ -1343,6 +1351,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     const yellow = Color(0xFFFFFF00);
     final cat = _category;
     final name = item.nameKey.tr();
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final iconDiameter = (screenWidth - 176).clamp(136.0, 190.0);
+    final iconFontSize = iconDiameter * 0.63;
     final glow = hc ? yellow : Color.lerp(cat.color, Colors.white, 0.35)!;
     final tile = Semantics(
       button: true,
@@ -1362,8 +1373,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 124,
-                      height: 124,
+                      width: iconDiameter,
+                      height: iconDiameter,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -1376,7 +1387,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                 BoxShadow(color: cat.color.withValues(alpha: 0.5), blurRadius: 10),
                               ],
                       ),
-                      child: Text(item.emoji, style: const TextStyle(fontSize: 76)),
+                      child: Text(item.emoji, style: TextStyle(fontSize: iconFontSize)),
                     ),
                     if (seen)
                       Positioned(
@@ -1402,12 +1413,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _stageArrow(Icons.arrow_back_rounded, 'picture_book.previous_item'.tr(), () => _stageStep(-1), hc),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1415,21 +1426,19 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                 tile,
                 const SizedBox(height: 8),
                 ExcludeSemantics(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      name,
-                      maxLines: 1,
-                      softWrap: false,
-                      textAlign: TextAlign.center,
-                      style: GameTypography.heading(context, _onBg(hc, contrast), 24 * _kPbText),
-                    ),
+                  child: Text(
+                    name,
+                    maxLines: 2,
+                    softWrap: true,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: GameTypography.heading(context, _onBg(hc, contrast), 32 * _kPbText),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           _stageArrow(Icons.arrow_forward_rounded, 'picture_book.next_item'.tr(), () => _stageStep(1), hc),
         ],
       ),
@@ -1465,21 +1474,36 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   // --- Поединечна сликовница ---
 
+  /// Деталниот приказ ја користи ИСТАТА сцена како категоријата.
+  /// Нема второ копче за квиз: оригиналното останува на сцената.
   Widget _buildItemDetail(BuildContext context) {
-    final contrastColor = AccessibilityUtils.getContrastColor(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final contrast = AccessibilityUtils.getContrastColor(context);
+    final item = _item;
+    final visited = _visited;
+    final sceneItems = [
+      for (final i in _category.items)
+        PbSceneItem(
+          id: i.id,
+          emoji: i.emoji,
+          label: i.nameKey.tr(),
+          visited: visited.contains(i.id),
+        ),
+    ];
+    const yellow = Color(0xFFFFFF00);
+
     return Align(
       alignment: Alignment.topCenter,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000),
+        constraints: const BoxConstraints(maxWidth: 1100),
         child: Column(
           children: [
             Row(
               children: [
-                _buildBackRow(contrastColor, onBack: _closeItemDetail),
+                _buildBackRow(contrast, onBack: _closeItemDetail),
                 const Spacer(),
                 Padding(
-                  padding: const EdgeInsets.only(top: 12, right: 16),
+                  padding: const EdgeInsets.only(top: 8, right: 12),
                   child: CategoryVoiceCommandButton(
                     compact: true,
                     background: hc ? null : Playful.sun,
@@ -1497,54 +1521,367 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               ],
             ),
             _buildStorySegments(context),
-            // Отворена книга: лево и десно високи ленти за листање (секогаш
-            // на исто место), во средина страницата со 3Д прелистување.
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final stripW = constraints.maxWidth < 480 ? 56.0 : 64.0;
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        SizedBox(
-                          width: stripW,
-                          child: _NavZone(
-                            enabled: _hasPrevItem,
-                            icon: Icons.chevron_left_rounded,
-                            onTap: _goToPrevItem,
-                            label: 'picture_book.previous_item'.tr(),
-                            highContrast: hc,
+                  final compact = constraints.maxWidth < 620;
+                  final sceneHeight = (constraints.maxHeight * (compact ? 0.58 : 0.65))
+                      .clamp(180.0, 460.0);
+                  return Column(
+                    children: [
+                      SizedBox(
+                        height: sceneHeight,
+                        width: double.infinity,
+                        child: ClipRect(
+                          child: AnimatedScale(
+                            // Зум на постојната сцена, без заменување на
+                            // дрвото, лентата, планетата, увото или лавот.
+                            // Кај фабричката лента предметот веќе се зумира
+                            // во ObjectsBeltScene (focusMode). Зумирање на
+                            // целата сцена го отсекува десниот раб на квизот.
+                            scale: _category.id == 'objects' ? 1.0 : 1.08,
+                            duration: Duration(
+                              milliseconds: Playful.reduceMotion(context) ? 0 : 350,
+                            ),
+                            child: _detailScene(
+                              sceneItems,
+                              hc,
+                              Playful.reduceMotion(context),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: PageView.builder(
-                            controller: _itemPageController,
-                            itemCount: _category.items.length,
-                            onPageChanged: _onItemPageChanged,
-                            itemBuilder: (context, index) => _build3DPage(context, contrastColor, _category.items[index], index),
+                      ),
+                      const SizedBox(height: 6),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.fromLTRB(6, 0, 6, 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: hc ? Colors.black : Color.lerp(_category.color, Colors.black, 0.70),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: hc ? yellow : _category.color.withValues(alpha: 0.95),
+                              width: 2.5,
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: _objectsExplanation(
+                                  item.nameKey.tr(),
+                                  item.emoji,
+                                  item.descriptionKey.tr(),
+                                  item.learnKey.tr(),
+                                  hc,
+                                  const Color(0xFF071A43),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Row(
+                                children: [
+                                  _objectsArrow(
+                                    Icons.arrow_back_rounded,
+                                    'picture_book.previous_item'.tr(),
+                                    hc,
+                                    _goToPrevItem,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _objectsActionButton(
+                                      Icons.volume_up_rounded,
+                                      'Повтори',
+                                      _category.color,
+                                      hc ? yellow : Colors.white,
+                                      hc,
+                                      _repeatItem,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  _objectsArrow(
+                                    Icons.arrow_forward_rounded,
+                                    'picture_book.next_item'.tr(),
+                                    hc,
+                                    _goToNextItem,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        SizedBox(
-                          width: stripW,
-                          child: _NavZone(
-                            enabled: _hasNextItem,
-                            icon: Icons.chevron_right_rounded,
-                            onTap: _goToNextItem,
-                            label: 'picture_book.next_item'.tr(),
-                            highContrast: hc,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   );
                 },
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Деталната сцена ги користи оригиналните widget-и и нивните анимации.
+  /// Изборот на нов поим го ажурира деталниот приказ, не stage екранот.
+  Widget _detailScene(List<PbSceneItem> items, bool hc, bool reduce) {
+    final selected = _itemIndex;
+    final quizLabel = 'picture_book.go_to_quiz'.tr();
+    void select(int index) {
+      if (index != _itemIndex) _onItemPageChanged(index);
+    }
+    switch (_category.id) {
+      case 'nature':
+        return NatureTreeScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+      case 'objects':
+        return ObjectsBeltScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce, focusMode: true,
+        );
+      case 'space':
+        return SpaceOrbitScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+      case 'music':
+        return MusicEarScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+      case 'animals':
+      default:
+        return AnimalsLionScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+    }
+  }
+
+  Widget _objectsExplanation(
+    String name,
+    String emoji,
+    String description,
+    String learn,
+    bool hc,
+    Color navy,
+  ) {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 66,
+                height: 66,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: hc ? Colors.black : Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: hc ? const Color(0xFFFFFF00) : Colors.white.withValues(alpha: 0.42),
+                    width: 2,
+                  ),
+                ),
+                child: Text(emoji, style: const TextStyle(fontSize: 43)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  style: GoogleFonts.lexend(
+                    fontSize: 29 * _kPbText,
+                    height: 1.12,
+                    fontWeight: FontWeight.w800,
+                    color: hc ? const Color(0xFFFFFF00) : Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            description,
+            style: GoogleFonts.lexend(
+              fontSize: 26 * _kPbText,
+              height: 1.2,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            learn,
+            style: GoogleFonts.lexend(
+              fontSize: 24 * _kPbText,
+              height: 1.22,
+              fontWeight: FontWeight.w700,
+              color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _objectsFocusedItem(
+    String emoji,
+    String itemId,
+    bool hc,
+    Color accent,
+    double fontSize,
+  ) {
+    return Center(
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 250),
+        transitionBuilder: (child, animation) => ScaleTransition(
+          scale: animation,
+          child: FadeTransition(opacity: animation, child: child),
+        ),
+        child: Container(
+          key: ValueKey(itemId),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: hc ? Colors.black : const Color(0xFFFFD56A),
+            border: Border.all(
+              color: hc ? const Color(0xFFFFFF00) : Colors.white,
+              width: hc ? 4 : 5,
+            ),
+            boxShadow: hc
+                ? null
+                : [
+                    BoxShadow(
+                      color: accent.withValues(alpha: 0.9),
+                      blurRadius: 26,
+                      spreadRadius: 4,
+                    ),
+                    const BoxShadow(
+                      color: Color(0xAAFFD76A),
+                      blurRadius: 42,
+                      spreadRadius: 10,
+                    ),
+                  ],
+          ),
+          child: Text(emoji, style: TextStyle(fontSize: fontSize)),
+        ),
+      ),
+    );
+  }
+
+  Widget _objectsNeighbour(int offset, bool hc, Color accent) {
+    final items = _category.items;
+    if (items.length < 2) return const SizedBox.shrink();
+    final index = (_itemIndex + offset + items.length) % items.length;
+    final item = items[index];
+    return Opacity(
+      opacity: hc ? 1 : 0.65,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: hc ? Colors.black : const Color(0xFF203D70),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: hc ? Colors.white : accent.withValues(alpha: 0.8),
+              width: 2,
+            ),
+          ),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(item.emoji, style: const TextStyle(fontSize: 42)),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _objectsArrow(
+    IconData icon,
+    String label,
+    bool hc,
+    VoidCallback onTap,
+  ) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: hc ? Colors.black : const Color(0xFF1769E8),
+        shape: CircleBorder(
+          side: BorderSide(
+            color: hc ? const Color(0xFFFFFF00) : Colors.white,
+            width: 3,
+          ),
+        ),
+        elevation: hc ? 0 : 5,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 46,
+            height: 46,
+            child: Icon(icon, size: 29, color: hc ? const Color(0xFFFFFF00) : Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _objectsActionButton(
+    IconData icon,
+    String label,
+    Color color,
+    Color foreground,
+    bool hc,
+    VoidCallback onTap,
+  ) {
+    return Semantics(
+      button: true,
+      label: label.replaceAll('\\n', ' '),
+      child: Material(
+        color: hc ? Colors.black : color,
+        borderRadius: BorderRadius.circular(20),
+        elevation: hc ? 0 : 4,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 62),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: hc ? const Color(0xFFFFFF00) : Colors.white,
+                width: hc ? 3 : 2,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 32, color: foreground),
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.lexend(
+                    fontSize: 19,
+                    height: 1.12,
+                    fontWeight: FontWeight.w800,
+                    color: foreground,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

@@ -256,8 +256,8 @@ class _NatureTreeSceneState extends State<NatureTreeScene> with TickerProviderSt
 
         // Табла за квизот на видливиот дел од стеблото.
         final visTrunk = groundY - (cy + r);
-        final signH = (visTrunk * 0.82).clamp(56.0, 72.0).toDouble();
-        final signW = (w * 0.42).clamp(132.0, 240.0).toDouble();
+        final signH = (visTrunk * 0.9).clamp(64.0, 88.0).toDouble();
+        final signW = (w * 0.48).clamp(155.0, 270.0).clamp(0.0, w - 24).toDouble();
         final signTop = cy + r + math.max(2.0, (visTrunk - signH) / 2);
 
         final yaw = _effYaw;
@@ -500,7 +500,7 @@ class _NatureTreeSceneState extends State<NatureTreeScene> with TickerProviderSt
                             Text(
                               widget.quizLabel,
                               maxLines: 1,
-                              style: Playful.title(signH * 0.34, color: Colors.white),
+                              style: Playful.title((signH * 0.38).clamp(22.0, 34.0).toDouble(), color: Colors.white),
                             ),
                           ],
                         ),
