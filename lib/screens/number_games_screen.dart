@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:hear_and_see_safe/utils/input_mode.dart';
 import 'package:flutter/services.dart';
@@ -119,6 +120,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   // ---------------------------------------------------------------------
   final AudioPlayer _voicePlayer = AudioPlayer();
   final AudioPlayer _effectsPlayer = AudioPlayer();
+  final AudioPlayer _markerPlayer = AudioPlayer();
   static const int _maxNumber = 20;
   static const double _tallyRadius = 34;
   bool _extraExplanationOpen = false;
@@ -200,6 +202,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _countToken++;
     _voicePlayer.dispose();
     _effectsPlayer.dispose();
+    _markerPlayer.dispose();
     _inputController.dispose();
     _seqInputController.dispose();
     _playScroll.dispose();
@@ -653,6 +656,34 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     } catch (_) {}
   }
 
+  DateTime? _lastMarkerSound;
+
+  Future<void> _markerSound() async {
+    final now = DateTime.now();
+    if (_lastMarkerSound != null && now.difference(_lastMarkerSound!).inMilliseconds < 450) return;
+    _lastMarkerSound = now;
+    if (!mounted) return;
+    try {
+      await _markerPlayer.stop();
+      await _markerPlayer.setVolume(0.75);
+      await _markerPlayer.play(AssetSource('audio/number_games/marker_write.wav'));
+    } catch (_) {
+      // Анимацијата останува функционална и ако ресурсот недостасува.
+    }
+  }
+
+  Widget _writtenNumber(String text, {required double size, required Color color, bool animate = true}) {
+    return _MarkerWriting(
+      key: ValueKey('$_mode-$text-${(_mode == _GameMode.operations || _mode == _GameMode.multiplyDivide) ? 0 : _asked}-${animate ? 'write' : 'still'}'),
+      text: text,
+      fontSize: size,
+      color: color,
+      highContrast: AccessibilityUtils.isHighContrast(context),
+      animate: animate,
+      onWriting: _markerSound,
+    );
+  }
+
   Future<void> _vib({int? duration, List<int>? pattern}) async {
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: duration, pattern: pattern);
@@ -976,7 +1007,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.92),
       borderRadius: BorderRadius.circular(24),
       border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.55), width: hc ? 3 : 2.5),
-      boxShadow: hc ? null : [BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 20)],
+      boxShadow: hc ? null : [
+        BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 20),
+        const BoxShadow(color: Color(0xFF064E3B), offset: Offset(0, 5)),
+      ],
     );
   }
 
@@ -984,10 +1018,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   /// со бел раб.
   BoxDecoration _whiteCardDecoration(bool hc, {double radius = 22, double border = 3, bool glow = false}) {
     return BoxDecoration(
-      color: hc ? Colors.black : Colors.white,
+      color: hc ? Colors.black : null,
+      gradient: hc ? null : const LinearGradient(
+        begin: Alignment.topLeft, end: Alignment.bottomRight,
+        colors: [Color(0xFFFFFBEB), Color(0xFFE0F2FE), Color(0xFFECFDF5)],
+      ),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(color: hc ? Colors.white : Playful.sun, width: border),
-      boxShadow: hc || !glow ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.4), blurRadius: 22)],
+      boxShadow: hc || !glow ? null : [
+        BoxShadow(color: Playful.sun.withValues(alpha: 0.3), blurRadius: 22, offset: const Offset(0, 9)),
+        const BoxShadow(color: Color(0xFFCBD5E1), offset: Offset(0, 5)),
+      ],
     );
   }
 
@@ -1041,7 +1082,13 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                       borderRadius: BorderRadius.circular(radius),
                       border: Border.all(color: borderColor, width: borderWidth),
                     ),
-                    child: child,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (!hc) const Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _MathBoardPainter()))),
+                        child,
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1310,8 +1357,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       duration: const Duration(milliseconds: 150),
       margin: const EdgeInsets.all(5),
       decoration: BoxDecoration(
-        color: gradient == null ? bg : null,
-        gradient: gradient,
+        color: hc ? bg : null,
+        gradient: hc ? null : (gradient ?? const LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: [Color(0xFFFFFBEB), Color(0xFFDDF4FF)],
+        )),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: border, width: (isCurrent || found) ? 4 : 3),
         boxShadow: shadow,
@@ -1321,10 +1371,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           fit: BoxFit.scaleDown,
           child: Padding(
             padding: const EdgeInsets.all(8),
-            child: Text(
-              _gridValues[index].toString(),
-              style: Playful.display(84, color: fg),
-            ),
+            child: _writtenNumber(_gridValues[index].toString(), size: 84, color: fg),
           ),
         ),
       ),
@@ -1431,10 +1478,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                   Flexible(
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: Text(
-                        _seqAnswer.toString(),
-                        style: Playful.display(110, color: valueColor),
-                      ),
+                      child: _writtenNumber(_seqAnswer.toString(), size: 110, color: valueColor),
                     ),
                   ),
                   Icon(Icons.keyboard_arrow_down_rounded, size: 40, color: arrowColor),
@@ -1570,7 +1614,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       width: w,
       height: 70,
       decoration: BoxDecoration(
-        color: bg,
+        color: hc ? bg : null,
+        gradient: hc ? null : LinearGradient(
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+          colors: isBlank ? [const Color(0xFFFFF1A8), const Color(0xFFFFD166)] : [const Color(0xFFFFFBEB), const Color(0xFFDDF4FF)],
+        ),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: hc ? Colors.white : (isBlank ? Colors.white : Playful.sun),
@@ -1578,17 +1626,18 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
         ),
         boxShadow: hc || !isBlank ? null : [BoxShadow(color: Playful.sun.withValues(alpha: 0.6), blurRadius: 18)],
       ),
-      child: Center(
-        child: FittedBox(
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          if (!hc) const Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _MathBoardPainter()))),
+          Center(child: FittedBox(
           fit: BoxFit.scaleDown,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Text(
-              isBlank ? '? $text' : text,
-              style: Playful.display(30, color: fg),
-            ),
+            child: _writtenNumber(text, size: 30, color: fg),
           ),
-        ),
+        )),
+        ],
       ),
     );
   }
@@ -3346,19 +3395,27 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
           decoration: BoxDecoration(
-            color: hc ? Colors.black : Colors.white,
+            gradient: hc ? null : const LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: [Color(0xFFFFFBEB), Color(0xFFE0F2FE), Color(0xFFF0FDFA)],
+            ),
+            color: hc ? Colors.black : null,
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 4 : 5),
+            border: Border.all(color: hc ? Colors.white : Playful.sun, width: hc ? 4 : 6),
             boxShadow: hc
                 ? null
                 : [
+                    const BoxShadow(color: Color(0xFFB45309), offset: Offset(0, 8)),
                     BoxShadow(color: Playful.sun.withValues(alpha: 0.45), blurRadius: 28),
                     BoxShadow(color: _moduleAccent.withValues(alpha: 0.35), blurRadius: 40, offset: const Offset(0, 12)),
                   ],
           ),
-          child: Align(
-            heightFactor: 1.0,
-            child: FittedBox(fit: BoxFit.scaleDown, child: child),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              if (!hc) const Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _MathBoardPainter()))),
+              Align(heightFactor: 1.0, child: FittedBox(fit: BoxFit.scaleDown, child: child)),
+            ],
           ),
         ),
       ),
@@ -3371,10 +3428,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     final numberSize = (size.height * 0.24).clamp(90.0, 200.0).toDouble();
     return _questionCard(
       hc,
-      Text(
-        _displayNumber.toString(),
-        style: Playful.display(numberSize, color: hc ? contrast : Playful.ink),
-      ),
+      _writtenNumber(_displayNumber.toString(), size: numberSize, color: hc ? contrast : Playful.ink),
     );
   }
 
@@ -3421,9 +3475,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           fit: BoxFit.scaleDown,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text(
-              value.toString(),
-              style: Playful.display(60, color: hc ? (isCorrectValue ? Colors.black : AccessibilityUtils.getContrastColor(context)) : Colors.white),
+            child: _writtenNumber(
+              value.toString(), size: 60,
+              color: hc ? (isCorrectValue ? Colors.black : AccessibilityUtils.getContrastColor(context)) : Colors.white,
             ),
           ),
         ),
@@ -3433,23 +3487,27 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   Widget _buildOperationsView(BuildContext context, Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
-    final opText = _isAddition ? '$_opA + $_opB = ?' : '$_opA − $_opB = ?';
+    final showSolution = _inputLocked && _lastAnswerCorrect == false;
+    final result = showSolution ? _correctOpAnswer.toString() : '?';
+    final opText = _isAddition ? '$_opA + $_opB = $result' : '$_opA − $_opB = $result';
     final size = MediaQuery.of(context).size;
     final textSize = (size.height * 0.1).clamp(44.0, 100.0).toDouble();
     return _questionCard(
       hc,
-      Text(opText, style: Playful.display(textSize, color: hc ? contrast : Playful.ink)),
+      _writtenNumber(opText, size: textSize, color: hc ? contrast : Playful.ink),
     );
   }
 
   Widget _buildMultiplyView(BuildContext context, Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
-    final opText = _isMultiply ? '$_mulA × $_mulB = ?' : '${_mulA * _mulB} ÷ $_mulB = ?';
+    final showSolution = _inputLocked && _lastAnswerCorrect == false;
+    final result = showSolution ? _correctMulAnswer.toString() : '?';
+    final opText = _isMultiply ? '$_mulA × $_mulB = $result' : '${_mulA * _mulB} ÷ $_mulB = $result';
     final size = MediaQuery.of(context).size;
     final textSize = (size.height * 0.1).clamp(44.0, 100.0).toDouble();
     return _questionCard(
       hc,
-      Text(opText, style: Playful.display(textSize, color: hc ? contrast : Playful.ink)),
+      _writtenNumber(opText, size: textSize, color: hc ? contrast : Playful.ink),
     );
   }
 
@@ -3690,7 +3748,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           color: hc ? Colors.black : Colors.white,
           glow: _moduleAccent,
           borderColor: hc ? Colors.white : Playful.sun,
-          borderWidth: hc ? 2 : 3,
+          borderWidth: hc ? 3 : 4,
           child: Center(
             child: Text(digit, style: Playful.display(fontSize, color: hc ? AccessibilityUtils.getContrastColor(context) : Playful.ink)),
           ),
@@ -3935,4 +3993,141 @@ class _StarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+/// Анимирано пишување со фломастер. Clip-от открива текст, а врвот
+/// на фломастерот ја следи линијата; без интерактивни преклопувања.
+class _MarkerWriting extends StatefulWidget {
+  const _MarkerWriting({
+    super.key,
+    required this.text,
+    required this.fontSize,
+    required this.color,
+    required this.highContrast,
+    required this.onWriting,
+    this.animate = true,
+  });
+
+  final String text;
+  final double fontSize;
+  final Color color;
+  final bool highContrast;
+  final bool animate;
+  final VoidCallback onWriting;
+
+  @override
+  State<_MarkerWriting> createState() => _MarkerWritingState();
+}
+
+class _MarkerWritingState extends State<_MarkerWriting>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 650 + widget.text.length * 190),
+    );
+    if (widget.animate) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onWriting();
+        _controller.forward();
+      });
+    } else {
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Playful.display(widget.fontSize, color: widget.color);
+    final painter = TextPainter(
+      text: TextSpan(text: widget.text, style: style),
+      textDirection: ui.TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final width = painter.width + 20;
+    final height = painter.height + 12;
+    return Semantics(
+      label: widget.text,
+      child: ExcludeSemantics(
+        child: SizedBox(
+          width: width,
+          height: height,
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, _) {
+              final progress = Curves.easeInOut.transform(_controller.value);
+              return Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: progress.clamp(0.001, 1.0),
+                      child: SizedBox(
+                        width: width,
+                        height: height,
+                        child: Center(child: Text(widget.text, style: style, maxLines: 1)),
+                      ),
+                    ),
+                  ),
+                  if (widget.animate && _controller.value < 1)
+                    Positioned(
+                      left: (width * progress - 8).clamp(0.0, width - 10),
+                      top: height * 0.04,
+                      child: Transform.rotate(
+                        angle: -0.55,
+                        child: Icon(
+                          Icons.edit_rounded,
+                          size: (widget.fontSize * 0.35).clamp(17.0, 37.0),
+                          color: widget.highContrast ? widget.color : const Color(0xFF0F766E),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Дискретна математичка текстура во внатрешноста на секоја табла.
+/// Светлите линии се зад бројките и не го намалуваат контрастот.
+class _MathBoardPainter extends CustomPainter {
+  const _MathBoardPainter();
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width < 12 || size.height < 12) return;
+    final grid = Paint()..color = const Color(0xFF0E7490).withValues(alpha: 0.075)
+      ..strokeWidth = 1;
+    const step = 24.0;
+    for (double x = 12; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), grid);
+    }
+    for (double y = 12; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
+    }
+    final corner = Paint()..color = const Color(0xFF0891B2).withValues(alpha: 0.22)
+      ..style = PaintingStyle.stroke..strokeWidth = 2;
+    final r = min(18.0, min(size.width, size.height) * 0.16);
+    for (final p in [Offset(8, 8), Offset(size.width - 8, 8),
+      Offset(8, size.height - 8), Offset(size.width - 8, size.height - 8)]) {
+      canvas.drawCircle(p, r * 0.34, corner);
+    }
+  }
+  @override
+  bool shouldRepaint(covariant _MathBoardPainter oldDelegate) => false;
 }

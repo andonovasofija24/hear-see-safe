@@ -96,6 +96,7 @@ flutter:
     - assets/audio/number_games/mk/
     - assets/audio/number_games/en/
     - assets/audio/number_games/sq/
+    - assets/audio/number_games/
     - assets/audio/cyber_safety/mk/
     - assets/audio/cyber_safety/en/
     - assets/audio/cyber_safety/sq/
