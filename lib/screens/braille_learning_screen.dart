@@ -50,6 +50,7 @@ enum _View {
   sentenceGame,
   reference,
   savedSentences,
+  secrets,
 }
 
 class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
@@ -94,6 +95,20 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// назад-копчето оди точно таму (главно мени, „Искажи ја својата мисла“
   /// или „Пишувај реченици“).
   _View _viewBeforeReference = _View.categorySelect;
+  int _secretLesson = 0;
+  int _secretTopic = 0;
+  final Set<String> _secretExpanded = {};
+  int _secretExample = 0;
+  bool _secretShowChange = false;
+  final Set<int> _labDots = {1, 2, 4};
+  String _labInput = '';
+  int _labStep = 0;
+  bool _labHistoryOpen = false;
+  final Set<String> _labOpenPanels = {};
+  int _labAudioToken = 0;
+  bool _labAudioPlaying = false;
+  Completer<void>? _labPendingCompletion;
+
   int _groupIndex = 0;
   int _symbolIndex = 0;
   int _narrationToken = 0;
@@ -1546,6 +1561,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   return _buildReferenceGrid(context);
                 case _View.savedSentences:
                   return _buildSavedSentences(context);
+                case _View.secrets:
+                  return _buildSecrets(context);
               }
             },
           ),
@@ -1707,6 +1724,986 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return options;
   }
 
+
+  // ---------------------------------------------------------------------
+  // Тајните на Брајовата азбука: објаснувачки лекции без резултат или квиз.
+  // Сите комбинации се преземаат од BrailleData за тековниот јазик.
+  // ---------------------------------------------------------------------
+  String _secretText(String mk, String sq, String en) =>
+      _lang == BrailleLang.mk ? mk : (_lang == BrailleLang.sq ? sq : en);
+
+  Widget _secretsMenuCard(bool hc) => _menuCard(
+    color: const Color(0xFF0D9488),
+    icon: Icons.auto_awesome_rounded,
+    title: _secretText('Тајните на Брајовата азбука', 'Sekretet e alfabetit Braille', 'Secrets of the Braille alphabet'),
+    subtitle: _secretText('Откриј како се поврзани буквите, броевите и знаците.',
+      'Zbulo lidhjet mes shkronjave, numrave dhe shenjave.',
+      'Discover patterns connecting letters, numbers and punctuation.'),
+    onTap: () { setState(() { _view = _View.secrets; _secretLesson = 0; _secretTopic = 0; _secretExample = 0; _secretShowChange = false; _secretExpanded.clear(); }); },
+    hc: hc,
+    done: false,
+  );
+
+  // Објаснувачка содржина: без квизови, одговори и прелистување примери.
+  BrailleSymbol? _secretByDots(List<int> dots) {
+    final target = dots.toSet();
+    for (final symbol in BrailleData.lettersFor(_lang)) {
+      if (symbol.dots.toSet().containsAll(target) && target.containsAll(symbol.dots)) return symbol;
+    }
+    return null;
+  }
+
+  Widget _secretCell(List<int> dots, {Set<int> highlights = const {}, String? label}) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Semantics(
+      label: '${label ?? ''}. ${_secretText('Точки', 'Pikat', 'Dots')}: ${dots.isEmpty ? '0' : dots.join(', ')}',
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : const Color(0xFF17213B),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: hc ? Colors.white : _gold.withValues(alpha: .9), width: 3),
+          boxShadow: hc ? null : [BoxShadow(color: _gold.withValues(alpha: .15), blurRadius: 14)],
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (var row = 0; row < 3; row++)
+            Row(mainAxisSize: MainAxisSize.min, children: [
+              for (final d in [row + 1, row + 4])
+                Container(width: 46, height: 46, margin: const EdgeInsets.all(7),
+                  decoration: BoxDecoration(shape: BoxShape.circle,
+                    color: dots.contains(d) ? (highlights.contains(d) ? const Color(0xFF4ADE80) : _gold) : Colors.white24,
+                    border: Border.all(color: dots.contains(d) ? Colors.white : Colors.white38, width: 1.5))),
+            ]),
+        ]),
+      ),
+    );
+  }
+
+  Widget _secretHeading(String text) => Padding(
+    padding: const EdgeInsets.only(top: 24, bottom: 12),
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(colors: [Color(0xFF123E49), Color(0xFF17213B)]),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF45E0D0).withValues(alpha: .6), width: 2),
+      ),
+      child: Text(text, textAlign: TextAlign.center,
+        style: const TextStyle(color: Color(0xFFFFDE78), fontSize: 37,
+          fontWeight: FontWeight.w900, height: 1.2)),
+    ),
+  );
+
+  Widget _secretParagraph(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+    child: Text(text, textAlign: TextAlign.start,
+      style: TextStyle(color: _fg(context), fontSize: 31, height: 1.45,
+        fontWeight: FontWeight.w500)),
+  );
+
+  // All educational audio is assembled from existing MP3 assets; never TTS.
+  Future<bool> _labPlayAsset(String path, int token) async {
+    if (!mounted || token != _labAudioToken) return false;
+    try {
+      // Asset existence check prevents errors from interrupting the lesson.
+      await rootBundle.load('assets/$path');
+      final done = Completer<void>();
+      _labPendingCompletion = done;
+      late StreamSubscription<void> subscription;
+      subscription = _voicePlayer.onPlayerComplete.listen((_) {
+        if (!done.isCompleted) done.complete();
+      });
+      await _voicePlayer.stop();
+      if (token != _labAudioToken) { await subscription.cancel(); return false; }
+      await _voicePlayer.play(AssetSource(path));
+      await done.future.timeout(const Duration(minutes: 3), onTimeout: () {});
+      await subscription.cancel();
+      if (identical(_labPendingCompletion, done)) _labPendingCompletion = null;
+      return token == _labAudioToken;
+    } catch (_) { return false; }
+  }
+
+  Future<bool> _labPlayCandidates(List<String> paths, int token) async {
+    for (final path in paths) {
+      if (token != _labAudioToken) return false;
+      try { await rootBundle.load('assets/$path'); }
+      catch (_) { continue; }
+      return _labPlayAsset(path, token);
+    }
+    return false;
+  }
+
+  void _labStopAudio() {
+    _labAudioToken++;
+    final pending = _labPendingCompletion;
+    _labPendingCompletion = null;
+    if (pending != null && !pending.isCompleted) pending.complete();
+    _narrationToken++;
+    _voicePlayer.stop();
+    if (mounted) setState(() => _labAudioPlaying = false);
+  }
+
+  // Category names play automatically on opening; no synthesized speech.
+  Future<void> _labPlayCategoryName(String id) async {
+    _labStopAudio();
+    final token = _labAudioToken;
+    if (mounted) setState(() => _labAudioPlaying = true);
+    await _labPlayAsset('audio/braille/$_langCode/secrets_name_$id.mp3', token);
+    if (mounted && token == _labAudioToken) setState(() => _labAudioPlaying = false);
+  }
+
+  Future<void> _labPlayStandaloneSymbol(BrailleSymbol symbol) async {
+    _labStopAudio();
+    final token = _labAudioToken;
+    if (mounted) setState(() => _labAudioPlaying = true);
+    await _labPlayCellNarration(symbol, token);
+    if (mounted && token == _labAudioToken) setState(() => _labAudioPlaying = false);
+  }
+
+  Widget _labStandaloneSymbol(BrailleSymbol symbol, String title) {
+    final id = 'standalone-${symbol.key}';
+    final opened = _secretExpanded.contains(id);
+    return _secretSection(id, title, [
+      if (opened) ...[
+        Center(child: _secretCell(symbol.dots, label: title)),
+        _secretParagraph('${_secretText('Точки', 'Pikat', 'Dots')}: ${symbol.dots.join(', ')}'),
+        Wrap(spacing: 12, runSpacing: 8, children: [
+          ElevatedButton.icon(onPressed: () => _labPlayStandaloneSymbol(symbol),
+            icon: const Icon(Icons.play_arrow),
+            label: Text(_secretText('Слушни знак и точки', 'Dëgjo shenjën dhe pikat', 'Hear sign and dots'))),
+          OutlinedButton.icon(onPressed: _labStopAudio, icon: const Icon(Icons.stop),
+            label: Text(_secretText('Стоп', 'Ndalo', 'Stop'))),
+        ]),
+      ],
+    ]);
+  }
+
+  Future<void> _labPlayIntro(String section) async {
+    _labStopAudio();
+    final token = _labAudioToken;
+    setState(() => _labAudioPlaying = true);
+    // Add user-recorded files here: assets/audio/braille/<lang>/secrets_intro_<section>.mp3
+    await _labPlayAsset('audio/braille/$_langCode/secrets_intro_$section.mp3', token);
+    if (mounted && token == _labAudioToken) setState(() => _labAudioPlaying = false);
+  }
+
+  // The reminder's exact audio sequence: symbol name followed by each dot.
+  Future<void> _labPlayCellNarration(BrailleSymbol symbol, int token) async {
+    if (token != _labAudioToken) return;
+    await _labPlayAsset('audio/braille/$_langCode/${symbol.audioClip}.mp3', token);
+    for (final cell in symbol.cells) {
+      for (final dot in cell) {
+        if (token != _labAudioToken) return;
+        await _labPlayAsset('audio/braille/$_langCode/dot_$dot.mp3', token);
+      }
+    }
+  }
+
+  Future<void> _labPlayFormula(String before, List<int> from, List<int> to) async {
+    _labStopAudio();
+    final token = _labAudioToken;
+    setState(() => _labAudioPlaying = true);
+    final letter = _secretByDots(from);
+    // First: letter name, then its dots, then PLUS/MINUS and changed dots.
+    final sign = BrailleData.punctuationFor(_lang).where((s) => !s.isMultiCell && s.dots.toSet().containsAll(from) && from.toSet().containsAll(s.dots)).firstOrNull;
+    final digit = BrailleData.digits.where((s) => s.dots.join(',') == from.join(',')).firstOrNull;
+    final spoken = before.contains('(') && to.join(',') == from.join(',') ? (digit ?? letter ?? sign) : (letter ?? sign);
+    if (spoken != null) {
+      await _labPlayCellNarration(spoken, token);
+    } else {
+      // Empty initial cell has no name or dots to announce.
+      for (final d in from) {
+        if (token != _labAudioToken) break;
+        await _labPlayAsset('audio/braille/$_langCode/dot_$d.mp3', token);
+      }
+    }
+    final removed = from.toSet().difference(to.toSet()).toList()..sort();
+    final added = to.toSet().difference(from.toSet()).toList()..sort();
+    for (final change in <(String, List<int>)>[('minus', removed), ('plus', added)]) {
+      if (change.$2.isEmpty || token != _labAudioToken) continue;
+      final op = change.$1;
+      await _labPlayCandidates([
+        'audio/number_games/$_langCode/$op.mp3',
+        'audio/number_games/$_langCode/$op.wav',
+        'audio/number_games/$_langCode/${op == 'plus' ? 'плус' : 'минус'}.mp3',
+        'audio/number_games/$_langCode/${op == 'plus' ? 'плус' : 'минус'}.wav',
+      ], token);
+      for (final d in change.$2) {
+        if (token != _labAudioToken) break;
+        await _labPlayAsset('audio/braille/$_langCode/dot_$d.mp3', token);
+      }
+    }
+    if (mounted && token == _labAudioToken) setState(() => _labAudioPlaying = false);
+  }
+
+  Widget _labAudioControls(String section) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 12),
+    child: Wrap(spacing: 12, runSpacing: 8, children: [
+      ElevatedButton.icon(
+        onPressed: () => _labPlayIntro(section),
+        icon: const Icon(Icons.volume_up_rounded, size: 30),
+        label: Text(_secretText('Слушни вовед (MP3)', 'Dëgjo hyrjen (MP3)', 'Play introduction (MP3)'),
+          style: const TextStyle(fontSize: 23)),
+      ),
+      OutlinedButton.icon(
+        onPressed: _labStopAudio,
+        icon: const Icon(Icons.stop_circle_outlined, size: 30),
+        label: Text(_secretText('Стоп', 'Ndalo', 'Stop'), style: const TextStyle(fontSize: 23)),
+      ),
+    ]),
+  );
+
+  Widget _labFold(String id, String title, Widget child, {String? introSection}) {
+    final open = _labOpenPanels.contains(id);
+    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Semantics(button: true, expanded: open,
+        child: InkWell(onTap: () => setState(() {
+          if (open) { _labOpenPanels.remove(id); _labStopAudio(); } else { _labOpenPanels.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
+        }), child: Padding(padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(children: [
+            Expanded(child: _labText(title, size: 31, weight: FontWeight.w800)),
+            Icon(open ? Icons.expand_less : Icons.expand_more, color: _labYellow, size: 42),
+          ])))),
+      if (open) ...[
+        if (introSection != null) _labAudioControls(introSection),
+        child,
+      ],
+    ]));
+  }
+
+  Widget _labAudioControlsForFormula(String before, List<int> from, List<int> to) =>
+    Wrap(spacing: 10, runSpacing: 8, alignment: WrapAlignment.center, children: [
+      ElevatedButton.icon(onPressed: () => _labPlayFormula(before, from, to),
+        icon: const Icon(Icons.play_arrow_rounded, size: 30),
+        label: Text(_secretText('Слушни ги точките', 'Dëgjo pikat', 'Hear the dots'),
+          style: const TextStyle(fontSize: 23))),
+      OutlinedButton.icon(onPressed: _labStopAudio,
+        icon: const Icon(Icons.stop_rounded, size: 30),
+        label: Text(_secretText('Стоп', 'Ndalo', 'Stop'), style: const TextStyle(fontSize: 23))),
+    ]);
+
+  Widget _secretFormula(String before, List<int> from, String operation, String after, List<int> to,
+      {Set<int> added = const {}, String? note}) {
+    final fg = _fg(context);
+    final formulaId = 'formula-${before.hashCode}-${after.hashCode}-${from.join()}-${to.join()}';
+    final isOpen = _secretExpanded.contains(formulaId);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(colors: [Color(0xFF202F4A), Color(0xFF132F3D)]),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: const Color(0xFFFFDE78).withValues(alpha: .55), width: 2)),
+        child: Column(children: [
+          InkWell(onTap: () => setState(() {
+            if (isOpen) { _secretExpanded.remove(formulaId); _labStopAudio(); }
+            else { _secretExpanded.add(formulaId); Future.microtask(() => _labPlayFormula(before, from, to)); }
+          }), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(children: [
+              Expanded(child: Text('$before → $after', style: TextStyle(color: fg, fontSize: 32, fontWeight: FontWeight.bold))),
+              Icon(isOpen ? Icons.expand_less : Icons.expand_more, color: _gold, size: 40),
+            ]))),
+          if (isOpen) ...[
+          Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12, runSpacing: 12, children: [
+              Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(before, style: TextStyle(color: fg, fontSize: 41, fontWeight: FontWeight.bold)),
+                _secretCell(from, label: before),
+              ]),
+              Text(operation, style: TextStyle(color: _gold, fontSize: 32, fontWeight: FontWeight.bold)),
+              Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(after, style: TextStyle(color: fg, fontSize: 41, fontWeight: FontWeight.bold)),
+                _secretCell(to, highlights: added, label: after),
+              ]),
+            ]),
+          _labAudioControlsForFormula(before, from, to),
+          if (note != null) Padding(padding: const EdgeInsets.only(top: 9),
+            child: Text(note, textAlign: TextAlign.center, style: TextStyle(color: fg, fontSize: 29))),
+        ],
+        ]),
+      ),
+    );
+  }
+
+  Widget _secretLetterFormula(List<int> from, List<int> to, String op, {String? note}) {
+    final a = _secretByDots(from);
+    final b = _secretByDots(to);
+    if (a == null || b == null) return const SizedBox.shrink();
+    return _secretFormula(a.char.toUpperCase(), from, op, b.char.toUpperCase(), to,
+      added: to.toSet().difference(from.toSet()), note: note);
+  }
+
+  Widget _secretSection(String id, String title, List<Widget> children) {
+    final opened = _secretExpanded.contains(id);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: hc ? null : const LinearGradient(
+            begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF123E49), Color(0xFF17213B)]),
+          color: hc ? Colors.black : null,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: opened ? const Color(0xFF50E3CE) : _gold.withValues(alpha: .7), width: opened ? 3 : 2),
+          boxShadow: hc ? null : [BoxShadow(color: const Color(0xFF00C9B7).withValues(alpha: .13), blurRadius: 16, offset: const Offset(0, 6))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Semantics(
+            button: true,
+            expanded: opened,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => setState(() {
+                if (opened) { _secretExpanded.remove(id); _labStopAudio(); }
+                else { _secretExpanded.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
+              }),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                child: Row(children: [
+                  Icon(opened ? Icons.menu_book_rounded : Icons.auto_stories_rounded, color: const Color(0xFF50E3CE), size: 35),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(title, style: TextStyle(color: _fg(context), fontSize: 34,
+                    fontWeight: FontWeight.w800))),
+                  Icon(opened ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    color: _gold, size: 38),
+                ]),
+              ),
+            ),
+          ),
+          if (opened) Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 22),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // Секој наслов започнува нова категорија што се отвора со притискање.
+  Widget _secretAccordionContent(String prefix, Widget content) {
+    if (content is! Column) return content;
+    final sections = <Widget>[];
+    var index = 0;
+    String? heading;
+    var body = <Widget>[];
+    void flush() {
+      if (heading != null) {
+        final sectionId = '$prefix-${index++}';
+        sections.add(_secretSection(sectionId, heading!, [_labAudioControls(sectionId), ...body]));
+      }
+    }
+    for (final child in content.children) {
+      // Насловите се генерираат преку _secretHeading (Padding со Text).
+      if (child is Padding && child.child is Container &&
+          child.padding == const EdgeInsets.only(top: 24, bottom: 12) &&
+          (child.child as Container).child is Text) {
+        flush();
+        heading = ((child.child as Container).child as Text).data ?? '';
+        body = <Widget>[];
+      } else {
+        body.add(child);
+      }
+    }
+    flush();
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: sections);
+  }
+
+  Widget _secretLetters() {
+    const base = <List<int>>[
+      [1], [1,2], [1,4], [1,4,5], [1,5],
+      [1,2,4], [1,2,4,5], [1,2,5], [2,4], [2,4,5],
+    ];
+    const english = ['A','B','C','D','E','F','G','H','I','J'];
+    final out = <Widget>[];
+    out.add(_secretHeading(_secretText('Група 1 — горните четири точки', 'Grupi 1 — katër pikat e sipërme', 'Group 1 — the upper four dots')));
+    out.add(_secretParagraph(_secretText(
+      'Првите десет основни шеми историски го следат редоследот A, B, C, D, E, F, G, H, I, J од латинската (англиската) азбука. Се користат само точките 1, 2, 4 и 5. Во македонскиот јазик ги покажуваме буквите што ги имаат истите шеми, па затоа редоследот не е македонски азбучен ред.',
+      'Dhjetë modelet bazë ndjekin rendin latin A–J dhe përdorin vetëm pikat 1, 2, 4 dhe 5. Shkronjat shqipe paraqiten sipas modelit, jo sipas rendit alfabetik shqip.',
+      'The first ten patterns follow Latin/English alphabetical order A–J and use only dots 1, 2, 4 and 5.')));
+    out.add(_secretParagraph(_secretText(
+      'Почнуваме со А (точка 1). Со додавање на точка 2 добиваме Б. Потоа точката 2 се отстранува и се додава точка 4 за следната шема. Понатаму точките се додаваат или отстрануваат по редот подолу. Ова е начин за паметење на утврдениот редослед, а не правило дека секоја буква мора да се создаде од претходната.',
+      'Fillojmë me A (pika 1), shtojmë pikën 2 për B, pastaj e zëvendësojmë me pikën 4 për C. Ndryshimet më poshtë ndihmojnë në memorizimin e rendit.',
+      'Start with A (dot 1), add dot 2 for B, then replace dot 2 with dot 4 for C. The changes below are a memory aid for the established sequence.')));
+    for (var i = 0; i < base.length; i++) {
+      final symbol = _secretByDots(base[i]);
+      if (symbol == null) continue;
+      if (i == 0) {
+        out.add(_secretFormula('A', const [], _secretText('+ точка 1', '+ pika 1', '+ dot 1'), symbol.char.toUpperCase(), base[i], added: {1}));
+      } else {
+        final previous = base[i-1].toSet();
+        final current = base[i].toSet();
+        final add = current.difference(previous).toList()..sort();
+        final remove = previous.difference(current).toList()..sort();
+        final changes = [
+          if (remove.isNotEmpty) '${_secretText(remove.length == 1 ? '− точка' : '− точки', remove.length == 1 ? '− pika' : '− pikat', remove.length == 1 ? '− dot' : '− dots')} ${remove.join(', ')}',
+          if (add.isNotEmpty) '${_secretText(add.length == 1 ? '+ точка' : '+ точки', add.length == 1 ? '+ pika' : '+ pikat', add.length == 1 ? '+ dot' : '+ dots')} ${add.join(', ')}',
+        ].join('  ');
+        out.add(_secretFormula('${english[i-1]} (${_secretByDots(base[i-1])?.char.toUpperCase() ?? ''})', base[i-1], changes,
+          '${english[i]} (${symbol.char.toUpperCase()})', base[i], added: add.toSet()));
+      }
+    }
+    out.add(_secretHeading(_secretText('Трик за паметење — поврзани парови',
+      'Truk për kujtesën — çifte të lidhura', 'Memory trick — related pairs')));
+    out.add(_secretParagraph(_secretText(
+      'Четири лесни парови: A → B со додавање точка 2; C → D, F → G и I → J со додавање точка 5. Исто така, D → E и G → H се добиваат со отстранување точка 4. Ова е помош за помнење, не историски алгоритам.',
+      'Katër çifte: A → B (+ pika 2); C → D, F → G, I → J (+ pika 5). D → E dhe G → H (− pika 4).',
+      'Four pairs: A → B (+ dot 2); C → D, F → G, I → J (+ dot 5). D → E and G → H (− dot 4).')));
+    for (final pair in const <List<int>>[[0,1],[2,3],[5,6],[8,9],[3,4],[6,7]]) {
+      final from = base[pair[0]];
+      final to = base[pair[1]];
+      final added = to.toSet().difference(from.toSet()).toList();
+      final removed = from.toSet().difference(to.toSet()).toList();
+      final operation = added.isNotEmpty
+        ? _secretText('+ точка ${added.single}', '+ pika ${added.single}', '+ dot ${added.single}')
+        : _secretText('− точка ${removed.single}', '− pika ${removed.single}', '− dot ${removed.single}');
+      out.add(_secretFormula('${english[pair[0]]} (${_secretByDots(from)?.char.toUpperCase() ?? ''})', from,
+        operation, '${english[pair[1]]} (${_secretByDots(to)?.char.toUpperCase() ?? ''})', to,
+        added: added.toSet()));
+    }
+    out.add(_secretHeading(_secretText('Група 2 — додади точка 3', 'Grupi 2 — shto pikën 3', 'Group 2 — add dot 3')));
+    out.add(_secretParagraph(_secretText(
+      'Секоја од десетте основни шеми добива точка 3. Во англиската азбука така се добиваат K–T. Кај нас се користат буквите со истите точки; на пример, англиската Q нема посебна буква во македонската азбука. Затоа ќе ги прикажеме само постојните соодветни букви.',
+      'Secilit prej dhjetë modeleve i shtohet pika 3, duke krijuar K–T në alfabetin latin. Shfaqen vetëm shkronjat që ekzistojnë në gjuhën e zgjedhur.',
+      'Add dot 3 to each of the ten basic patterns to form K–T. Only letters that exist in the selected language are shown.')));
+    for (final dots in base) {
+      final next = [...dots, 3]..sort();
+      out.add(_secretLetterFormula(dots, next, _secretText('+ точка 3', '+ pika 3', '+ dot 3')));
+    }
+    out.add(_secretHeading(_secretText('Група 3 — додади точка 6', 'Grupi 3 — shto pikën 6', 'Group 3 — add dot 6')));
+    out.add(_secretParagraph(_secretText(
+      'Во англискиот Брај, U, V, X, Y и Z се добиваат од K, L, M, N и O со додавање на точка 6. W е историски исклучок и има посебна шема (2,4,5,6). Македонските букви не го следат истиот азбучен ред, па ги покажуваме реалните врски што постојат во нашите податоци.',
+      'Në Braille anglez, U, V, X, Y dhe Z formohen duke shtuar pikën 6 te K, L, M, N dhe O. W është përjashtim historik. Shembujt përshtaten me shkronjat shqipe.',
+      'In English Braille, U, V, X, Y and Z add dot 6 to K, L, M, N and O. W is a historical exception. Examples follow the selected language.')));
+    for (final dots in base.take(5)) {
+      final middle = [...dots, 3]..sort();
+      final last = [...middle, 6]..sort();
+      out.add(_secretLetterFormula(middle, last, _secretText('+ точка 6', '+ pika 6', '+ dot 6')));
+    }
+    // Дополнителни врски со точка 6 што не припаѓаат на U–Z.
+    if (_lang != BrailleLang.en) out.add(_secretHeading(_secretText('Уште букви со додавање точка 6',
+      'Shkronja të tjera me pikën 6', 'More letters formed with dot 6')));
+    if (_lang != BrailleLang.en) out.add(_secretParagraph(_secretText(
+      'Дополнителните букви се поврзуваат со позната шема со додавање точка 6.',
+      'Shkronjat e tjera lidhen me një model të njohur duke shtuar pikën 6.',
+      'Additional letters connect to known patterns by adding dot 6.')));
+    final shownThird = <String>{};
+    for (final dots in base.take(5)) {
+      final target = [...dots, 3, 6]..sort();
+      final found = _secretByDots(target);
+      if (found != null) shownThird.add(found.char);
+    }
+    for (final symbol in BrailleData.lettersFor(_lang)) {
+      if (!symbol.dots.contains(6) || shownThird.contains(symbol.char)) continue;
+      if (_lang == BrailleLang.mk && (symbol.char == 'ѓ' || symbol.char == 'ќ')) continue;
+      final from = symbol.dots.where((dot) => dot != 6).toList();
+      if (_secretByDots(from) != null) {
+        out.add(_secretLetterFormula(from, symbol.dots,
+          _secretText('+ точка 6', '+ pika 6', '+ dot 6')));
+      }
+    }
+    if (_lang != BrailleLang.en) out.add(_secretHeading(_secretText('Други букви и исклучоци', 'Shkronja të tjera dhe përjashtime', 'Other letters and exceptions')));
+    if (_lang != BrailleLang.en) out.add(_secretParagraph(_secretText(
+      'Кај македонските букви, Ѓ и Ќ ги издвојуваме како посебни шеми. Другите специфични букви можат да се поврзат со веќе научени букви преку додавање точка 6 или преку споредување на шемите.',
+      'Shkronjat e tjera dhe digrafët nuk futen me forcë në rendin anglez; mësohen sipas kombinimeve reale.',
+      'Remaining letters should not be forced into the English sequence; learn their actual patterns and similarities.')));
+    if (_lang == BrailleLang.en) {
+      out.add(_secretParagraph('W is the historical exception: it uses dots 2, 4, 5 and 6. Unlike U, V, X, Y and Z, it is not created by adding dot 6 to K–O.'));
+    }
+    final special = _lang == BrailleLang.mk ? <String>['ѓ','ќ']
+      : _lang == BrailleLang.sq ? <String>['ç','ë','dh','gj','ll','nj','rr','sh','th','xh','zh'] : <String>['w'];
+    for (final s in BrailleData.lettersFor(_lang)) {
+      if (!special.contains(s.char) || _lang == BrailleLang.en) continue;
+      final baseDots = s.dots.where((d) => d != 6).toList();
+      final near = _secretByDots(baseDots);
+      if (s.dots.contains(6) && near != null && near.key != s.key) {
+        out.add(_secretLetterFormula(baseDots, s.dots, _secretText('+ точка 6', '+ pika 6', '+ dot 6')));
+      } else {
+        out.add(_secretFormula(_secretText('Посебна шема', 'Model i veçantë', 'Special pattern'), const [], '→',
+          s.char.toUpperCase(), s.dots, added: s.dots.toSet(),
+          note: '${_secretText('Точки', 'Pikat', 'Dots')} ${s.dots.join(', ')}'));
+      }
+    }
+    if (_lang == BrailleLang.en) {
+      final w = _secretByDots(const [2, 4, 5, 6]);
+      if (w != null) out.add(Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Text('W — historical exception', style: TextStyle(fontSize: 33, fontWeight: FontWeight.bold, color: Color(0xFFFFDE78))),
+        const SizedBox(height: 12),
+        _secretCell(w.dots, label: 'W'),
+        const SizedBox(height: 10),
+        _secretParagraph('Dots 2, 4, 5, 6'),
+      ])));
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
+  }
+
+  Widget _secretNumbers() {
+    const english = ['A','B','C','D','E','F','G','H','I','J'];
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      _secretHeading(_secretText('Броевите ги повторуваат првите десет шеми', 'Numrat përsërisin dhjetë modelet e para', 'Numbers reuse the first ten patterns')),
+      _secretParagraph(_secretText(
+        'Не мора да паметиш десет нови комбинации. Цифрите 1–9 и 0 ги имаат истите точки како латиничните A–I и J. Разликата е што ПРЕД цифрата се пишува посебна клетка за знак за број: точки 3, 4, 5 и 6.',
+        'Shifrat 1–9 dhe 0 përdorin të njëjtat modele si A–I dhe J. Para tyre shkruhet shenja e numrit: pikat 3, 4, 5 dhe 6.',
+        'Digits 1–9 and 0 use the same patterns as A–I and J. Write the number sign, dots 3, 4, 5 and 6, before the digit.')),
+      _labStandaloneSymbol(BrailleData.numberSign, _secretText('Знак за број', 'Shenja e numrit', 'Number sign')),
+      for (var i = 0; i < BrailleData.digits.length; i++)
+        _secretFormula('${english[i]} (${_secretByDots(BrailleData.digits[i].dots)?.char.toUpperCase() ?? english[i]})',
+          BrailleData.digits[i].dots, _secretText('исти точки →', 'të njëjtat pika →', 'same dots →'),
+          BrailleData.digits[i].char, BrailleData.digits[i].dots,
+          note: _secretText('Претходно се додава знакот за број (3,4,5,6).',
+            'Më parë vendoset shenja e numrit (3,4,5,6).',
+            'The number sign (3,4,5,6) is placed first.')),
+      _secretParagraph(_secretText(
+        'За повеќецифрен број, како 12, знакот за број се пишува еднаш, а потоа следуваат клетките за 1 и 2. Во оваа апликација бројниот режим трае до празно место.',
+        'Për numra me disa shifra, si 12, shenja e numrit shkruhet një herë. Në këtë aplikacion modaliteti numerik zgjat deri te hapësira.',
+        'For a multi-digit number such as 12, write the number sign once, followed by the digits. In this app number mode continues until a space.')),
+    ]);
+  }
+
+  Widget _secretSigns() {
+    final punct = BrailleData.punctuationFor(_lang);
+    BrailleSymbol? byKey(String key) {
+      for (final symbol in punct) {
+        if (symbol.key == key) return symbol;
+      }
+      return null;
+    }
+
+    Widget relation(String first, String second) {
+      final a = byKey(first);
+      final b = byKey(second);
+      if (a == null || b == null || a.isMultiCell || b.isMultiCell) {
+        return const SizedBox.shrink();
+      }
+      final from = a.dots.toSet();
+      final to = b.dots.toSet();
+      final added = to.difference(from).toList()..sort();
+      final removed = from.difference(to).toList()..sort();
+      String points(List<int> dots, bool plus) {
+        if (dots.isEmpty) return '';
+        final singular = dots.length == 1;
+        final word = _secretText(
+          singular ? 'точка' : 'точки',
+          singular ? 'pikë' : 'pika',
+          singular ? 'dot' : 'dots',
+        );
+        return '${plus ? '+' : '−'} $word ${dots.join(', ')}';
+      }
+      final op = [
+        if (removed.isNotEmpty) points(removed, false),
+        if (added.isNotEmpty) points(added, true),
+      ].join('  ');
+      return _secretFormula(a.char, a.dots, op, b.char, b.dots,
+        added: added.toSet(),
+        note: _secretText(
+          'Ова е врска за полесно паметење на комбинациите.',
+          'Kjo lidhje ndihmon në mbajtjen mend të modeleve.',
+          'This relationship helps you remember the patterns.',
+        ),
+      );
+    }
+
+    final out = <Widget>[
+      _secretHeading(_secretText('1. Семејството на запирката',
+        '1. Familja e presjes', '1. The comma family')),
+      _secretParagraph(_secretText(
+        'Почнуваме со запирката: таа користи само точка 2. Ако додадеме точка 3, добиваме точка-запирка. Ако додадеме точка 5, добиваме две точки. Во македонскиот и албанскиот код на апликацијата, додавањето точка 6 дава прашалник. Во англискиот прашалникот користи точки 2, 3 и 6, па се додаваат две точки: 3 и 6.',
+        'Fillojmë me presjen, e cila përdor vetëm pikën 2. Duke shtuar pikën 3 marrim pikëpresjen; me pikën 5 marrim dy pikat. Në kodin shqip të aplikacionit, pika 6 krijon pikëpyetjen; në anglisht shtohen pikat 3 dhe 6.',
+        'Start with the comma, which uses only dot 2. Add dot 3 for a semicolon or dot 5 for a colon. In the Macedonian and Albanian mappings, add dot 6 for a question mark; in English, add dots 3 and 6.',
+      )),
+      relation('comma', 'semicolon'),
+      relation('comma', 'colon'),
+      relation('comma', 'question'),
+      _secretHeading(_secretText('2. Од две точки до извичник и точка',
+        '2. Nga dy pikat te pikëçuditja dhe pika',
+        '2. From colon to exclamation mark and period')),
+      _secretParagraph(_secretText(
+        'Двете точки користат точки 2 и 5. Со додавање точка 3 добиваме извичник (2, 3, 5), а со додавање точка 6 добиваме точка (2, 5, 6). Така, две нови комбинации се паметат преку една позната основа.',
+        'Dy pikat përdorin pikat 2 dhe 5. Shto pikën 3 për pikëçuditjen (2, 3, 5), ose pikën 6 për pikën (2, 5, 6).',
+        'The colon uses dots 2 and 5. Add dot 3 for the exclamation mark (2, 3, 5), or dot 6 for the period (2, 5, 6).',
+      )),
+      relation('colon', 'exclamation'),
+      relation('colon', 'period'),
+      _secretParagraph(_secretText(
+        'Запомни ги двете патеки: запирка → две точки → извичник и запирка → две точки → точка.',
+        'Mbaj mend dy rrugët: presje → dy pika → pikëçuditje dhe presje → dy pika → pikë.',
+        'Remember two paths: comma → colon → exclamation mark, and comma → colon → period.',
+      )),
+      _secretHeading(_secretText('3. Апостроф и цртичка',
+        '3. Apostrofi dhe viza', '3. Apostrophe and hyphen')),
+      _secretParagraph(_secretText(
+        'Апострофот има само точка 3. Ако додадеме точка 6, добиваме цртичка со точки 3 и 6.',
+        'Apostrofi përdor vetëm pikën 3. Shto pikën 6 për vizën me pikat 3 dhe 6.',
+        'The apostrophe uses only dot 3. Add dot 6 to form the hyphen with dots 3 and 6.',
+      )),
+      relation('apostrophe', 'hyphen'),
+      _secretHeading(_secretText('4. Посебни знаци и повеќе клетки',
+        '4. Shenja të veçanta dhe disa qeliza',
+        '4. Special signs and multiple cells')),
+      _secretParagraph(_secretText(
+        'Знакот за голема буква се пишува пред буквата. Во македонскиот и албанскиот код на апликацијата користи точки 4 и 6, а во англискиот само точка 6. Знакот за број користи точки 3, 4, 5 и 6 и се пишува пред цифрите.',
+        'Shenja e shkronjës së madhe shkruhet para shkronjës: pikat 4 dhe 6 në shqip dhe maqedonisht, ose pika 6 në anglisht. Shenja e numrit përdor pikat 3, 4, 5 dhe 6.',
+        'The capital sign goes before a letter: dots 4 and 6 in this app’s Macedonian and Albanian mappings, or dot 6 in English. The number sign uses dots 3, 4, 5 and 6.',
+      )),
+      _secretFormula('⇧', BrailleData.capitalSignFor(_lang).dots,
+        _secretText('па', 'pastaj', 'then'),
+        BrailleData.lettersFor(_lang).first.char.toUpperCase(),
+        BrailleData.lettersFor(_lang).first.dots,
+        note: _secretText('Првата клетка означува голема буква.',
+          'Qeliza e parë shënon shkronjën e madhe.',
+          'The first cell indicates capitalization.')),
+      _labStandaloneSymbol(BrailleData.numberSign, _secretText('Знак за број', 'Shenja e numrit', 'Number sign')),
+      _secretParagraph(_secretText(
+        'Некои знаци се составени од две последователни Брајови клетки. Тие се читаат заедно како еден знак. Во оваа апликација англиските наводници се двоклеточни, а македонските и албанските се едноклеточни.',
+        'Disa shenja përdorin dy qeliza Braille me radhë. Në këtë aplikacion thonjëzat angleze kanë dy qeliza, ndërsa ato shqipe dhe maqedonase kanë një.',
+        'Some symbols use two consecutive Braille cells. In this app English quotation marks use two cells, while Macedonian and Albanian quotation marks use one.',
+      )),
+    ];
+    for (final symbol in punct.where((s) => s.isMultiCell || s.key == 'quote_open' || s.key == 'quote_close')) {
+      out.add(_secretSection('punct-${symbol.key}', symbol.char, [
+        Column(children: [
+          Text(symbol.char, style: TextStyle(color: _fg(context), fontSize: 41, fontWeight: FontWeight.bold)),
+          Wrap(alignment: WrapAlignment.center, spacing: 18, runSpacing: 12,
+            children: [
+              for (var i = 0; i < symbol.cells.length; i++)
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  _secretCell(symbol.cells[i], label: '${symbol.char} ${i + 1}'),
+                  Text('${_secretText('Клетка', 'Qeliza', 'Cell')} ${i + 1}',
+                    style: TextStyle(color: _fg(context), fontSize: 27)),
+                ]),
+            ]),
+        ]),
+        Wrap(spacing: 12, children: [
+          ElevatedButton.icon(onPressed: () => _labPlayStandaloneSymbol(symbol), icon: const Icon(Icons.play_arrow), label: Text(_secretText('Слушни', 'Dëgjo', 'Listen'))),
+          OutlinedButton.icon(onPressed: _labStopAudio, icon: const Icon(Icons.stop), label: Text(_secretText('Стоп', 'Ndalo', 'Stop'))),
+        ]),
+      ]));
+    }
+    out.add(_secretParagraph(_secretText(
+      'Овие семејства се олеснителен механизам за паметење, а не историски редослед на создавање на знаците. Важно: комбинациите за @ и / во македонскиот и албанскиот дел се преземени од англискиот Брај и бараат стручна проверка.',
+      'Këto familje janë ndihmë për kujtesën, jo rend historik. Modelet @ dhe / janë marrë nga Braille anglez dhe kërkojnë verifikim.',
+      'These families are memory aids, not a historical creation order. The @ and / patterns for Macedonian and Albanian were borrowed from English Braille and require expert verification.',
+    )));
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
+  }
+
+  // BRAILLE LAB — tactile minimalism, accessible interactive explanations.
+  // No external assets or packages are needed.
+  static const _labNavy = Color(0xFF0D1929);
+  static const _labPanel = Color(0xFF172A3E);
+  static const _labCyan = Color(0xFF67F0E0);
+  static const _labYellow = Color(0xFFFFDE78);
+
+  Widget _labCard({required Widget child, EdgeInsets? padding}) => Container(
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 18),
+    padding: padding ?? const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: _labPanel,
+      borderRadius: BorderRadius.circular(26),
+      border: Border.all(color: _labCyan.withValues(alpha: .48), width: 2),
+      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .22),
+        blurRadius: 16, offset: const Offset(0, 6))],
+    ),
+    child: child,
+  );
+
+  Widget _labText(String text, {double size = 28, Color color = Colors.white,
+    FontWeight weight = FontWeight.w500, TextAlign align = TextAlign.start}) =>
+    Text(text, textAlign: align, style: TextStyle(color: color, fontSize: size,
+      fontWeight: weight, height: 1.3));
+
+  Widget _labDotCell(List<int> dots, {String? label, Set<int> added = const {},
+    bool interactive = false}) {
+    final active = dots.toSet();
+    return Semantics(
+      label: '${label ?? ''} ${_secretText('Активни точки', 'Pikat aktive', 'Active dots')}: ${active.isEmpty ? '0' : (active.toList()..sort()).join(', ')}',
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        for (var r = 0; r < 3; r++) Row(mainAxisSize: MainAxisSize.min, children: [
+          for (final n in [r + 1, r + 4]) Padding(
+            padding: const EdgeInsets.all(5),
+            child: Semantics(
+              button: interactive,
+              label: '${_secretText('Точка', 'Pika', 'Dot')} $n, ${active.contains(n) ? _secretText('активна', 'aktive', 'active') : _secretText('неактивна', 'joaktive', 'inactive')}',
+              child: GestureDetector(
+                onTap: interactive ? () => setState(() {
+                  if (!_labDots.add(n)) _labDots.remove(n);
+                  HapticFeedback.selectionClick();
+                }) : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 230),
+                  curve: Curves.easeOutCubic,
+                  width: 54, height: 54,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: active.contains(n) ? (added.contains(n) ? _labCyan : _labYellow) : const Color(0xFF34485C),
+                    border: Border.all(color: active.contains(n) ? Colors.white : const Color(0xFF94A3B8), width: 2),
+                    boxShadow: active.contains(n) ? [
+                      BoxShadow(color: (added.contains(n) ? _labCyan : _labYellow).withValues(alpha: .45),
+                        blurRadius: 10, offset: const Offset(0, 4)),
+                    ] : null,
+                  ),
+                  child: interactive ? Text('$n', style: TextStyle(fontSize: 23,
+                    fontWeight: FontWeight.w900, color: active.contains(n) ? _labNavy : Colors.white)) : null,
+                ),
+              ),
+            ),
+          ),
+        ]),
+      ]),
+    );
+  }
+
+  Widget _labHistory() => _labCard(child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start, children: [
+      InkWell(onTap: () => setState(() => _labHistoryOpen = !_labHistoryOpen),
+        child: Row(children: [
+          const Icon(Icons.history_edu_rounded, color: _labYellow, size: 39),
+          const SizedBox(width: 12),
+          Expanded(child: _labText(_secretText('Приказната за Луј Брај',
+            'Historia e Louis Braille', 'The story of Louis Braille'), size: 31, weight: FontWeight.bold)),
+          Icon(_labHistoryOpen ? Icons.expand_less : Icons.expand_more, color: _labYellow, size: 38),
+        ])),
+      if (_labHistoryOpen) ...[
+        const SizedBox(height: 16),
+        _labText(_secretText(
+          'Луј Брај е роден во 1809 година во Кувре, Франција. Во 1821 година се запознал со системот „ноќно писмо“ на Шарл Барбие. Подоцна го развил поедноставениот шестоточков систем; неговото прво објавено дело за методот е од 1829 година.',
+          'Louis Braille lindi në vitin 1809 në Coupvray, Francë. Në 1821 ai u njoh me shkrimin e natës të Charles Barbier. Më vonë zhvilloi sistemin me gjashtë pika dhe botoi metodën në vitin 1829.',
+          'Louis Braille was born in 1809 in Coupvray, France. In 1821 he encountered Charles Barbier’s night writing. He later developed the six-dot system and published his method in 1829.'), size: 26),
+        const SizedBox(height: 14),
+        for (final item in [
+          ['1809', _secretText('Раѓање во Кувре', 'Lindja në Coupvray', 'Born in Coupvray')],
+          ['1821', _secretText('Запознавање со ноќното писмо', 'Njohja me shkrimin e natës', 'Introduced to night writing')],
+          ['1829', _secretText('Објавување на методот', 'Botimi i metodës', 'Publication of his method')],
+        ]) Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [
+          _labText(item[0], color: _labYellow, size: 29, weight: FontWeight.w900),
+          const SizedBox(width: 16),
+          Expanded(child: _labText(item[1], size: 25)),
+        ])),
+      ],
+    ],
+  ));
+
+  Widget _labExplorer() {
+    final dots = _labDots.toList()..sort();
+    final letter = _secretByDots(dots);
+    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.touch_app_rounded, color: _labCyan, size: 38),
+        const SizedBox(width: 10),
+        Expanded(child: _labText(_secretText('Истражи ја шесточката',
+          'Eksploro gjashtë pikat', 'Explore the six-dot cell'),
+          size: 31, weight: FontWeight.w800)),
+      ]),
+      const SizedBox(height: 10),
+      _labText(_secretText('Притисни која било точка за да ја вклучиш или исклучиш. Ова е демонстрација, не тест.',
+        'Prek çdo pikë për ta ndezur ose fikur. Ky është demonstrim, jo test.',
+        'Tap any dot to switch it on or off. This is a demonstration, not a test.'), size: 25),
+      const SizedBox(height: 18),
+      Center(child: _labDotCell(dots, interactive: true)),
+      const SizedBox(height: 14),
+      Center(child: _labText('${_secretText('Точки', 'Pikat', 'Dots')}: ${dots.isEmpty ? '—' : dots.join(', ')}',
+        color: _labYellow, size: 29, weight: FontWeight.bold)),
+      Center(child: _labText(letter == null
+        ? _secretText('Истражувај различни комбинации', 'Eksploro kombinime të ndryshme', 'Explore different patterns')
+        : '${_secretText('Буква', 'Shkronja', 'Letter')}: ${letter.char.toUpperCase()}',
+        size: 27, align: TextAlign.center)),
+      const SizedBox(height: 10),
+      Center(child: OutlinedButton.icon(
+        onPressed: () => setState(() { _labDots..clear()..addAll([1, 2, 4]); }),
+        icon: const Icon(Icons.restart_alt_rounded),
+        label: Text(_secretText('Почетна шема', 'Modeli fillestar', 'Reset pattern'),
+          style: const TextStyle(fontSize: 24)),
+        style: OutlinedButton.styleFrom(foregroundColor: _labYellow,
+          side: const BorderSide(color: _labYellow, width: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13)),
+      )),
+    ]));
+  }
+
+  Widget _labTransformation() {
+    const base = <List<int>>[
+      [1], [1,2], [1,4], [1,4,5], [1,5],
+      [1,2,4], [1,2,4,5], [1,2,5], [2,4], [2,4,5],
+    ];
+    const english = ['A','B','C','D','E','F','G','H','I','J'];
+    final i = _labStep.clamp(0, 9).toInt();
+    final before = i == 0 ? <int>[] : base[i-1];
+    final after = base[i];
+    final added = after.toSet().difference(before.toSet());
+    final removed = before.toSet().difference(after.toSet());
+    final pieces = <String>[];
+    if (added.isNotEmpty) pieces.add('+ ${_secretText(added.length == 1 ? 'точка' : 'точки', added.length == 1 ? 'pikë' : 'pika', added.length == 1 ? 'dot' : 'dots')} ${added.join(', ')}');
+    if (removed.isNotEmpty) pieces.add('− ${_secretText(removed.length == 1 ? 'точка' : 'точки', removed.length == 1 ? 'pikë' : 'pika', removed.length == 1 ? 'dot' : 'dots')} ${removed.join(', ')}');
+    return _labCard(child: Column(children: [
+      _labText(_secretText('Точките оживуваат', 'Pikat marrin jetë', 'Watch the dots change'),
+        size: 32, color: _labYellow, weight: FontWeight.w900, align: TextAlign.center),
+      const SizedBox(height: 10),
+      _labText(_secretText('Следи ја низата A–J и забележи кои точки се додаваат или бришат.',
+        'Ndiq sekuencën A–J dhe shiko cilat pika shtohen ose hiqen.',
+        'Follow A–J and see which dots are added or removed.'), size: 25, align: TextAlign.center),
+      const SizedBox(height: 16),
+      _labText('${english[i]} · ${_secretByDots(after)?.char.toUpperCase() ?? english[i]}',
+        size: 42, weight: FontWeight.w900),
+      const SizedBox(height: 12),
+      _labDotCell(after, label: english[i], added: added),
+      const SizedBox(height: 12),
+      _labText(pieces.join('  ·  '), size: 29, color: _labCyan,
+        weight: FontWeight.w800, align: TextAlign.center),
+      const SizedBox(height: 14),
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        IconButton.filledTonal(onPressed: i == 0 ? null : () => setState(() => _labStep--),
+          icon: const Icon(Icons.arrow_back_rounded, size: 33),
+          tooltip: _secretText('Претходна буква', 'Shkronja e mëparshme', 'Previous letter')),
+        _labText('${i+1} / 10', size: 26),
+        IconButton.filledTonal(onPressed: i == 9 ? null : () => setState(() => _labStep++),
+          icon: const Icon(Icons.arrow_forward_rounded, size: 33),
+          tooltip: _secretText('Следна буква', 'Shkronja tjetër', 'Next letter')),
+      ]),
+    ]));
+  }
+
+  List<Widget> _labConverted() {
+    final symbols = BrailleData.lettersFor(_lang).toList()
+      ..sort((a, b) => b.char.length.compareTo(a.char.length));
+    final input = _labInput.toLowerCase();
+    final result = <Widget>[];
+    var offset = 0;
+    while (offset < input.length && result.length < 24) {
+      if (input[offset].trim().isEmpty) {
+        result.add(const SizedBox(width: 30));
+        offset++;
+        continue;
+      }
+      BrailleSymbol? match;
+      for (final s in symbols) {
+        if (input.startsWith(s.char.toLowerCase(), offset)) { match = s; break; }
+      }
+      if (match == null) {
+        final unknown = input[offset];
+        result.add(Padding(padding: const EdgeInsets.all(8), child: Column(children: [
+          _labText(unknown, size: 27, color: _labYellow),
+          _labText('?', size: 30),
+        ])));
+        offset++;
+      } else {
+        final s = match;
+        result.add(Padding(padding: const EdgeInsets.all(7), child: Column(children: [
+          _labText(s.char.toUpperCase(), size: 27, weight: FontWeight.bold),
+          _labDotCell(s.dots, label: s.char),
+        ])));
+        offset += s.char.length;
+      }
+    }
+    return result;
+  }
+
+  Widget _labConverter() => _labCard(child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        const Icon(Icons.translate_rounded, color: _labCyan, size: 38),
+        const SizedBox(width: 12),
+        Expanded(child: _labText(_secretText('Брајов конвертор',
+          'Konvertuesi Braille', 'Braille converter'), size: 32, weight: FontWeight.w900)),
+      ]),
+      const SizedBox(height: 12),
+      _labText(_secretText('Напиши краток збор. Подолу ќе се појават Брајовите клетки за избраниот јазик.',
+        'Shkruaj një fjalë të shkurtër. Qelizat Braille do të shfaqen më poshtë.',
+        'Type a short word to see its Braille cells in the selected language.'), size: 25),
+      const SizedBox(height: 16),
+      TextField(
+        onChanged: (value) => setState(() => _labInput = value),
+        maxLength: 24,
+        style: const TextStyle(fontSize: 30, color: Colors.white),
+        decoration: InputDecoration(
+          hintText: _secretText('Напиши збор…', 'Shkruaj një fjalë…', 'Type a word…'),
+          hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 26),
+          filled: true, fillColor: const Color(0xFF253B50),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _labCyan, width: 2)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+            borderSide: const BorderSide(color: _labCyan, width: 2)),
+        ),
+      ),
+      if (_labInput.isNotEmpty) ...[
+        const SizedBox(height: 14),
+        Wrap(spacing: 8, runSpacing: 12, children: _labConverted()),
+        const SizedBox(height: 12),
+        _labText(_secretText('Едукативен приказ на букви; не претставува целосен преведувач на интерпункција, големи букви и скратеници.',
+          'Paraqitje mësimore e shkronjave, jo përkthyes i plotë për shenjat, shkronjat e mëdha apo shkurtimet.',
+          'Educational letter display; not a complete translator for punctuation, capitals or contractions.'), size: 22, color: const Color(0xFFCBD5E1)),
+      ],
+    ],
+  ));
+
+  Widget _buildSecrets(BuildContext context) {
+    final fg = _fg(context);
+    return Column(children: [
+      _buildBackRow(fg, onBack: () {
+        _labStopAudio();
+        setState(() => _view = _View.categorySelect);
+      }),
+      Expanded(child: Container(color: _labNavy,
+        child: LayoutBuilder(builder: (context, size) => ListView(
+          padding: _brailleSidePad(size.maxWidth, top: 18, bottom: 44),
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 30),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [Color(0xFF0F5663), Color(0xFF173451)],
+                  begin: Alignment.topLeft, end: Alignment.bottomRight),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: _labYellow, width: 2.5),
+              ),
+              child: Column(children: [
+                const Icon(Icons.auto_awesome_rounded, color: _labYellow, size: 54),
+                const SizedBox(height: 12),
+                _labText(_secretText('Светлина низ допир', 'Dritë përmes prekjes', 'Light through touch'),
+                  size: 39, weight: FontWeight.w900, align: TextAlign.center),
+                const SizedBox(height: 10),
+                _labText(_secretText('Тајните на Брајовата азбука',
+                  'Sekretet e alfabetit Braille', 'Secrets of the Braille alphabet'),
+                  size: 30, color: _labYellow, weight: FontWeight.w800, align: TextAlign.center),
+                const SizedBox(height: 16),
+                _labText('⠁   ⠃   ⠉   ⠙', size: 50, color: _labYellow, align: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(onPressed: _labStopAudio,
+                  icon: const Icon(Icons.stop_circle_rounded, size: 30),
+                  label: Text(_secretText('Прекини звук', 'Ndalo audion', 'Stop audio'),
+                    style: const TextStyle(fontSize: 24))),
+                const SizedBox(height: 10),
+                _labText(_secretText('Шест точки. Безброј можности. Откриј ја логиката преку допир и поврзување.',
+                  'Gjashtë pika. Mundësi të panumërta. Zbulo logjikën përmes prekjes.',
+                  'Six dots. Endless possibilities. Discover patterns through touch and connections.'),
+                  size: 26, align: TextAlign.center),
+              ]),
+            ),
+            _labFold('lab-history', _secretText('Приказната за Луј Брај', 'Historia e Louis Braille', 'The story of Louis Braille'), _labHistory(), introSection: 'history'),
+            _labFold('lab-explorer', _secretText('Истражи ја шесточката', 'Eksploro gjashtë pikat', 'Explore the six-dot cell'), _labExplorer(), introSection: 'explorer'),
+            _labFold('lab-transform', _secretText('Точките оживуваат', 'Pikat marrin jetë', 'Watch the dots change'), _labTransformation(), introSection: 'transformation'),
+            _labText(_secretText('Едукативни категории', 'Kategoritë mësimore', 'Learning collections'),
+              size: 36, color: _labYellow, weight: FontWeight.w900),
+            const SizedBox(height: 14),
+            _secretSection('topic-letters', _secretText('01 · Букви', '01 · Shkronja', '01 · Letters'), [
+                            _secretAccordionContent('letters', _secretLetters()),
+            ]),
+            _secretSection('topic-numbers', _secretText('02 · Броеви', '02 · Numra', '02 · Numbers'), [
+                            _secretAccordionContent('numbers', _secretNumbers()),
+            ]),
+            _secretSection('topic-signs', _secretText('03 · Знаци', '03 · Shenja', '03 · Signs'), [
+                            _secretAccordionContent('signs', _secretSigns()),
+            ]),
+            const SizedBox(height: 10),
+            _labFold('lab-converter', _secretText('Брајов конвертор', 'Konvertuesi Braille', 'Braille converter'), _labConverter(), introSection: 'converter'),
+          ],
+        )),
+      )),
+    ]);
+  }
+
   Widget _buildCategorySelect(BuildContext context) {
     final contrast = _fg(context);
     final hc = AccessibilityUtils.isHighContrast(context);
@@ -1774,6 +2771,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   builder: (context) {
                     const gap = 18.0;
                     final cards = <Widget>[
+                      _secretsMenuCard(hc),
                       for (var i = 0; i < _groups.length; i++) _groupCard(context, i, contrast, hc),
                       _wordGameCard(contrast, hc),
                       _expressThoughtCard(contrast, hc),

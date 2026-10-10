@@ -1,0 +1,34 @@
+secrets_name_lab-history	Historia e Louis Braille
+secrets_name_lab-explorer	Eksploro qelizën me gjashtë pika
+secrets_name_lab-transform	Pikat marrin jetë
+secrets_name_lab-converter	Konvertuesi Braille
+secrets_name_topic-letters	Shkronja
+secrets_name_topic-numbers	Numra
+secrets_name_topic-signs	Shenja
+secrets_name_letters-0	Grupi 1, katër pikat e sipërme
+secrets_name_letters-1	Truk për kujtesën, çifte të lidhura
+secrets_name_letters-2	Grupi 2, shto pikën 3
+secrets_name_letters-3	Grupi 3, shto pikën 6
+secrets_name_letters-4	Shkronja të tjera me pikën 6
+secrets_name_letters-5	Shkronja të tjera dhe përjashtime
+secrets_name_numbers-0	Numrat përsërisin dhjetë modelet e para
+secrets_name_signs-0	1. Familja e presjes
+secrets_name_signs-1	2. Nga dy pikat te pikëçuditja dhe pika
+secrets_name_signs-2	3. Apostrofi dhe viza
+secrets_name_signs-3	4. Shenja të veçanta dhe disa qeliza
+secrets_name_standalone-number_sign	Shenja e numrit
+secrets_intro_letters-0	Dhjetë modelet bazë ndjekin rendin latin A deri J dhe përdorin vetëm pikat 1, 2, 4 dhe 5. Shkronjat shqipe paraqiten sipas modelit, jo sipas rendit alfabetik shqip. Fillojmë me A (pika 1), shtojmë pikën 2 për B, pastaj e zëvendësojmë me pikën 4 për C. Ndryshimet më poshtë ndihmojnë në memorizimin e rendit.
+secrets_intro_letters-1	Katër çifte: A te B (shtohet pika 2); C te D, F te G, I te J (shtohet pika 5). D te E dhe G te H (hiqet pika 4).
+secrets_intro_letters-2	Secilit prej dhjetë modeleve i shtohet pika 3, duke krijuar K deri T në alfabetin latin. Shfaqen vetëm shkronjat që ekzistojnë në gjuhën e zgjedhur.
+secrets_intro_letters-3	Në Braille anglez, U, V, X, Y dhe Z formohen duke shtuar pikën 6 te K, L, M, N dhe O. W është përjashtim historik. Shembujt përshtaten me shkronjat shqipe.
+secrets_intro_letters-5	Shkronjat e tjera dhe digrafët nuk futen me forcë në rendin anglez; mësohen sipas kombinimeve reale.
+secrets_intro_numbers-0	Shifrat 1 deri 9 dhe 0 përdorin të njëjtat modele si A deri I dhe J. Para tyre shkruhet shenja e numrit: pikat 3, 4, 5 dhe 6. Për numra me disa shifra, si 12, shenja e numrit shkruhet një herë. Në këtë aplikacion modaliteti numerik zgjat deri te hapësira.
+secrets_intro_signs-0	Fillojmë me presjen, e cila përdor vetëm pikën 2. Duke shtuar pikën 3 marrim pikëpresjen; me pikën 5 marrim dy pikat. Në kodin shqip të aplikacionit, pika 6 krijon pikëpyetjen; në anglisht shtohen pikat 3 dhe 6.
+secrets_intro_signs-1	Dy pikat përdorin pikat 2 dhe 5. Shto pikën 3 për pikëçuditjen (2, 3, 5), ose pikën 6 për pikën (2, 5, 6). Mbaj mend dy rrugët: presje te dy pika te pikëçuditje dhe presje te dy pika te pikë.
+secrets_intro_signs-2	Apostrofi përdor vetëm pikën 3. Shto pikën 6 për vizën me pikat 3 dhe 6.
+secrets_intro_signs-3	Shenja e shkronjës së madhe shkruhet para shkronjës: pikat 4 dhe 6 në shqip dhe maqedonisht, ose pika 6 në anglisht. Shenja e numrit përdor pikat 3, 4, 5 dhe 6. Disa shenja përdorin dy qeliza Braille me radhë. Në këtë aplikacion thonjëzat angleze kanë dy qeliza, ndërsa ato shqipe dhe maqedonase kanë një. Këto familje janë ndihmë për kujtesën, jo rend historik. Modelet „at“ dhe vija e pjerrët janë marrë nga Braille anglez dhe kërkojnë verifikim.
+secrets_intro_history	Louis Braille lindi në vitin 1809 në Coupvray, Francë. Në 1821 ai u njoh me shkrimin e natës të Charles Barbier. Më vonë zhvilloi sistemin me gjashtë pika dhe botoi metodën në vitin 1829.
+secrets_intro_explorer	Prek çdo pikë për ta ndezur ose fikur. Ky është demonstrim, jo test.
+secrets_intro_transformation	Ndiq sekuencën A deri J dhe shiko cilat pika shtohen ose hiqen.
+secrets_intro_converter	Shkruaj një fjalë të shkurtër. Qelizat Braille do të shfaqen më poshtë.
+secrets_intro_letters-4	Shkronjat e tjera lidhen me një model të njohur duke shtuar pikën 6.

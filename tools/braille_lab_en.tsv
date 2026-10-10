@@ -1,0 +1,30 @@
+secrets_name_lab-history	The story of Louis Braille
+secrets_name_lab-explorer	Explore the six-dot cell
+secrets_name_lab-transform	Watch the dots change
+secrets_name_lab-converter	Braille converter
+secrets_name_topic-letters	Letters
+secrets_name_topic-numbers	Numbers
+secrets_name_topic-signs	Signs
+secrets_name_letters-0	Group 1, the upper four dots
+secrets_name_letters-1	Memory trick, related pairs
+secrets_name_letters-2	Group 2, add dot 3
+secrets_name_letters-3	Group 3, add dot 6
+secrets_name_numbers-0	Numbers reuse the first ten patterns
+secrets_name_signs-0	1. The comma family
+secrets_name_signs-1	2. From colon to exclamation mark and period
+secrets_name_signs-2	3. Apostrophe and hyphen
+secrets_name_signs-3	4. Special signs and multiple cells
+secrets_name_standalone-number_sign	Number sign
+secrets_intro_letters-0	The first ten patterns follow Latin/English alphabetical order A to J and use only dots 1, 2, 4 and 5. Start with A (dot 1), add dot 2 for B, then replace dot 2 with dot 4 for C. The changes below are a memory aid for the established sequence.
+secrets_intro_letters-1	Four pairs: A to B (add dot 2); C to D, F to G, I to J (add dot 5). D to E and G to H (remove dot 4).
+secrets_intro_letters-2	Add dot 3 to each of the ten basic patterns to form K to T. Only letters that exist in the selected language are shown.
+secrets_intro_letters-3	In English Braille, U, V, X, Y and Z add dot 6 to K, L, M, N and O. W is a historical exception. Examples follow the selected language.
+secrets_intro_numbers-0	Digits 1 to 9 and 0 use the same patterns as A to I and J. Write the number sign, dots 3, 4, 5 and 6, before the digit. For a multi-digit number such as 12, write the number sign once, followed by the digits. In this app number mode continues until a space.
+secrets_intro_signs-0	Start with the comma, which uses only dot 2. Add dot 3 for a semicolon or dot 5 for a colon. In the Macedonian and Albanian mappings, add dot 6 for a question mark; in English, add dots 3 and 6.
+secrets_intro_signs-1	The colon uses dots 2 and 5. Add dot 3 for the exclamation mark (2, 3, 5), or dot 6 for the period (2, 5, 6). Remember two paths: comma to colon to exclamation mark, and comma to colon to period.
+secrets_intro_signs-2	The apostrophe uses only dot 3. Add dot 6 to form the hyphen with dots 3 and 6.
+secrets_intro_signs-3	The capital sign goes before a letter: dots 4 and 6 in this app's Macedonian and Albanian mappings, or dot 6 in English. The number sign uses dots 3, 4, 5 and 6. Some symbols use two consecutive Braille cells. In this app English quotation marks use two cells, while Macedonian and Albanian quotation marks use one. These families are memory aids, not a historical creation order. The at sign and slash patterns for Macedonian and Albanian were borrowed from English Braille and require expert verification.
+secrets_intro_history	Louis Braille was born in 1809 in Coupvray, France. In 1821 he encountered Charles Barbier's night writing. He later developed the six-dot system and published his method in 1829.
+secrets_intro_explorer	Tap any dot to switch it on or off. This is a demonstration, not a test.
+secrets_intro_transformation	Follow A to J and see which dots are added or removed.
+secrets_intro_converter	Type a short word to see its Braille cells in the selected language.
