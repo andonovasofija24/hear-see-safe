@@ -523,7 +523,7 @@ class _SpaceOrbitSceneState extends _OrbitState<SpaceOrbitScene> {
   List<Widget> buildCenter(_OrbitGeom g, double t, bool hc) {
     final c = g.c;
     final pulse = (t * 4) % 1.0;
-    final badge = math.max(43.0, c * 0.31);
+    final badge = math.max(34.0, c * 0.26);
     final badgeScale = 1 + 0.07 * math.sin(_tau * t * 4);
     // Значката горе-десно, целосно во кругот на планетата.
     final bOff = c / 2 + c * 0.22 - badge / 2;
@@ -944,7 +944,7 @@ class _MusicEarSceneState extends _OrbitState<MusicEarScene> {
     );
     final hook = math.max(5.0, g.c * 0.045);
     final chain = math.max(4.0, g.c * 0.05);
-    final pr = math.max(20.0, g.c * 0.13);
+    final pr = math.max(15.0, g.c * 0.11);
     final drawH = hook * 2 + chain + pr * 2;
     final boxW = math.max(48.0, pr * 2 + 12);
     final boxH = math.max(48.0, drawH);
@@ -1183,123 +1183,248 @@ class _EarringPainter extends CustomPainter {
 // Животни
 // ---------------------------------------------------------------------------
 
-/// Животни: голем лав во савана што држи штит (квиз); животните кружат
-/// околу него.
+/// Хоризонтална галерија со решетка и централна подвижна врата.
 class AnimalsLionScene extends PbScene {
-  const AnimalsLionScene({
-    super.key,
-    required super.items,
-    required super.selected,
-    required super.onSelect,
-    required super.onOpen,
-    required super.onQuiz,
-    required super.quizLabel,
-    required super.highContrast,
-    super.reduceMotion,
-  });
+  const AnimalsLionScene({super.key, required super.items, required super.selected,
+    required super.onSelect, required super.onOpen, required super.onQuiz,
+    required super.quizLabel, required super.highContrast, super.reduceMotion});
 
   @override
-  State<AnimalsLionScene> createState() => _AnimalsLionSceneState();
+  State<AnimalsLionScene> createState() => _AnimalsGateSceneState();
 }
 
-class _AnimalsLionSceneState extends _OrbitState<AnimalsLionScene> {
-  @override
-  _OrbitStyle get style => const _OrbitStyle(
-        bubble: Color(0xFFFFF4DC),
-        bubbleBorder: Color(0xFF8A5A2B),
-        glow: Playful.sun,
-        track: Color(0xFFFFF1C9),
-      );
+class _AnimalsGateSceneState extends State<AnimalsLionScene>
+    with TickerProviderStateMixin {
+  late final AnimationController _travel;
+  late final AnimationController _gate;
+  int _previous = 0;
+  double _drag = 0;
 
   @override
-  double get centerLift => 0.12;
+  void initState() {
+    super.initState();
+    _previous = widget.selected;
+    _travel = AnimationController(vsync: this, duration: const Duration(milliseconds: 430))..value = 1;
+    _gate = AnimationController(vsync: this, duration: const Duration(milliseconds: 1250))..value = 1;
+    if (widget.reduceMotion) _travel.value = 1;
+  }
 
   @override
-  Widget buildBackground(_OrbitGeom g, double t, bool hc) =>
-      IgnorePointer(child: CustomPaint(painter: _SavannaPainter(t, hc)));
+  void didUpdateWidget(covariant AnimalsLionScene oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != oldWidget.selected) {
+      _previous = oldWidget.selected;
+      // A selection opens the gate independently of picture-book narration.
+      if (widget.reduceMotion) {
+        _gate.value = 1;
+      } else {
+        _gate.forward(from: 0);
+      }
+      if (widget.reduceMotion) {
+        _travel.value = 1;
+      } else {
+        _travel.forward(from: 0);
+      }
+    }
+  }
 
   @override
-  List<Widget> buildCenter(_OrbitGeom g, double t, bool hc) {
-    final c = g.c;
-    final breathe = 1 + 0.05 * math.sin(_tau * t * 2);
-    return [
-      Positioned(
-        left: g.cx - c * 0.65,
-        top: g.cy0 - c * 0.65,
-        width: c * 1.3,
-        height: c * 1.3,
-        child: IgnorePointer(
-          child: Transform.scale(
-            scale: breathe,
-            child: DecoratedBox(
-              decoration: hc
-                  ? BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Playful.sun, width: 4))
-                  : BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [
-                          const Color(0xFFFFB347).withValues(alpha: 0.75),
-                          const Color(0xFFFF8C1A).withValues(alpha: 0.35),
-                          const Color(0xFFFF8C1A).withValues(alpha: 0),
-                        ],
-                        stops: const [0.35, 0.65, 1.0],
+  void dispose() {
+    _travel.dispose();
+    _gate.dispose();
+    super.dispose();
+  }
+
+  // Opening the picture book is separate from the gate animation.
+  // This callback must never be fired by the gate controller.
+  void _openPictureBook() {
+    if (widget.items.isEmpty) return;
+    widget.onOpen();
+  }
+
+  void _select(int index) {
+    if (index < 0 || index >= widget.items.length) return;
+    if (index == widget.selected) {
+      _openPictureBook();
+    } else {
+      // The parent handles the selection (and any selection narration) once.
+      // didUpdateWidget animates the gate; it never calls onOpen.
+      widget.onSelect(index);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final w = constraints.maxWidth;
+      final h = constraints.maxHeight;
+      final gateW = math.min(150.0, w * .34);
+      final gateH = math.min(h * .65, 205.0);
+      final groundY = h * .79;
+      final cell = math.max(gateW * .9, math.min(150.0, w * .30));
+      final count = widget.items.length;
+      final selected = count == 0 ? 0 : widget.selected.clamp(0, count - 1);
+      return AnimatedBuilder(
+        animation: Listenable.merge([_travel, _gate]),
+        builder: (context, _) {
+          final travel = Curves.easeOutCubic.transform(_travel.value);
+          final current = _previous + (selected - _previous) * travel;
+          final zoom = 1 + .22 * Curves.easeInOut.transform(_gate.value);
+          final doorLift = Curves.easeInOutCubic.transform(_gate.value);
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate: (details) => _drag += details.delta.dx,
+            onHorizontalDragEnd: (_) {
+              if (count > 0 && _drag.abs() > 35) {
+                final next = (selected + (_drag < 0 ? 1 : -1)).clamp(0, count - 1);
+                if (count > 0) _select(next);
+              }
+              _drag = 0;
+            },
+            child: ClipRect(child: Stack(children: [
+              Positioned.fill(child: CustomPaint(painter: _SavannaPainter(0, widget.highContrast))),
+              Transform.scale(
+                scale: zoom,
+                alignment: const Alignment(0, .30),
+                child: Stack(children: [
+                  // Подлога, а не фабричка лента.
+                  Positioned(left: 0, right: 0, top: groundY - 5, height: 29,
+                    child: DecoratedBox(decoration: BoxDecoration(
+                      color: widget.highContrast ? Colors.white24 : const Color(0xFF88633E),
+                      border: Border(top: BorderSide(color: widget.highContrast ? Colors.white : const Color(0xFFE8BF78), width: 5)),
+                    ))),
+                  for (var i = 0; i < count; i++)
+                    Builder(builder: (context) {
+                      final x = w / 2 + (i - current) * cell;
+                      final active = i == selected;
+                      final iconSize = math.min(gateW * .60, 72.0);
+                      return Positioned(
+                        left: x - cell * .46,
+                        top: groundY - gateH * .75,
+                        width: cell * .92,
+                        height: gateH * .75,
+                        child: Semantics(
+                          button: true, selected: active,
+                          label: widget.items[i].label,
+                          child: InkWell(
+                            onTap: () => _select(i),
+                            child: Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+                              Text(widget.items[i].emoji, textScaler: TextScaler.noScaling,
+                                style: TextStyle(fontSize: iconSize, height: 1)),
+                              Text(widget.items[i].label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: TextStyle(fontWeight: FontWeight.bold,
+                                  color: widget.highContrast ? Colors.white : const Color(0xFF37250F),
+                                  fontSize: 13)),
+                              const SizedBox(height: 6),
+                            ]),
+                          ),
+                        ),
+                      );
+                    }),
+                  // Континуирана решетка: вертикални и хоризонтални прачки.
+                  Positioned(left: 0, right: 0, top: groundY - gateH, height: gateH,
+                    child: IgnorePointer(child: CustomPaint(painter: _AnimalFencePainter(
+                      highContrast: widget.highContrast, centerWidth: gateW)))),
+                  // Вратата се отвора при селекција и ОСТАНУВА отворена; штитот останува видлив.
+                  // Целиот внатрешен дел е кликабилен за отворање,
+                  // освен штитот кој го стартува квизот.
+                  Positioned(
+                    left: (w - gateW) / 2,
+                    top: groundY - gateH - (gateH * .48) * doorLift,
+                    width: gateW,
+                    height: gateH,
+                    child: Stack(fit: StackFit.expand, children: [
+                      Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _openPictureBook,
+                          child: CustomPaint(painter: _AnimalDoorPainter(
+                            highContrast: widget.highContrast)),
+                        ),
                       ),
-                    ),
-            ),
-          ),
-        ),
-      ),
-      Positioned(
-        left: g.cx - c / 2,
-        top: g.cy0 - c / 2,
-        width: c,
-        height: c,
-        child: IgnorePointer(
-          child: ExcludeSemantics(
-            child: Center(
-              child: Text(
-                '🦁',
-                textScaler: TextScaler.noScaling,
-                style: TextStyle(fontSize: c * 0.78, height: 1.0),
+                      // Квиз-штитот е физички прикачен НА ВРАТАТА.
+                      // Неговиот допир не ја отвора сликовницата.
+                      Positioned(
+                        top: gateH * .68,
+                        left: (gateW - 58) / 2,
+                        width: 58,
+                        height: 65,
+                        child: Semantics(
+                          button: true,
+                          label: widget.quizLabel,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: widget.onQuiz,
+                              child: CustomPaint(
+                                painter: _ShieldPainter(widget.highContrast),
+                                child: const Center(child: Icon(
+                                  _kQuizIcon, color: Colors.white, size: 27)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ]),
+                  ),
+                ]),
               ),
-            ),
-          ),
-        ),
-      ),
-    ];
-  }
 
-  @override
-  List<Widget> buildOverlay(_OrbitGeom g, double t, bool hc) {
-    final c = g.c;
-    final sw = math.max(58.0, c * 0.42);
-    final sh = sw * 1.15;
-    final pulse = 1 + 0.05 * math.sin(_tau * t * 4);
-    final center = Offset(g.cx + c * 0.27, g.cy0 + c * 0.27);
-    return [
-      Positioned(
-        left: center.dx - sw / 2,
-        top: center.dy - sh / 2,
-        width: sw,
-        height: sh,
-        child: Transform.rotate(
-          angle: -0.12,
-          child: Transform.scale(
-            scale: pulse,
-            child: quizTap(
-              child: CustomPaint(
-                painter: _ShieldPainter(hc),
-                child: Align(
-                  alignment: const Alignment(0, -0.15),
-                  child: Icon(_kQuizIcon, size: sw * 0.5, color: Colors.white),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ];
+            ])),
+          );
+        },
+      );
+    });
   }
+}
+
+class _AnimalFencePainter extends CustomPainter {
+  const _AnimalFencePainter({required this.highContrast, required this.centerWidth});
+  final bool highContrast;
+  final double centerWidth;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = highContrast ? Colors.white : const Color(0xFF594A3D)
+      ..strokeWidth = 5..strokeCap = StrokeCap.round;
+    final left = (size.width - centerWidth) / 2;
+    final right = left + centerWidth;
+    for (double x = 7; x < size.width; x += 22) {
+      if (x > left - 3 && x < right + 3) continue;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
+    }
+    for (final y in [7.0, size.height * .48, size.height - 6]) {
+      canvas.drawLine(Offset(0, y), Offset(left, y), p);
+      canvas.drawLine(Offset(right, y), Offset(size.width, y), p);
+    }
+    canvas.drawLine(Offset(left, 0), Offset(left, size.height), p..strokeWidth = 9);
+    canvas.drawLine(Offset(right, 0), Offset(right, size.height), p);
+  }
+  @override
+  bool shouldRepaint(covariant _AnimalFencePainter old) =>
+    old.highContrast != highContrast || old.centerWidth != centerWidth;
+}
+
+class _AnimalDoorPainter extends CustomPainter {
+  const _AnimalDoorPainter({required this.highContrast});
+  final bool highContrast;
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = highContrast ? Colors.yellow : const Color(0xFFC69B58)
+      ..strokeWidth = 6..strokeCap = StrokeCap.square;
+    canvas.drawRect(Rect.fromLTWH(3, 3, size.width - 6, size.height - 6),
+      p..style = PaintingStyle.stroke);
+    p.style = PaintingStyle.fill;
+    for (double x = 18; x < size.width - 10; x += 21) {
+      canvas.drawLine(Offset(x, 6), Offset(x, size.height - 6), p);
+    }
+    for (double y = 25; y < size.height - 12; y += 27) {
+      canvas.drawLine(Offset(6, y), Offset(size.width - 6, y), p..strokeWidth = 4);
+    }
+    canvas.drawCircle(Offset(size.width - 15, size.height * .53), 7,
+      Paint()..color = highContrast ? Colors.white : const Color(0xFFFFE4A0));
+  }
+  @override
+  bool shouldRepaint(covariant _AnimalDoorPainter old) => old.highContrast != highContrast;
 }
 
 class _SavannaPainter extends CustomPainter {
