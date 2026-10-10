@@ -49,6 +49,26 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
 
   Timer? _gameTimer;
 
+  /// Звучен водич: кога топчето е во левата половина и оди кон палката.
+  /// guide_good.mp3 (позитивен) свири кога палката е на патот на топчето и
+  /// станува сè погласен како што топчето се приближува; guide_bad.mp3
+  /// (негативен) свири кога палката не е на патот - толку погласно колку
+  /// што палката е подалеку од местото каде што ќе стигне топчето.
+  final AudioPlayer _goodPlayer = AudioPlayer();
+  final AudioPlayer _badPlayer = AudioPlayer();
+  bool _guideReady = false;
+  bool _goodStarted = false;
+  bool _badStarted = false;
+  /// 0 = тишина, 1 = позитивен, 2 = негативен.
+  int _guideMode = 0;
+  double _goodVol = -1;
+  double _badVol = -1;
+
+  /// Колку најмногу смее палката да е оддалечена од пресметаното место на
+  /// топчето за да се смета дека „оди кон палката“ (малку помалку од
+  /// половина палка - позитивниот звук значи сигурен погодок).
+  static const double _guideAimTolerance = _paddleHalfHeight * 0.9;
+
   double _paddleY = 0.5; // нормализирана позиција (0 = горе, 1 = долу)
   double _ballX = 0.85;
   double _ballY = 0.5;
@@ -74,6 +94,99 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
     _loadBest();
+    _initGuide();
+  }
+
+  Future<void> _initGuide() async {
+    try {
+      await _goodPlayer.setReleaseMode(ReleaseMode.loop);
+      await _badPlayer.setReleaseMode(ReleaseMode.loop);
+      _guideReady = true;
+    } catch (_) {
+      _guideReady = false;
+    }
+  }
+
+  Future<void> _safe(Future<void> Function() f) async {
+    try {
+      await f();
+    } catch (_) {}
+  }
+
+  /// Каде (0-1, вертикално) ќе стигне топчето кога ќе дојде до палката,
+  /// со отскоците од горниот и долниот ѕид.
+  double _predictYAtPaddle() {
+    if (_vx >= 0) return _ballY;
+    final steps = (_ballX - _paddleXThreshold) / -_vx;
+    final raw = _ballY + _vy * steps;
+    final m = raw % 2.0; // Dart: секогаш во [0, 2)
+    return m <= 1.0 ? m : 2.0 - m;
+  }
+
+  /// Се повикува на секој чекор од играта.
+  void _updateGuide() {
+    if (!_playing || _vx >= 0 || _ballX > 0.5) {
+      _setGuide(0, 0);
+      return;
+    }
+    final miss = (_predictYAtPaddle() - _paddleY).abs();
+    // 0 кога топчето штотуку влегло во левата половина, 1 кај палката.
+    final approach = (1 - (_ballX - _paddleXThreshold) / (0.5 - _paddleXThreshold)).clamp(0.0, 1.0).toDouble();
+    if (miss <= _guideAimTolerance) {
+      final vol = 0.25 + 0.75 * approach * (1 - 0.5 * miss / _guideAimTolerance);
+      _setGuide(1, vol.clamp(0.0, 1.0).toDouble());
+    } else {
+      final far = ((miss - _guideAimTolerance) / 0.5).clamp(0.0, 1.0).toDouble();
+      _setGuide(2, 0.2 + 0.8 * far);
+    }
+  }
+
+  void _setGuide(int mode, double vol) {
+    if (!_guideReady) return;
+    if (mode != _guideMode) {
+      final prev = _guideMode;
+      _guideMode = mode;
+      if (prev == 1) unawaited(_safe(() => _goodPlayer.pause()));
+      if (prev == 2) unawaited(_safe(() => _badPlayer.pause()));
+      if (mode == 1) {
+        _goodVol = vol;
+        unawaited(_startLoop(_goodPlayer, 'guide_good.mp3', vol, true));
+      } else if (mode == 2) {
+        _badVol = vol;
+        unawaited(_startLoop(_badPlayer, 'guide_bad.mp3', vol, false));
+      }
+      return;
+    }
+    // Јачината се менува само кога разликата се слуша - не на секои 35 ms.
+    if (mode == 1 && (vol - _goodVol).abs() > 0.03) {
+      _goodVol = vol;
+      unawaited(_safe(() => _goodPlayer.setVolume(vol)));
+    } else if (mode == 2 && (vol - _badVol).abs() > 0.03) {
+      _badVol = vol;
+      unawaited(_safe(() => _badPlayer.setVolume(vol)));
+    }
+  }
+
+  Future<void> _startLoop(AudioPlayer player, String file, double vol, bool good) async {
+    try {
+      await player.setVolume(vol);
+      final started = good ? _goodStarted : _badStarted;
+      if (started) {
+        await player.resume();
+      } else {
+        await player.play(AssetSource('sounds/pong/$file'), volume: vol);
+        if (good) {
+          _goodStarted = true;
+        } else {
+          _badStarted = true;
+        }
+      }
+      // Ако во меѓувреме режимот се сменил, веднаш паузирај.
+      final wanted = good ? 1 : 2;
+      if (_guideMode != wanted) await player.pause();
+    } catch (_) {
+      // Снимката ја нема - водичот тивко не работи.
+    }
   }
 
   Future<void> _loadBest() async {
@@ -99,6 +212,8 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
     _gameTimer?.cancel();
     _voicePlayer.dispose();
     _effectsPlayer.dispose();
+    _goodPlayer.dispose();
+    _badPlayer.dispose();
     super.dispose();
   }
 
@@ -243,6 +358,7 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
         _onMiss();
       }
     }
+    _updateGuide();
   }
 
   Future<void> _onPaddleHit() async {
@@ -265,6 +381,10 @@ class _VoicePongScreenState extends State<VoicePongScreen> {
 
   Future<void> _onMiss() async {
     _gameTimer?.cancel();
+    _guideMode = -1; // принуди пауза на двата
+    _setGuide(0, 0);
+    unawaited(_safe(() => _goodPlayer.pause()));
+    unawaited(_safe(() => _badPlayer.pause()));
     final record = _hits > _best;
     setState(() {
       _playing = false;
