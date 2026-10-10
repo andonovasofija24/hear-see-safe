@@ -1,0 +1,5 @@
+compass_turn_north	Kthehu nga veriu
+compass_turn_south	Kthehu nga jugu
+compass_turn_east	Kthehu nga lindja
+compass_turn_west	Kthehu nga perëndimi
+explanation_simon	Kjo lojë stërvit kujtesën hapësinore përmes prekjes. Fillimisht prek 'Fillo të ndjesh' - do të ndjesh një sekuencë vibrimesh. Çdo drejtim ka numrin e vet të vibrimeve: majtas - një, lart - dy, djathtas - tre, poshtë - katër. Numëroji dhe mbaji mend me kujdes, sipas radhës. Pastaj, në panelin në formë kryqi më poshtë, prek të njëjtat drejtime sipas të njëjtës radhë siç i ndjeve. Nëse do t'i ndjesh përsëri para se të përgjigjesh, prek 'Ndjeje përsëri'. Çdo raund shton edhe një hap në sekuencë - loja ka gjithsej 10 raunde.

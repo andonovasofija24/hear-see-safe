@@ -2116,11 +2116,13 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     'left': Icons.keyboard_arrow_left_rounded,
     'right': Icons.keyboard_arrow_right_rounded,
   };
+  /// Број на вибрации за секоја насока: лево 1, горе 2, десно 3, долу 4.
+  /// Секој удар трае 180 ms, со пауза од 220 ms - лесно се бројат.
   static const Map<String, List<int>> _directionVibrationPatterns = {
-    'up': [0, 400],
-    'down': [0, 120, 100, 120],
-    'left': [0, 80, 80, 80, 80, 80],
-    'right': [0, 80, 120, 300],
+    'left': [0, 180],
+    'up': [0, 180, 220, 180],
+    'right': [0, 180, 220, 180, 220, 180],
+    'down': [0, 180, 220, 180, 220, 180, 220, 180],
   };
 
   late final List<int> _simonLengthPerRound =
@@ -2209,6 +2211,14 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     90: 'spatial.compass_east',
     180: 'spatial.compass_south',
     270: 'spatial.compass_west',
+  };
+
+  /// Имиња на снимките „Сврти се кон …“ (compass_turn_<име>.mp3).
+  static final Map<double, String> _compassTurnClipNames = {
+    0: 'north',
+    90: 'east',
+    180: 'south',
+    270: 'west',
   };
 
   StreamSubscription<CompassEvent>? _compassSub;
@@ -2405,7 +2415,7 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     await stateSub.cancel();
 
     if (!mounted) return;
-    if (!(playCallSucceeded && reachedPlaying)) {
+    if (!(playCallSucceeded && reachedPlaying) && fallbackText.isNotEmpty) {
       await _voiceAssistant.speakWithLanguage(fallbackText, _langCode, vibrate: false);
     }
   }
@@ -2487,7 +2497,11 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       if (!mounted) return;
       setState(() => _simonFlashingDir = dir);
       await _vibrateDirection(dir);
-      await Future.delayed(const Duration(milliseconds: 650));
+      // Чекај да завршат сите удари (до 4) пред следната насока, плус
+      // јасна пауза за детето да ги изброи.
+      final pattern = _directionVibrationPatterns[dir]!;
+      final patternMs = pattern.fold<int>(0, (a, b) => a + b);
+      await Future.delayed(Duration(milliseconds: patternMs + 600));
       if (!mounted) return;
       setState(() => _simonFlashingDir = null);
       await Future.delayed(const Duration(milliseconds: 250));
@@ -2909,6 +2923,10 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       _compassAwaitingTarget = false;
       _compassLockProgress = 0;
     });
+    // Гласовна порака „Сврти се кон север/југ/исток/запад“ -
+    // audio/spatial_orientation/<јазик>/compass_turn_<насока>.mp3.
+    final dirName = _compassTurnClipNames[target];
+    if (dirName != null) unawaited(_playClip('compass_turn_$dirName', ''));
   }
 
   /// Аголна разлика a-b во [-180, 180] (правилно преку 359° -> 0°).

@@ -19,6 +19,8 @@ import 'package:hear_and_see_safe/widgets/picture_book_scenes/scene_contract.dar
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/nature_tree_scene.dart';
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/objects_belt_scene.dart';
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/orbit_scenes.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/nutrition_pyramid_scene.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/world_cultures_scene.dart';
 
 /// Колку пати поголем текст (како на почетниот екран).
 const double _kPbText = 1.6;
@@ -46,6 +48,44 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   final Random _random = Random();
 
   static const List<PictureBookCategory> _categories = [
+    PictureBookCategory(
+      id: 'cultures',
+      titleKey: 'picture_book.category_cultures',
+      icon: Icons.public_rounded,
+      color: Color(0xFF0F766E),
+      items: [
+        PictureBookItem(id: 'culture_japan', nameKey: 'picture_book.culture_japan', descriptionKey: 'picture_book.culture_japan_desc', learnKey: 'picture_book.culture_japan_learn', emoji: '🌸', hasSound: false),
+        PictureBookItem(id: 'culture_egypt', nameKey: 'picture_book.culture_egypt', descriptionKey: 'picture_book.culture_egypt_desc', learnKey: 'picture_book.culture_egypt_learn', emoji: '🏺', hasSound: false),
+        PictureBookItem(id: 'culture_italy', nameKey: 'picture_book.culture_italy', descriptionKey: 'picture_book.culture_italy_desc', learnKey: 'picture_book.culture_italy_learn', emoji: '🏛️', hasSound: false),
+        PictureBookItem(id: 'culture_mexico', nameKey: 'picture_book.culture_mexico', descriptionKey: 'picture_book.culture_mexico_desc', learnKey: 'picture_book.culture_mexico_learn', emoji: '🎨', hasSound: false),
+        PictureBookItem(id: 'culture_france', nameKey: 'picture_book.culture_france', descriptionKey: 'picture_book.culture_france_desc', learnKey: 'picture_book.culture_france_learn', emoji: '🗼', hasSound: false),
+        PictureBookItem(id: 'culture_greece', nameKey: 'picture_book.culture_greece', descriptionKey: 'picture_book.culture_greece_desc', learnKey: 'picture_book.culture_greece_learn', emoji: '🏺', hasSound: false),
+        PictureBookItem(id: 'culture_china', nameKey: 'picture_book.culture_china', descriptionKey: 'picture_book.culture_china_desc', learnKey: 'picture_book.culture_china_learn', emoji: '🏮', hasSound: false),
+        PictureBookItem(id: 'culture_india', nameKey: 'picture_book.culture_india', descriptionKey: 'picture_book.culture_india_desc', learnKey: 'picture_book.culture_india_learn', emoji: '🕌', hasSound: false),
+        PictureBookItem(id: 'culture_kenya', nameKey: 'picture_book.culture_kenya', descriptionKey: 'picture_book.culture_kenya_desc', learnKey: 'picture_book.culture_kenya_learn', emoji: '🪘', hasSound: false),
+        PictureBookItem(id: 'culture_turkey', nameKey: 'picture_book.culture_turkey', descriptionKey: 'picture_book.culture_turkey_desc', learnKey: 'picture_book.culture_turkey_learn', emoji: '🧿', hasSound: false),
+      ],
+    ),
+
+    PictureBookCategory(
+      id: 'nutrition',
+      titleKey: 'picture_book.category_nutrition',
+      icon: Icons.restaurant_rounded,
+      color: Color(0xFFB45309),
+      items: [
+        PictureBookItem(id: 'food_sweets', nameKey: 'picture_book.food_sweets', descriptionKey: 'picture_book.food_sweets_desc', learnKey: 'picture_book.food_sweets_learn', emoji: '🍬', hasSound: false),
+        PictureBookItem(id: 'food_dairy', nameKey: 'picture_book.food_dairy', descriptionKey: 'picture_book.food_dairy_desc', learnKey: 'picture_book.food_dairy_learn', emoji: '🥛', hasSound: false),
+        PictureBookItem(id: 'food_meat', nameKey: 'picture_book.food_meat', descriptionKey: 'picture_book.food_meat_desc', learnKey: 'picture_book.food_meat_learn', emoji: '🍗', hasSound: false),
+        PictureBookItem(id: 'food_fish', nameKey: 'picture_book.food_fish', descriptionKey: 'picture_book.food_fish_desc', learnKey: 'picture_book.food_fish_learn', emoji: '🐟', hasSound: false),
+        PictureBookItem(id: 'food_fruit', nameKey: 'picture_book.food_fruit', descriptionKey: 'picture_book.food_fruit_desc', learnKey: 'picture_book.food_fruit_learn', emoji: '🍎', hasSound: false),
+        PictureBookItem(id: 'food_vegetables', nameKey: 'picture_book.food_vegetables', descriptionKey: 'picture_book.food_vegetables_desc', learnKey: 'picture_book.food_vegetables_learn', emoji: '🥦', hasSound: false),
+        PictureBookItem(id: 'food_grains', nameKey: 'picture_book.food_grains', descriptionKey: 'picture_book.food_grains_desc', learnKey: 'picture_book.food_grains_learn', emoji: '🍞', hasSound: false),
+        PictureBookItem(id: 'food_legumes', nameKey: 'picture_book.food_legumes', descriptionKey: 'picture_book.food_legumes_desc', learnKey: 'picture_book.food_legumes_learn', emoji: '🫘', hasSound: false),
+        PictureBookItem(id: 'food_nuts', nameKey: 'picture_book.food_nuts', descriptionKey: 'picture_book.food_nuts_desc', learnKey: 'picture_book.food_nuts_learn', emoji: '🥜', hasSound: false),
+        PictureBookItem(id: 'food_water', nameKey: 'picture_book.food_water', descriptionKey: 'picture_book.food_water_desc', learnKey: 'picture_book.food_water_learn', emoji: '💧', hasSound: false),
+      ],
+    ),
+
     PictureBookCategory(
       id: 'animals',
       titleKey: 'picture_book.category_animals',
@@ -681,7 +721,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       if (!alive()) return;
       setState(() => _quizReadingIndex = i);
       final choice = _quizChoices[i];
-      await _speak('${choice.id}_name', choice.nameKey.tr());
+      await _speak('${choice.id}_name', choice.nameKey.tr(), allowTtsFallback: false);
       if (!mounted || myToken != _narrationToken) return;
       setState(() {
         _quizReadingIndex = null;
@@ -1211,6 +1251,20 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     final quizLabel = 'picture_book.go_to_quiz'.tr();
     final key = ValueKey('pb-scene-${cat.id}');
     switch (cat.id) {
+      case 'cultures':
+        return WorldCulturesScene(
+          key: key, items: items, selected: selected,
+          onSelect: _selectStageItem, onOpen: _openStageItem,
+          onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+      case 'nutrition':
+        return NutritionPyramidScene(
+          key: key, items: items, selected: selected,
+          onSelect: _selectStageItem, onOpen: _openStageItem,
+          onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
       case 'nature':
         return NatureTreeScene(
           key: key,
@@ -1351,9 +1405,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     const yellow = Color(0xFFFFFF00);
     final cat = _category;
     final name = item.nameKey.tr();
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final iconDiameter = (screenWidth - 176).clamp(136.0, 190.0);
-    final iconFontSize = iconDiameter * 0.63;
     final glow = hc ? yellow : Color.lerp(cat.color, Colors.white, 0.35)!;
     final tile = Semantics(
       button: true,
@@ -1373,8 +1424,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: iconDiameter,
-                      height: iconDiameter,
+                      width: 124,
+                      height: 124,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -1387,7 +1438,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                 BoxShadow(color: cat.color.withValues(alpha: 0.5), blurRadius: 10),
                               ],
                       ),
-                      child: Text(item.emoji, style: TextStyle(fontSize: iconFontSize)),
+                      child: Text(item.emoji, style: const TextStyle(fontSize: 76)),
                     ),
                     if (seen)
                       Positioned(
@@ -1413,12 +1464,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           _stageArrow(Icons.arrow_back_rounded, 'picture_book.previous_item'.tr(), () => _stageStep(-1), hc),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1426,19 +1477,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                 tile,
                 const SizedBox(height: 8),
                 ExcludeSemantics(
-                  child: Text(
-                    name,
-                    maxLines: 2,
-                    softWrap: true,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: GameTypography.heading(context, _onBg(hc, contrast), 32 * _kPbText),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      softWrap: false,
+                      textAlign: TextAlign.center,
+                      style: GameTypography.heading(context, _onBg(hc, contrast), 24 * _kPbText),
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 8),
           _stageArrow(Icons.arrow_forward_rounded, 'picture_book.next_item'.tr(), () => _stageStep(1), hc),
         ],
       ),
@@ -1525,8 +1578,10 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final compact = constraints.maxWidth < 620;
-                  final sceneHeight = (constraints.maxHeight * (compact ? 0.58 : 0.65))
-                      .clamp(180.0, 460.0);
+                  final isCultures = _category.id == 'cultures';
+                  final sceneHeight = (constraints.maxHeight *
+                          (isCultures ? (compact ? 0.48 : 0.53) : (compact ? 0.58 : 0.65)))
+                      .clamp(isCultures ? 150.0 : 180.0, isCultures ? 380.0 : 460.0);
                   return Column(
                     children: [
                       SizedBox(
@@ -1536,10 +1591,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                           child: AnimatedScale(
                             // Зум на постојната сцена, без заменување на
                             // дрвото, лентата, планетата, увото или лавот.
-                            // Кај фабричката лента предметот веќе се зумира
-                            // во ObjectsBeltScene (focusMode). Зумирање на
-                            // целата сцена го отсекува десниот раб на квизот.
-                            scale: _category.id == 'objects' ? 1.0 : 1.08,
+                            scale: isCultures ? 0.90 : 1.08,
                             duration: Duration(
                               milliseconds: Playful.reduceMotion(context) ? 0 : 350,
                             ),
@@ -1570,7 +1622,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                               Expanded(
                                 child: _objectsExplanation(
                                   item.nameKey.tr(),
-                                  item.emoji,
                                   item.descriptionKey.tr(),
                                   item.learnKey.tr(),
                                   hc,
@@ -1630,6 +1681,18 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       if (index != _itemIndex) _onItemPageChanged(index);
     }
     switch (_category.id) {
+      case 'cultures':
+        return WorldCulturesScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
+      case 'nutrition':
+        return NutritionPyramidScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
       case 'nature':
         return NatureTreeScene(
           items: items, selected: selected, onSelect: select,
@@ -1666,69 +1729,80 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   Widget _objectsExplanation(
     String name,
-    String emoji,
     String description,
     String learn,
     bool hc,
     Color navy,
   ) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 66,
-                height: 66,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: hc ? Colors.black : Colors.white.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: hc ? const Color(0xFFFFFF00) : Colors.white.withValues(alpha: 0.42),
-                    width: 2,
-                  ),
-                ),
-                child: Text(emoji, style: const TextStyle(fontSize: 43)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  name,
-                  style: GoogleFonts.lexend(
-                    fontSize: 29 * _kPbText,
-                    height: 1.12,
-                    fontWeight: FontWeight.w800,
-                    color: hc ? const Color(0xFFFFFF00) : Colors.white,
-                  ),
-                ),
-              ),
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (_category.id == 'cultures') ...[
+              Builder(builder: (context) {
+                const ids = ['culture_japan', 'culture_egypt', 'culture_italy',
+                  'culture_mexico', 'culture_france', 'culture_greece',
+                  'culture_china', 'culture_india', 'culture_kenya', 'culture_turkey'];
+                const flags = ['🇯🇵', '🇪🇬', '🇮🇹', '🇲🇽', '🇫🇷', '🇬🇷', '🇨🇳', '🇮🇳', '🇰🇪', '🇹🇷'];
+                final i = ids.indexOf(_item.id);
+                if (i < 0) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(children: [
+                    Text(flags[i], style: const TextStyle(fontSize: 54)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(name,
+                      style: GoogleFonts.lexend(fontSize: 27,
+                        fontWeight: FontWeight.w900, color: Colors.white))),
+                  ]),
+                );
+              }),
             ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            description,
-            style: GoogleFonts.lexend(
-              fontSize: 26 * _kPbText,
-              height: 1.2,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+            Text(
+              description,
+              style: GoogleFonts.lexend(
+                fontSize: 28,
+                height: 1.16,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            learn,
-            style: GoogleFonts.lexend(
-              fontSize: 24 * _kPbText,
-              height: 1.22,
-              fontWeight: FontWeight.w700,
-              color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A),
+            const SizedBox(height: 5),
+            Text(
+              learn,
+              style: GoogleFonts.lexend(
+                fontSize: 25,
+                height: 1.16,
+                fontWeight: FontWeight.w700,
+                color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A),
+              ),
             ),
-          ),
-        ],
+            if (_category.id == 'cultures') ...[
+              const SizedBox(height: 18),
+              Text('picture_book.culture_landmarks_title'.tr(),
+                style: GoogleFonts.lexend(fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                  color: hc ? const Color(0xFFFFFF00) : Colors.white)),
+              const SizedBox(height: 10),
+              ...List.generate(3, (index) => Padding(
+                padding: const EdgeInsets.only(bottom: 9),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A))),
+                  child: Text('picture_book.${_item.id}_landmark_${index + 1}'.tr(),
+                    style: GoogleFonts.lexend(fontSize: 22,
+                      fontWeight: FontWeight.w700, color: Colors.white)),
+                ),
+              )),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -1954,6 +2028,9 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     final name = item.nameKey.tr();
     final description = item.descriptionKey.tr();
     final learn = item.learnKey.tr();
+    final culture = _category.id == 'cultures';
+    final cultureIndex = const ['culture_japan','culture_egypt','culture_italy','culture_mexico','culture_france','culture_greece','culture_china','culture_india','culture_kenya','culture_turkey'].indexOf(item.id);
+    const cultureFlags = ['🇯🇵','🇪🇬','🇮🇹','🇲🇽','🇫🇷','🇬🇷','🇨🇳','🇮🇳','🇰🇪','🇹🇷'];
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -2048,7 +2125,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                   color: hc ? Colors.black : Colors.white,
                                   border: Border.all(color: hc ? Colors.white : catColor.withValues(alpha: 0.35), width: hc ? 2 : 3),
                                 ),
-                                child: Text(item.emoji, style: TextStyle(fontSize: emojiSize)),
+                                child: Text(culture && cultureIndex >= 0 ? cultureFlags[cultureIndex] : item.emoji, style: TextStyle(fontSize: emojiSize)),
                               ),
                             ),
                             const SizedBox(height: 18),
@@ -2089,6 +2166,28 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                 ),
                               ),
                             ),
+                            if (culture && cultureIndex >= 0) ...[
+                              const SizedBox(height: 18),
+                              Text('picture_book.culture_landmarks_title'.tr(),
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.lexend(fontSize: 25, fontWeight: FontWeight.w800,
+                                  color: hc ? yellow : catDeep)),
+                              const SizedBox(height: 12),
+                              Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center,
+                                children: List.generate(3, (landmark) => Container(
+                                  constraints: const BoxConstraints(minWidth: 125, maxWidth: 260),
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: hc ? Colors.black : Colors.white,
+                                    border: Border.all(color: hc ? yellow : catColor, width: 2),
+                                    borderRadius: BorderRadius.circular(14)),
+                                  child: Text('picture_book.${item.id}_landmark_${landmark + 1}'.tr(),
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.w700,
+                                      color: hc ? Colors.white : Playful.ink)),
+                                )),
+                              ),
+                            ],
                             const SizedBox(height: 22),
                             Wrap(
                               alignment: WrapAlignment.center,

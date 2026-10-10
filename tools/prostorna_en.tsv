@@ -1,0 +1,5 @@
+compass_turn_north	Turn to the north
+compass_turn_south	Turn to the south
+compass_turn_east	Turn to the east
+compass_turn_west	Turn to the west
+explanation_simon	This game trains spatial memory through touch. First tap 'Start sensing' - you'll feel a sequence of vibrations. Each direction has its own number of vibrations: left - one, up - two, right - three, down - four. Count and remember them carefully, in order. Then, on the cross-shaped pad below, tap the same directions in the same order you felt them. If you want to feel the sequence again before answering, tap 'Sense again'. Each round adds one more step to the sequence - the game has 10 rounds in total.
