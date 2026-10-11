@@ -21,6 +21,7 @@ import 'package:hear_and_see_safe/widgets/picture_book_scenes/objects_belt_scene
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/orbit_scenes.dart';
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/nutrition_pyramid_scene.dart';
 import 'package:hear_and_see_safe/widgets/picture_book_scenes/world_cultures_scene.dart';
+import 'package:hear_and_see_safe/widgets/picture_book_scenes/institutions_square_scene.dart';
 
 /// Колку пати поголем текст (како на почетниот екран).
 const double _kPbText = 1.6;
@@ -48,6 +49,23 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
   final Random _random = Random();
 
   static const List<PictureBookCategory> _categories = [
+    PictureBookCategory(
+      id: 'institutions',
+      titleKey: 'picture_book.category_institutions',
+      icon: Icons.account_balance_rounded,
+      color: Color(0xFF2563EB),
+      items: [
+        PictureBookItem(id: 'institution_city_hall', nameKey: 'picture_book.institution_city_hall', descriptionKey: 'picture_book.institution_city_hall_desc', learnKey: 'picture_book.institution_city_hall_learn', emoji: '🏛️', hasSound: false),
+        PictureBookItem(id: 'institution_hospital', nameKey: 'picture_book.institution_hospital', descriptionKey: 'picture_book.institution_hospital_desc', learnKey: 'picture_book.institution_hospital_learn', emoji: '🏥', hasSound: false),
+        PictureBookItem(id: 'institution_school', nameKey: 'picture_book.institution_school', descriptionKey: 'picture_book.institution_school_desc', learnKey: 'picture_book.institution_school_learn', emoji: '🏫', hasSound: false),
+        PictureBookItem(id: 'institution_library', nameKey: 'picture_book.institution_library', descriptionKey: 'picture_book.institution_library_desc', learnKey: 'picture_book.institution_library_learn', emoji: '📚', hasSound: false),
+        PictureBookItem(id: 'institution_police', nameKey: 'picture_book.institution_police', descriptionKey: 'picture_book.institution_police_desc', learnKey: 'picture_book.institution_police_learn', emoji: '🚓', hasSound: false),
+        PictureBookItem(id: 'institution_fire_station', nameKey: 'picture_book.institution_fire_station', descriptionKey: 'picture_book.institution_fire_station_desc', learnKey: 'picture_book.institution_fire_station_learn', emoji: '🚒', hasSound: false),
+        PictureBookItem(id: 'institution_post_office', nameKey: 'picture_book.institution_post_office', descriptionKey: 'picture_book.institution_post_office_desc', learnKey: 'picture_book.institution_post_office_learn', emoji: '📮', hasSound: false),
+        PictureBookItem(id: 'institution_museum', nameKey: 'picture_book.institution_museum', descriptionKey: 'picture_book.institution_museum_desc', learnKey: 'picture_book.institution_museum_learn', emoji: '🖼️', hasSound: false),
+      ],
+    ),
+
     PictureBookCategory(
       id: 'cultures',
       titleKey: 'picture_book.category_cultures',
@@ -484,27 +502,47 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _announceItem();
   }
 
+  // Претходно снимени имиња на знаменитости (без системски TTS).
+  // Пример: assets/audio/picture_book/mk/culture_japan_landmark_1.mp3
+  Future<void> _playCultureLandmark(String countryId, int number) async {
+    if (_category.id != 'cultures') return;
+    final key = 'picture_book.${countryId}_landmark_$number';
+    await _speak('${countryId}_landmark_$number', key.tr(), allowTtsFallback: false);
+  }
+
+  Future<void> _playCultureLandmarksSequence(String countryId, int token) async {
+    if (_category.id != 'cultures') return;
+    for (var number = 1; number <= 3; number++) {
+      if (!mounted || token != _narrationToken || _item.id != countryId) return;
+      await _playCultureLandmark(countryId, number);
+    }
+  }
+
   Future<void> _announceItem() async {
     final myToken = ++_narrationToken;
     final item = _item;
     final fallback = '${item.nameKey.tr()}. ${item.descriptionKey.tr()}. ${item.learnKey.tr()}';
     await _speak('${item.id}_explanation', fallback);
     if (!mounted || myToken != _narrationToken) return;
+    await _playCultureLandmarksSequence(item.id, myToken);
   }
 
   Future<void> _repeatItem() async {
-    _narrationToken++;
+    final myToken = ++_narrationToken;
     if (await VibrationUtils.hasVibrator()) {
       await VibrationUtils.vibrate(duration: 100);
     }
     final item = _item;
     final fallback = '${item.nameKey.tr()}. ${item.descriptionKey.tr()}. ${item.learnKey.tr()}';
     await _speak('${item.id}_explanation', fallback);
+    if (!mounted || myToken != _narrationToken) return;
     if (item.learn2Key != null) {
       final remember = _t('remember');
       final learn2 = item.learn2Key!.tr();
       await _speak('${item.id}_extra', '$remember $learn2');
     }
+    if (!mounted || myToken != _narrationToken) return;
+    await _playCultureLandmarksSequence(item.id, myToken);
   }
 
   /// Го пушта звукот на предметот - се повикува ИСКЛУЧИВО од кружното
@@ -1251,6 +1289,13 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     final quizLabel = 'picture_book.go_to_quiz'.tr();
     final key = ValueKey('pb-scene-${cat.id}');
     switch (cat.id) {
+      case 'institutions':
+        return InstitutionsSquareScene(
+          key: key, items: items, selected: selected,
+          onSelect: _selectStageItem, onOpen: _openStageItem,
+          onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce,
+        );
       case 'cultures':
         return WorldCulturesScene(
           key: key, items: items, selected: selected,
@@ -1681,6 +1726,12 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       if (index != _itemIndex) _onItemPageChanged(index);
     }
     switch (_category.id) {
+      case 'institutions':
+        return InstitutionsSquareScene(
+          items: items, selected: selected, onSelect: select,
+          onOpen: _repeatItem, onQuiz: _startQuiz, quizLabel: quizLabel,
+          highContrast: hc, reduceMotion: reduce, focusMode: true,
+        );
       case 'cultures':
         return WorldCulturesScene(
           items: items, selected: selected, onSelect: select,
@@ -1788,16 +1839,34 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               const SizedBox(height: 10),
               ...List.generate(3, (index) => Padding(
                 padding: const EdgeInsets.only(bottom: 9),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A))),
-                  child: Text('picture_book.${_item.id}_landmark_${index + 1}'.tr(),
-                    style: GoogleFonts.lexend(fontSize: 22,
-                      fontWeight: FontWeight.w700, color: Colors.white)),
+                child: Semantics(
+                  button: true,
+                  label: 'picture_book.${_item.id}_landmark_${index + 1}'.tr(),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        _narrationToken++;
+                        _playCultureLandmark(_item.id, index + 1);
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFFE18A))),
+                        child: Row(children: [
+                          const Icon(Icons.volume_up_rounded, color: Colors.white, size: 25),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text('picture_book.${_item.id}_landmark_${index + 1}'.tr(),
+                            style: GoogleFonts.lexend(fontSize: 22,
+                              fontWeight: FontWeight.w700, color: Colors.white))),
+                        ]),
+                      ),
+                    ),
+                  ),
                 ),
               )),
             ],
@@ -2174,17 +2243,35 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
                                   color: hc ? yellow : catDeep)),
                               const SizedBox(height: 12),
                               Wrap(spacing: 10, runSpacing: 10, alignment: WrapAlignment.center,
-                                children: List.generate(3, (landmark) => Container(
-                                  constraints: const BoxConstraints(minWidth: 125, maxWidth: 260),
-                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                                  decoration: BoxDecoration(
-                                    color: hc ? Colors.black : Colors.white,
-                                    border: Border.all(color: hc ? yellow : catColor, width: 2),
-                                    borderRadius: BorderRadius.circular(14)),
-                                  child: Text('picture_book.${item.id}_landmark_${landmark + 1}'.tr(),
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.w700,
-                                      color: hc ? Colors.white : Playful.ink)),
+                                children: List.generate(3, (landmark) => Semantics(
+                                  button: true,
+                                  label: 'picture_book.${item.id}_landmark_${landmark + 1}'.tr(),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: () {
+                                        _narrationToken++;
+                                        _playCultureLandmark(item.id, landmark + 1);
+                                      },
+                                      child: Container(
+                                        constraints: const BoxConstraints(minWidth: 125, maxWidth: 260),
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: hc ? Colors.black : Colors.white,
+                                          border: Border.all(color: hc ? yellow : catColor, width: 2),
+                                          borderRadius: BorderRadius.circular(14)),
+                                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                                          Icon(Icons.volume_up_rounded, size: 22, color: hc ? yellow : catDeep),
+                                          const SizedBox(width: 8),
+                                          Flexible(child: Text('picture_book.${item.id}_landmark_${landmark + 1}'.tr(),
+                                            textAlign: TextAlign.center,
+                                            style: GoogleFonts.lexend(fontSize: 20, fontWeight: FontWeight.w700,
+                                              color: hc ? Colors.white : Playful.ink))),
+                                        ]),
+                                      ),
+                                    ),
+                                  ),
                                 )),
                               ),
                             ],

@@ -16,6 +16,7 @@ import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/braille/braille_data.dart';
 import 'package:hear_and_see_safe/utils/book_page_keys.dart';
 import 'package:hear_and_see_safe/utils/input_mode.dart';
+import 'package:hear_and_see_safe/widgets/braille_lab_art.dart';
 
 /// Зголемување на читливиот текст на целиот екран (~1.6x, исто како на
 /// почетниот екран).
@@ -51,6 +52,10 @@ enum _View {
   reference,
   savedSentences,
   secrets,
+  menuLetters,
+  menuSigns,
+  menuGames,
+  introPage,
 }
 
 class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
@@ -115,7 +120,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   /// Додека е true, категориите (групи/потсетник/игри) се заклучени -
   /// воведот самиот е СЕКОГАШ видлив, ова важи само за содржината подолу.
-  bool _introLocked = true;
+  bool _introLocked = false;
 
   final Set<String> _exploredKeys = {};
 
@@ -297,7 +302,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     super.initState();
     _voiceAssistant = Provider.of<VoiceAssistantService>(context, listen: false);
     _voiceAssistant.initialize();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _startIntroLockSequence());
   }
 
   /// Прво 3 секунди тишина, потоа "Брајова азбука" (game_name.mp3).
@@ -799,7 +803,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       _sentence = null;
       _sentenceFinished = false;
       _expressExplanationOpen = false;
-      _view = _View.categorySelect;
+      _view = _parentMenuView;
     });
   }
 
@@ -1048,7 +1052,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       return;
     }
     _playClip('word_round_unavailable');
-    if (_view == _View.wordRound) setState(() => _view = _View.categorySelect);
+    if (_view == _View.wordRound) setState(() => _view = _View.menuGames);
   }
 
   /// Зборот се спелува буква по буква. Намерно потоа НЕ се изговара првата
@@ -1118,7 +1122,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_wordSessionCount >= _wordSessionTarget) {
       setState(() {
         _currentWord = null;
-        _view = _View.categorySelect;
+        _view = _View.menuGames;
       });
     } else {
       _pickNextWord();
@@ -1563,6 +1567,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   return _buildSavedSentences(context);
                 case _View.secrets:
                   return _buildSecrets(context);
+                case _View.menuLetters:
+                  return _buildGroupMenu(context, signs: false);
+                case _View.menuSigns:
+                  return _buildGroupMenu(context, signs: true);
+                case _View.menuGames:
+                  return _buildGamesMenu(context);
+                case _View.introPage:
+                  return _buildIntroPage(context);
               }
             },
           ),
@@ -1734,7 +1746,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Widget _secretsMenuCard(bool hc) => _menuCard(
     color: const Color(0xFF0D9488),
-    icon: Icons.auto_awesome_rounded,
+    icon: Icons.history_edu_rounded,
     title: _secretText('Тајните на Брајовата азбука', 'Sekretet e alfabetit Braille', 'Secrets of the Braille alphabet'),
     subtitle: _secretText('Откриј како се поврзани буквите, броевите и знаците.',
       'Zbulo lidhjet mes shkronjave, numrave dhe shenjave.',
@@ -1753,51 +1765,75 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return null;
   }
 
+  // --- Изглед „Работната маса на Луј Брај“: хартија, мастило, печати. ---
+  bool get _labHc => AccessibilityUtils.isHighContrast(context);
+  Color get _ink => _labHc ? Colors.white : LabPalette.ink;
+  Color get _inkSoft => _labHc ? Colors.white : LabPalette.inkSoft;
+  Color get _inkAccent => _labHc ? LabPalette.hcYellow : LabPalette.sepia;
+  Color get _inkTeal => _labHc ? Colors.white : LabPalette.dotAdded;
+
+  /// Копчињата и текстот врз хартија: темно мастило, топли бои.
+  Widget _paperTheme(Widget child) {
+    final hc = _labHc;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(18));
+    const text = TextStyle(fontSize: 23, fontWeight: FontWeight.w800);
+    const pad = EdgeInsets.symmetric(horizontal: 20, vertical: 14);
+    return Theme(
+      data: Theme.of(context).copyWith(
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: hc ? LabPalette.hcYellow : LabPalette.ink,
+            foregroundColor: hc ? Colors.black : LabPalette.paper,
+            iconColor: hc ? Colors.black : LabPalette.gold,
+            minimumSize: const Size(64, 58),
+            padding: pad,
+            textStyle: text,
+            shape: shape,
+            elevation: hc ? 0 : 3,
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: hc ? Colors.white : LabPalette.ink,
+            iconColor: hc ? Colors.white : LabPalette.seal,
+            side: BorderSide(color: hc ? Colors.white : LabPalette.ink, width: 2),
+            minimumSize: const Size(64, 58),
+            padding: pad,
+            textStyle: text,
+            shape: shape,
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            backgroundColor: hc ? Colors.black : LabPalette.ink,
+            foregroundColor: hc ? Colors.white : LabPalette.paper,
+            disabledBackgroundColor: hc ? Colors.black : LabPalette.paperEdge,
+            side: hc ? const BorderSide(color: Colors.white, width: 2) : null,
+            minimumSize: const Size(60, 60),
+          ),
+        ),
+      ),
+      child: DefaultTextStyle.merge(style: TextStyle(color: _ink), child: child),
+    );
+  }
+
   Widget _secretCell(List<int> dots, {Set<int> highlights = const {}, String? label}) {
-    final hc = AccessibilityUtils.isHighContrast(context);
     return Semantics(
       label: '${label ?? ''}. ${_secretText('Точки', 'Pikat', 'Dots')}: ${dots.isEmpty ? '0' : dots.join(', ')}',
-      child: Container(
-        padding: const EdgeInsets.all(10),
-        decoration: BoxDecoration(
-          color: hc ? Colors.black : const Color(0xFF17213B),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: hc ? Colors.white : _gold.withValues(alpha: .9), width: 3),
-          boxShadow: hc ? null : [BoxShadow(color: _gold.withValues(alpha: .15), blurRadius: 14)],
-        ),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          for (var row = 0; row < 3; row++)
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              for (final d in [row + 1, row + 4])
-                Container(width: 46, height: 46, margin: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(shape: BoxShape.circle,
-                    color: dots.contains(d) ? (highlights.contains(d) ? const Color(0xFF4ADE80) : _gold) : Colors.white24,
-                    border: Border.all(color: dots.contains(d) ? Colors.white : Colors.white38, width: 1.5))),
-            ]),
-        ]),
+      child: ExcludeSemantics(
+        child: EmbossedCell(dots: dots, added: highlights, hc: _labHc, dotSize: 42),
       ),
     );
   }
 
-  Widget _secretHeading(String text) => Padding(
-    padding: const EdgeInsets.only(top: 24, bottom: 12),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF123E49), Color(0xFF17213B)]),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFF45E0D0).withValues(alpha: .6), width: 2),
-      ),
-      child: Text(text, textAlign: TextAlign.center,
-        style: const TextStyle(color: Color(0xFFFFDE78), fontSize: 37,
-          fontWeight: FontWeight.w900, height: 1.2)),
-    ),
-  );
+  /// Наслов на поглавје - [_secretAccordionContent] го претвора во
+  /// посебен дел што се отвора.
+  Widget _secretHeading(String text) => _SecretHeading(text);
 
   Widget _secretParagraph(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
     child: Text(text, textAlign: TextAlign.start,
-      style: TextStyle(color: _fg(context), fontSize: 31, height: 1.45,
+      style: TextStyle(color: _ink, fontSize: 31, height: 1.45,
         fontWeight: FontWeight.w500)),
   );
 
@@ -1938,89 +1974,168 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   Widget _labAudioControls(String section) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Wrap(spacing: 12, runSpacing: 8, children: [
+    child: Wrap(spacing: 12, runSpacing: 10, children: [
       ElevatedButton.icon(
         onPressed: () => _labPlayIntro(section),
         icon: const Icon(Icons.volume_up_rounded, size: 30),
-        label: Text(_secretText('Слушни вовед (MP3)', 'Dëgjo hyrjen (MP3)', 'Play introduction (MP3)'),
-          style: const TextStyle(fontSize: 23)),
+        label: Text(_secretText('Слушни објаснување', 'Dëgjo shpjegimin', 'Hear the explanation')),
       ),
       OutlinedButton.icon(
         onPressed: _labStopAudio,
         icon: const Icon(Icons.stop_circle_outlined, size: 30),
-        label: Text(_secretText('Стоп', 'Ndalo', 'Stop'), style: const TextStyle(fontSize: 23)),
+        label: Text(_secretText('Стоп', 'Ndalo', 'Stop')),
       ),
     ]),
   );
 
+  /// Илустрацијата за секој дел од лабораторијата.
+  Widget _labArtFor(String id, double size) {
+    final hc = _labHc;
+    switch (id) {
+      case 'lab-history':
+        return LouisBraillePortrait(size: size, hc: hc);
+      case 'lab-explorer':
+        return LabArt(kind: LabArtKind.slate, size: size, hc: hc);
+      case 'lab-transform':
+        return LabArt(kind: LabArtKind.sparkle, size: size, hc: hc);
+      case 'lab-converter':
+        return LabArt(kind: LabArtKind.brailler, size: size, hc: hc);
+      default:
+        return LabArt(kind: LabArtKind.book, size: size, hc: hc);
+    }
+  }
+
   Widget _labFold(String id, String title, Widget child, {String? introSection}) {
     final open = _labOpenPanels.contains(id);
-    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Semantics(button: true, expanded: open,
-        child: InkWell(onTap: () => setState(() {
-          if (open) { _labOpenPanels.remove(id); _labStopAudio(); } else { _labOpenPanels.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
-        }), child: Padding(padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Row(children: [
-            Expanded(child: _labText(title, size: 31, weight: FontWeight.w800)),
-            Icon(open ? Icons.expand_less : Icons.expand_more, color: _labYellow, size: 42),
-          ])))),
-      if (open) ...[
-        if (introSection != null) _labAudioControls(introSection),
-        child,
-      ],
-    ]));
+    final hc = _labHc;
+    void toggle() => setState(() {
+      if (open) { _labOpenPanels.remove(id); _labStopAudio(); } else { _labOpenPanels.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
+    });
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        PaperPanel(
+          hc: hc,
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          borderColor: open ? LabPalette.sepia : null,
+          child: _paperTheme(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Semantics(button: true, expanded: open,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: toggle,
+                child: Row(children: [
+                  ExcludeSemantics(child: _labArtFor(id, 78)),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(title, style: TextStyle(color: _ink, fontSize: 31,
+                    fontWeight: FontWeight.w900, height: 1.2))),
+                  AnimatedRotation(
+                    turns: open ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 250),
+                    child: Icon(Icons.expand_more_rounded, color: _inkAccent, size: 46),
+                  ),
+                ]),
+              )),
+            if (open && introSection != null) _labAudioControls(introSection),
+          ])),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: open
+              ? Padding(padding: const EdgeInsets.only(top: 10), child: child)
+              : const SizedBox(width: double.infinity),
+        ),
+      ]),
+    );
   }
 
   Widget _labAudioControlsForFormula(String before, List<int> from, List<int> to) =>
     Wrap(spacing: 10, runSpacing: 8, alignment: WrapAlignment.center, children: [
       ElevatedButton.icon(onPressed: () => _labPlayFormula(before, from, to),
         icon: const Icon(Icons.play_arrow_rounded, size: 30),
-        label: Text(_secretText('Слушни ги точките', 'Dëgjo pikat', 'Hear the dots'),
-          style: const TextStyle(fontSize: 23))),
+        label: Text(_secretText('Слушни ги точките', 'Dëgjo pikat', 'Hear the dots'))),
       OutlinedButton.icon(onPressed: _labStopAudio,
         icon: const Icon(Icons.stop_rounded, size: 30),
-        label: Text(_secretText('Стоп', 'Ndalo', 'Stop'), style: const TextStyle(fontSize: 23))),
+        label: Text(_secretText('Стоп', 'Ndalo', 'Stop'))),
     ]);
 
+  /// Картичка „од ... во ...“: две втиснати клетки и промената меѓу нив,
+  /// како белешка залепена во тетратка.
   Widget _secretFormula(String before, List<int> from, String operation, String after, List<int> to,
       {Set<int> added = const {}, String? note}) {
-    final fg = _fg(context);
+    final hc = _labHc;
     final formulaId = 'formula-${before.hashCode}-${after.hashCode}-${from.join()}-${to.join()}';
     final isOpen = _secretExpanded.contains(formulaId);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Container(
-        padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(colors: [Color(0xFF202F4A), Color(0xFF132F3D)]),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xFFFFDE78).withValues(alpha: .55), width: 2)),
+          color: hc ? Colors.black : const Color(0xFFFFFCF4),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: hc ? (isOpen ? LabPalette.hcYellow : Colors.white) : (isOpen ? LabPalette.sepia : LabPalette.paperEdge),
+            width: isOpen ? 3 : 2),
+          boxShadow: hc ? null : const [BoxShadow(color: Color(0x26704A20), blurRadius: 8, offset: Offset(0, 3))],
+        ),
         child: Column(children: [
-          InkWell(onTap: () => setState(() {
-            if (isOpen) { _secretExpanded.remove(formulaId); _labStopAudio(); }
-            else { _secretExpanded.add(formulaId); Future.microtask(() => _labPlayFormula(before, from, to)); }
-          }), child: Padding(padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(children: [
-              Expanded(child: Text('$before → $after', style: TextStyle(color: fg, fontSize: 32, fontWeight: FontWeight.bold))),
-              Icon(isOpen ? Icons.expand_less : Icons.expand_more, color: _gold, size: 40),
-            ]))),
+          Semantics(button: true, expanded: isOpen, child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => setState(() {
+              if (isOpen) { _secretExpanded.remove(formulaId); _labStopAudio(); }
+              else { _secretExpanded.add(formulaId); Future.microtask(() => _labPlayFormula(before, from, to)); }
+            }),
+            child: Padding(padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(children: [
+                Expanded(child: Text.rich(TextSpan(children: [
+                  TextSpan(text: before),
+                  TextSpan(text: '  →  ', style: TextStyle(color: _inkAccent)),
+                  TextSpan(text: after),
+                ]), style: TextStyle(color: _ink, fontSize: 31, fontWeight: FontWeight.w800))),
+                AnimatedRotation(
+                  turns: isOpen ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 220),
+                  child: Icon(Icons.expand_more_rounded, color: _inkAccent, size: 40),
+                ),
+              ])))),
           if (isOpen) ...[
-          Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12, runSpacing: 12, children: [
-              Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(before, style: TextStyle(color: fg, fontSize: 41, fontWeight: FontWeight.bold)),
-                _secretCell(from, label: before),
+            const SizedBox(height: 6),
+            Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 14, runSpacing: 14, children: [
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(before, style: TextStyle(color: _ink, fontSize: 38, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  _secretCell(from, label: before),
+                ]),
+                // Промената - како етикета со шило.
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: hc ? Colors.black : LabPalette.ink,
+                    borderRadius: BorderRadius.circular(30),
+                    border: hc ? Border.all(color: LabPalette.hcYellow, width: 2) : null,
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.edit_rounded, color: hc ? LabPalette.hcYellow : LabPalette.gold, size: 26),
+                    const SizedBox(width: 8),
+                    Flexible(child: Text(operation, style: TextStyle(
+                      color: hc ? LabPalette.hcYellow : LabPalette.goldLight, fontSize: 27, fontWeight: FontWeight.w900))),
+                  ]),
+                ),
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(after, style: TextStyle(color: _ink, fontSize: 38, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 6),
+                  _secretCell(to, highlights: added, label: after),
+                ]),
               ]),
-              Text(operation, style: TextStyle(color: _gold, fontSize: 32, fontWeight: FontWeight.bold)),
-              Column(mainAxisSize: MainAxisSize.min, children: [
-                Text(after, style: TextStyle(color: fg, fontSize: 41, fontWeight: FontWeight.bold)),
-                _secretCell(to, highlights: added, label: after),
-              ]),
-            ]),
-          _labAudioControlsForFormula(before, from, to),
-          if (note != null) Padding(padding: const EdgeInsets.only(top: 9),
-            child: Text(note, textAlign: TextAlign.center, style: TextStyle(color: fg, fontSize: 29))),
-        ],
+            const SizedBox(height: 12),
+            _labAudioControlsForFormula(before, from, to),
+            if (note != null) Padding(padding: const EdgeInsets.only(top: 10),
+              child: Text(note, textAlign: TextAlign.center,
+                style: TextStyle(color: _inkSoft, fontSize: 27, fontStyle: FontStyle.italic, height: 1.35))),
+          ],
         ]),
       ),
     );
@@ -2034,47 +2149,120 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       added: to.toSet().difference(from.toSet()), note: note);
   }
 
+  /// Трите големи теми се книги во кожен повез; поглавјата во нив се
+  /// страници со обележувач.
   Widget _secretSection(String id, String title, List<Widget> children) {
     final opened = _secretExpanded.contains(id);
-    final hc = AccessibilityUtils.isHighContrast(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: hc ? null : const LinearGradient(
-            begin: Alignment.topLeft, end: Alignment.bottomRight,
-            colors: [Color(0xFF123E49), Color(0xFF17213B)]),
-          color: hc ? Colors.black : null,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: opened ? const Color(0xFF50E3CE) : _gold.withValues(alpha: .7), width: opened ? 3 : 2),
-          boxShadow: hc ? null : [BoxShadow(color: const Color(0xFF00C9B7).withValues(alpha: .13), blurRadius: 16, offset: const Offset(0, 6))],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Semantics(
-            button: true,
-            expanded: opened,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => setState(() {
-                if (opened) { _secretExpanded.remove(id); _labStopAudio(); }
-                else { _secretExpanded.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
-              }),
+    final hc = _labHc;
+    final isTopic = id.startsWith('topic-');
+    void toggle() => setState(() {
+      if (opened) { _secretExpanded.remove(id); _labStopAudio(); }
+      else { _secretExpanded.add(id); Future.microtask(() => _labPlayCategoryName(id)); }
+    });
+    final chevron = AnimatedRotation(
+      turns: opened ? 0.5 : 0,
+      duration: const Duration(milliseconds: 250),
+      child: Icon(Icons.expand_more_rounded,
+        color: isTopic ? (hc ? LabPalette.hcYellow : LabPalette.gold) : _inkAccent, size: 44),
+    );
+    final body = AnimatedSize(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: opened
+          ? _paperTheme(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children))
+          : const SizedBox(width: double.infinity),
+    );
+
+    if (isTopic) {
+      final kind = id == 'topic-numbers'
+          ? LabArtKind.numbers
+          : (id == 'topic-signs' ? LabArtKind.signs : LabArtKind.letters);
+      final cover = id == 'topic-numbers'
+          ? LabPalette.leatherBlue
+          : (id == 'topic-signs' ? const Color(0xFF1F4D3A) : LabPalette.leather);
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: LeatherCover(
+          hc: hc,
+          color: cover,
+          open: opened,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Semantics(button: true, expanded: opened, child: InkWell(
+              borderRadius: BorderRadius.circular(18),
+              onTap: toggle,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 22),
+                padding: const EdgeInsets.fromLTRB(26, 18, 16, 18),
                 child: Row(children: [
-                  Icon(opened ? Icons.menu_book_rounded : Icons.auto_stories_rounded, color: const Color(0xFF50E3CE), size: 35),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(title, style: TextStyle(color: _fg(context), fontSize: 34,
-                    fontWeight: FontWeight.w800))),
-                  Icon(opened ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
-                    color: _gold, size: 38),
+                  ExcludeSemantics(child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: hc ? Colors.black : LabPalette.paper,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: hc ? Colors.white : LabPalette.gold, width: 2),
+                    ),
+                    child: LabArt(kind: kind, size: 62, hc: hc),
+                  )),
+                  const SizedBox(width: 16),
+                  Expanded(child: Text(title, style: TextStyle(
+                    color: hc ? Colors.white : LabPalette.goldLight,
+                    fontSize: 35, fontWeight: FontWeight.w900, letterSpacing: 0.5,
+                    shadows: hc ? null : const [Shadow(color: Color(0x99000000), blurRadius: 3, offset: Offset(1, 2))]))),
+                  chevron,
                 ]),
               ),
+            )),
+            if (opened)
+              PaperPanel(
+                hc: hc,
+                margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 16),
+                foldCorner: false,
+                child: body,
+              ),
+          ]),
+        ),
+      );
+    }
+
+    // Поглавје / страница со обележувач.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : (opened ? const Color(0xFFFFFCF4) : const Color(0xFFF6EAD0)),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: hc ? (opened ? LabPalette.hcYellow : Colors.white) : (opened ? LabPalette.sepia : LabPalette.paperEdge),
+            width: opened ? 3 : 2),
+          boxShadow: hc ? null : const [BoxShadow(color: Color(0x2E704A20), blurRadius: 10, offset: Offset(0, 4))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Semantics(button: true, expanded: opened, child: InkWell(
+            borderRadius: BorderRadius.circular(18),
+            onTap: toggle,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 12, 0),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                // Обележувач од панделка.
+                ExcludeSemantics(child: CustomPaint(
+                  size: const Size(34, 58),
+                  painter: _RibbonPainter(hc ? LabPalette.hcYellow : (opened ? LabPalette.dotAdded : LabPalette.seal)),
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  child: Text(title, style: TextStyle(color: _ink, fontSize: 31,
+                    fontWeight: FontWeight.w800, height: 1.25)),
+                )),
+                Padding(padding: const EdgeInsets.only(top: 12), child: chevron),
+              ]),
             ),
-          ),
+          )),
           if (opened) Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 22),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 18),
+            child: body,
           ),
         ]),
       ),
@@ -2095,12 +2283,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       }
     }
     for (final child in content.children) {
-      // Насловите се генерираат преку _secretHeading (Padding со Text).
-      if (child is Padding && child.child is Container &&
-          child.padding == const EdgeInsets.only(top: 24, bottom: 12) &&
-          (child.child as Container).child is Text) {
+      // Насловите се генерираат преку _secretHeading.
+      if (child is _SecretHeading) {
         flush();
-        heading = ((child.child as Container).child as Text).data ?? '';
+        heading = child.text;
         body = <Widget>[];
       } else {
         body.add(child);
@@ -2228,7 +2414,7 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     if (_lang == BrailleLang.en) {
       final w = _secretByDots(const [2, 4, 5, 6]);
       if (w != null) out.add(Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Text('W — historical exception', style: TextStyle(fontSize: 33, fontWeight: FontWeight.bold, color: Color(0xFFFFDE78))),
+        Text('W — historical exception', style: TextStyle(fontSize: 33, fontWeight: FontWeight.bold, color: _inkAccent)),
         const SizedBox(height: 12),
         _secretCell(w.dots, label: 'W'),
         const SizedBox(height: 10),
@@ -2363,14 +2549,14 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     for (final symbol in punct.where((s) => s.isMultiCell || s.key == 'quote_open' || s.key == 'quote_close')) {
       out.add(_secretSection('punct-${symbol.key}', symbol.char, [
         Column(children: [
-          Text(symbol.char, style: TextStyle(color: _fg(context), fontSize: 41, fontWeight: FontWeight.bold)),
+          Text(symbol.char, style: TextStyle(color: _ink, fontSize: 41, fontWeight: FontWeight.bold)),
           Wrap(alignment: WrapAlignment.center, spacing: 18, runSpacing: 12,
             children: [
               for (var i = 0; i < symbol.cells.length; i++)
                 Column(mainAxisSize: MainAxisSize.min, children: [
                   _secretCell(symbol.cells[i], label: '${symbol.char} ${i + 1}'),
                   Text('${_secretText('Клетка', 'Qeliza', 'Cell')} ${i + 1}',
-                    style: TextStyle(color: _fg(context), fontSize: 27)),
+                    style: TextStyle(color: _inkSoft, fontSize: 27)),
                 ]),
             ]),
         ]),
@@ -2388,137 +2574,123 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: out);
   }
 
-  // BRAILLE LAB — tactile minimalism, accessible interactive explanations.
-  // No external assets or packages are needed.
-  static const _labNavy = Color(0xFF0D1929);
-  static const _labPanel = Color(0xFF172A3E);
-  static const _labCyan = Color(0xFF67F0E0);
-  static const _labYellow = Color(0xFFFFDE78);
+  // BRAILLE LAB — „работната маса на Луј Брај“: хартија со втиснати точки,
+  // плоча и шило, книги во кожен повез. Сè е нацртано со код
+  // (lib/widgets/braille_lab_art.dart), без надворешни слики.
 
-  Widget _labCard({required Widget child, EdgeInsets? padding}) => Container(
-    width: double.infinity,
+  Widget _labCard({required Widget child, EdgeInsets? padding}) => PaperPanel(
+    hc: _labHc,
     margin: const EdgeInsets.only(bottom: 18),
     padding: padding ?? const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: _labPanel,
-      borderRadius: BorderRadius.circular(26),
-      border: Border.all(color: _labCyan.withValues(alpha: .48), width: 2),
-      boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .22),
-        blurRadius: 16, offset: const Offset(0, 6))],
-    ),
-    child: child,
+    child: _paperTheme(child),
   );
 
-  Widget _labText(String text, {double size = 28, Color color = Colors.white,
+  Widget _labText(String text, {double size = 28, Color? color,
     FontWeight weight = FontWeight.w500, TextAlign align = TextAlign.start}) =>
-    Text(text, textAlign: align, style: TextStyle(color: color, fontSize: size,
+    Text(text, textAlign: align, style: TextStyle(color: color ?? _ink, fontSize: size,
       fontWeight: weight, height: 1.3));
 
   Widget _labDotCell(List<int> dots, {String? label, Set<int> added = const {},
     bool interactive = false}) {
     final active = dots.toSet();
+    final cell = EmbossedCell(
+      dots: dots,
+      added: added,
+      hc: _labHc,
+      dotSize: interactive ? 64 : 40,
+      showNumbers: interactive,
+      onTapDot: interactive ? (n) => setState(() {
+        if (!_labDots.add(n)) _labDots.remove(n);
+        HapticFeedback.selectionClick();
+      }) : null,
+      dotLabel: interactive
+          ? (n) => '${_secretText('Точка', 'Pika', 'Dot')} $n, ${active.contains(n) ? _secretText('активна', 'aktive', 'active') : _secretText('неактивна', 'joaktive', 'inactive')}'
+          : null,
+    );
     return Semantics(
       label: '${label ?? ''} ${_secretText('Активни точки', 'Pikat aktive', 'Active dots')}: ${active.isEmpty ? '0' : (active.toList()..sort()).join(', ')}',
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        for (var r = 0; r < 3; r++) Row(mainAxisSize: MainAxisSize.min, children: [
-          for (final n in [r + 1, r + 4]) Padding(
-            padding: const EdgeInsets.all(5),
-            child: Semantics(
-              button: interactive,
-              label: '${_secretText('Точка', 'Pika', 'Dot')} $n, ${active.contains(n) ? _secretText('активна', 'aktive', 'active') : _secretText('неактивна', 'joaktive', 'inactive')}',
-              child: GestureDetector(
-                onTap: interactive ? () => setState(() {
-                  if (!_labDots.add(n)) _labDots.remove(n);
-                  HapticFeedback.selectionClick();
-                }) : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 230),
-                  curve: Curves.easeOutCubic,
-                  width: 54, height: 54,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: active.contains(n) ? (added.contains(n) ? _labCyan : _labYellow) : const Color(0xFF34485C),
-                    border: Border.all(color: active.contains(n) ? Colors.white : const Color(0xFF94A3B8), width: 2),
-                    boxShadow: active.contains(n) ? [
-                      BoxShadow(color: (added.contains(n) ? _labCyan : _labYellow).withValues(alpha: .45),
-                        blurRadius: 10, offset: const Offset(0, 4)),
-                    ] : null,
-                  ),
-                  child: interactive ? Text('$n', style: TextStyle(fontSize: 23,
-                    fontWeight: FontWeight.w900, color: active.contains(n) ? _labNavy : Colors.white)) : null,
-                ),
-              ),
-            ),
-          ),
-        ]),
-      ]),
+      child: interactive ? cell : ExcludeSemantics(child: cell),
     );
   }
 
-  Widget _labHistory() => _labCard(child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start, children: [
-      InkWell(onTap: () => setState(() => _labHistoryOpen = !_labHistoryOpen),
-        child: Row(children: [
-          const Icon(Icons.history_edu_rounded, color: _labYellow, size: 39),
-          const SizedBox(width: 12),
-          Expanded(child: _labText(_secretText('Приказната за Луј Брај',
-            'Historia e Louis Braille', 'The story of Louis Braille'), size: 31, weight: FontWeight.bold)),
-          Icon(_labHistoryOpen ? Icons.expand_less : Icons.expand_more, color: _labYellow, size: 38),
+  /// Приказната за Луј Брај: портрет, текст и временска линија со печати.
+  Widget _labHistory() {
+    final hc = _labHc;
+    final items = [
+      ['1809', _secretText('Раѓање во Кувре', 'Lindja në Coupvray', 'Born in Coupvray'), Icons.child_care_rounded],
+      ['1821', _secretText('Запознавање со ноќното писмо', 'Njohja me shkrimin e natës', 'Introduced to night writing'), Icons.nightlight_round],
+      ['1829', _secretText('Објавување на методот', 'Botimi i metodës', 'Publication of his method'), Icons.menu_book_rounded],
+    ];
+    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Center(child: ExcludeSemantics(child: LouisBraillePortrait(size: 170, hc: hc))),
+      const SizedBox(height: 8),
+      Center(child: _labText('Louis Braille · 1809 – 1852', size: 24, color: _inkAccent,
+        weight: FontWeight.w800, align: TextAlign.center)),
+      const SizedBox(height: 16),
+      _labText(_secretText(
+        'Луј Брај е роден во 1809 година во Кувре, Франција. Во 1821 година се запознал со системот „ноќно писмо“ на Шарл Барбие. Подоцна го развил поедноставениот шестоточков систем; неговото прво објавено дело за методот е од 1829 година.',
+        'Louis Braille lindi në vitin 1809 në Coupvray, Francë. Në 1821 ai u njoh me shkrimin e natës të Charles Barbier. Më vonë zhvilloi sistemin me gjashtë pika dhe botoi metodën në vitin 1829.',
+        'Louis Braille was born in 1809 in Coupvray, France. In 1821 he encountered Charles Barbier’s night writing. He later developed the six-dot system and published his method in 1829.'), size: 26),
+      const SizedBox(height: 18),
+      // Временска линија: печат со година, линија, опис.
+      for (var i = 0; i < items.length; i++)
+        IntrinsicHeight(child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          SizedBox(width: 92, child: Column(children: [
+            WaxSeal(label: items[i][0] as String, hc: hc, size: 84),
+            if (i < items.length - 1) Expanded(child: Container(
+              width: 4, margin: const EdgeInsets.symmetric(vertical: 4),
+              color: hc ? Colors.white : LabPalette.sepia.withValues(alpha: 0.5))),
+          ])),
+          const SizedBox(width: 14),
+          Expanded(child: Padding(
+            padding: const EdgeInsets.only(top: 18, bottom: 22),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(items[i][2] as IconData, color: _inkAccent, size: 34),
+              const SizedBox(width: 10),
+              Expanded(child: _labText(items[i][1] as String, size: 26, weight: FontWeight.w700)),
+            ]),
+          )),
         ])),
-      if (_labHistoryOpen) ...[
-        const SizedBox(height: 16),
-        _labText(_secretText(
-          'Луј Брај е роден во 1809 година во Кувре, Франција. Во 1821 година се запознал со системот „ноќно писмо“ на Шарл Барбие. Подоцна го развил поедноставениот шестоточков систем; неговото прво објавено дело за методот е од 1829 година.',
-          'Louis Braille lindi në vitin 1809 në Coupvray, Francë. Në 1821 ai u njoh me shkrimin e natës të Charles Barbier. Më vonë zhvilloi sistemin me gjashtë pika dhe botoi metodën në vitin 1829.',
-          'Louis Braille was born in 1809 in Coupvray, France. In 1821 he encountered Charles Barbier’s night writing. He later developed the six-dot system and published his method in 1829.'), size: 26),
-        const SizedBox(height: 14),
-        for (final item in [
-          ['1809', _secretText('Раѓање во Кувре', 'Lindja në Coupvray', 'Born in Coupvray')],
-          ['1821', _secretText('Запознавање со ноќното писмо', 'Njohja me shkrimin e natës', 'Introduced to night writing')],
-          ['1829', _secretText('Објавување на методот', 'Botimi i metodës', 'Publication of his method')],
-        ]) Padding(padding: const EdgeInsets.symmetric(vertical: 7), child: Row(children: [
-          _labText(item[0], color: _labYellow, size: 29, weight: FontWeight.w900),
-          const SizedBox(width: 16),
-          Expanded(child: _labText(item[1], size: 25)),
-        ])),
-      ],
-    ],
-  ));
+    ]));
+  }
 
   Widget _labExplorer() {
     final dots = _labDots.toList()..sort();
     final letter = _secretByDots(dots);
-    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        const Icon(Icons.touch_app_rounded, color: _labCyan, size: 38),
-        const SizedBox(width: 10),
-        Expanded(child: _labText(_secretText('Истражи ја шесточката',
-          'Eksploro gjashtë pikat', 'Explore the six-dot cell'),
-          size: 31, weight: FontWeight.w800)),
-      ]),
-      const SizedBox(height: 10),
+    return _labCard(child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       _labText(_secretText('Притисни која било точка за да ја вклучиш или исклучиш. Ова е демонстрација, не тест.',
         'Prek çdo pikë për ta ndezur ose fikur. Ky është demonstrim, jo test.',
         'Tap any dot to switch it on or off. This is a demonstration, not a test.'), size: 25),
       const SizedBox(height: 18),
       Center(child: _labDotCell(dots, interactive: true)),
-      const SizedBox(height: 14),
-      Center(child: _labText('${_secretText('Точки', 'Pikat', 'Dots')}: ${dots.isEmpty ? '—' : dots.join(', ')}',
-        color: _labYellow, size: 29, weight: FontWeight.bold)),
+      const SizedBox(height: 16),
+      // „Резултатот“ - како буква отпечатена на хартијата.
+      Center(child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        decoration: BoxDecoration(
+          color: _labHc ? Colors.black : LabPalette.ink,
+          borderRadius: BorderRadius.circular(20),
+          border: _labHc ? Border.all(color: LabPalette.hcYellow, width: 2) : null,
+        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(letter == null ? '?' : letter.char.toUpperCase(),
+            style: TextStyle(fontSize: 54, fontWeight: FontWeight.w900,
+              color: _labHc ? LabPalette.hcYellow : LabPalette.goldLight)),
+          Text('${_secretText('Точки', 'Pikat', 'Dots')}: ${dots.isEmpty ? '—' : dots.join(', ')}',
+            style: TextStyle(fontSize: 25, fontWeight: FontWeight.w700,
+              color: _labHc ? Colors.white : LabPalette.paper)),
+        ]),
+      )),
+      const SizedBox(height: 8),
       Center(child: _labText(letter == null
         ? _secretText('Истражувај различни комбинации', 'Eksploro kombinime të ndryshme', 'Explore different patterns')
         : '${_secretText('Буква', 'Shkronja', 'Letter')}: ${letter.char.toUpperCase()}',
-        size: 27, align: TextAlign.center)),
-      const SizedBox(height: 10),
+        size: 26, align: TextAlign.center, color: _inkSoft)),
+      const SizedBox(height: 12),
       Center(child: OutlinedButton.icon(
         onPressed: () => setState(() { _labDots..clear()..addAll([1, 2, 4]); }),
         icon: const Icon(Icons.restart_alt_rounded),
-        label: Text(_secretText('Почетна шема', 'Modeli fillestar', 'Reset pattern'),
-          style: const TextStyle(fontSize: 24)),
-        style: OutlinedButton.styleFrom(foregroundColor: _labYellow,
-          side: const BorderSide(color: _labYellow, width: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13)),
+        label: Text(_secretText('Почетна шема', 'Modeli fillestar', 'Reset pattern')),
       )),
     ]));
   }
@@ -2537,29 +2709,54 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     final pieces = <String>[];
     if (added.isNotEmpty) pieces.add('+ ${_secretText(added.length == 1 ? 'точка' : 'точки', added.length == 1 ? 'pikë' : 'pika', added.length == 1 ? 'dot' : 'dots')} ${added.join(', ')}');
     if (removed.isNotEmpty) pieces.add('− ${_secretText(removed.length == 1 ? 'точка' : 'точки', removed.length == 1 ? 'pikë' : 'pika', removed.length == 1 ? 'dot' : 'dots')} ${removed.join(', ')}');
+    final hc = _labHc;
     return _labCard(child: Column(children: [
-      _labText(_secretText('Точките оживуваат', 'Pikat marrin jetë', 'Watch the dots change'),
-        size: 32, color: _labYellow, weight: FontWeight.w900, align: TextAlign.center),
-      const SizedBox(height: 10),
       _labText(_secretText('Следи ја низата A–J и забележи кои точки се додаваат или бришат.',
         'Ndiq sekuencën A–J dhe shiko cilat pika shtohen ose hiqen.',
         'Follow A–J and see which dots are added or removed.'), size: 25, align: TextAlign.center),
+      const SizedBox(height: 14),
+      // Лента со десетте букви - тековната е „втисната“ во восок.
+      Wrap(alignment: WrapAlignment.center, spacing: 6, runSpacing: 6, children: [
+        for (var k = 0; k < 10; k++)
+          Semantics(button: true, selected: k == i, label: english[k], child: GestureDetector(
+            onTap: () => setState(() => _labStep = k),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 46, height: 46, alignment: Alignment.center,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: k == i ? (hc ? LabPalette.hcYellow : LabPalette.seal) : (hc ? Colors.black : LabPalette.paperDeep),
+                border: Border.all(color: hc ? Colors.white : (k == i ? LabPalette.seal : LabPalette.paperEdge), width: 2),
+              ),
+              child: Text(english[k], style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900,
+                color: k == i ? (hc ? Colors.black : LabPalette.goldLight) : _ink)),
+            ),
+          )),
+      ]),
       const SizedBox(height: 16),
       _labText('${english[i]} · ${_secretByDots(after)?.char.toUpperCase() ?? english[i]}',
-        size: 42, weight: FontWeight.w900),
+        size: 44, weight: FontWeight.w900),
       const SizedBox(height: 12),
       _labDotCell(after, label: english[i], added: added),
-      const SizedBox(height: 12),
-      _labText(pieces.join('  ·  '), size: 29, color: _labCyan,
-        weight: FontWeight.w800, align: TextAlign.center),
       const SizedBox(height: 14),
+      if (pieces.isNotEmpty) Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : LabPalette.ink,
+          borderRadius: BorderRadius.circular(30),
+          border: hc ? Border.all(color: LabPalette.hcYellow, width: 2) : null,
+        ),
+        child: Text(pieces.join('  ·  '), textAlign: TextAlign.center, style: TextStyle(fontSize: 27,
+          fontWeight: FontWeight.w900, color: hc ? LabPalette.hcYellow : LabPalette.goldLight)),
+      ),
+      const SizedBox(height: 16),
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        IconButton.filledTonal(onPressed: i == 0 ? null : () => setState(() => _labStep--),
-          icon: const Icon(Icons.arrow_back_rounded, size: 33),
+        IconButton(onPressed: i == 0 ? null : () => setState(() => _labStep--),
+          icon: const Icon(Icons.arrow_back_rounded, size: 34),
           tooltip: _secretText('Претходна буква', 'Shkronja e mëparshme', 'Previous letter')),
-        _labText('${i+1} / 10', size: 26),
-        IconButton.filledTonal(onPressed: i == 9 ? null : () => setState(() => _labStep++),
-          icon: const Icon(Icons.arrow_forward_rounded, size: 33),
+        _labText('${i+1} / 10', size: 27, weight: FontWeight.w800),
+        IconButton(onPressed: i == 9 ? null : () => setState(() => _labStep++),
+          icon: const Icon(Icons.arrow_forward_rounded, size: 34),
           tooltip: _secretText('Следна буква', 'Shkronja tjetër', 'Next letter')),
       ]),
     ]));
@@ -2584,14 +2781,15 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       if (match == null) {
         final unknown = input[offset];
         result.add(Padding(padding: const EdgeInsets.all(8), child: Column(children: [
-          _labText(unknown, size: 27, color: _labYellow),
+          _labText(unknown, size: 27, color: _inkAccent),
           _labText('?', size: 30),
         ])));
         offset++;
       } else {
         final s = match;
-        result.add(Padding(padding: const EdgeInsets.all(7), child: Column(children: [
-          _labText(s.char.toUpperCase(), size: 27, weight: FontWeight.bold),
+        result.add(Padding(padding: const EdgeInsets.all(5), child: Column(mainAxisSize: MainAxisSize.min, children: [
+          _labText(s.char.toUpperCase(), size: 27, weight: FontWeight.w900),
+          const SizedBox(height: 4),
           _labDotCell(s.dots, label: s.char),
         ])));
         offset += s.char.length;
@@ -2600,43 +2798,117 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     return result;
   }
 
-  Widget _labConverter() => _labCard(child: Column(
-    crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        const Icon(Icons.translate_rounded, color: _labCyan, size: 38),
-        const SizedBox(width: 12),
-        Expanded(child: _labText(_secretText('Брајов конвертор',
-          'Konvertuesi Braille', 'Braille converter'), size: 32, weight: FontWeight.w900)),
-      ]),
-      const SizedBox(height: 12),
-      _labText(_secretText('Напиши краток збор. Подолу ќе се појават Брајовите клетки за избраниот јазик.',
-        'Shkruaj një fjalë të shkurtër. Qelizat Braille do të shfaqen më poshtë.',
-        'Type a short word to see its Braille cells in the selected language.'), size: 25),
-      const SizedBox(height: 16),
-      TextField(
-        onChanged: (value) => setState(() => _labInput = value),
-        maxLength: 24,
-        style: const TextStyle(fontSize: 30, color: Colors.white),
-        decoration: InputDecoration(
-          hintText: _secretText('Напиши збор…', 'Shkruaj një fjalë…', 'Type a word…'),
-          hintStyle: const TextStyle(color: Color(0xFFCBD5E1), fontSize: 26),
-          filled: true, fillColor: const Color(0xFF253B50),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: _labCyan, width: 2)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(18),
-            borderSide: const BorderSide(color: _labCyan, width: 2)),
+  Widget _labConverter() {
+    final hc = _labHc;
+    final border = OutlineInputBorder(borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: hc ? Colors.white : LabPalette.ink, width: 2));
+    return _labCard(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _labText(_secretText('Напиши краток збор. Подолу ќе се појават Брајовите клетки за избраниот јазик.',
+          'Shkruaj një fjalë të shkurtër. Qelizat Braille do të shfaqen më poshtë.',
+          'Type a short word to see its Braille cells in the selected language.'), size: 25),
+        const SizedBox(height: 16),
+        TextField(
+          onChanged: (value) => setState(() => _labInput = value),
+          maxLength: 24,
+          style: TextStyle(fontSize: 30, color: _ink, fontWeight: FontWeight.w700),
+          cursorColor: _inkAccent,
+          decoration: InputDecoration(
+            hintText: _secretText('Напиши збор…', 'Shkruaj një fjalë…', 'Type a word…'),
+            hintStyle: TextStyle(color: _inkSoft, fontSize: 26),
+            prefixIcon: Icon(Icons.edit_rounded, color: _inkAccent, size: 30),
+            counterStyle: TextStyle(color: _inkSoft, fontSize: 18),
+            filled: true, fillColor: hc ? Colors.black : const Color(0xFFFFFCF4),
+            border: border,
+            enabledBorder: border,
+            focusedBorder: border.copyWith(borderSide: BorderSide(color: _inkAccent, width: 3)),
+          ),
         ),
-      ),
-      if (_labInput.isNotEmpty) ...[
-        const SizedBox(height: 14),
-        Wrap(spacing: 8, runSpacing: 12, children: _labConverted()),
-        const SizedBox(height: 12),
-        _labText(_secretText('Едукативен приказ на букви; не претставува целосен преведувач на интерпункција, големи букви и скратеници.',
-          'Paraqitje mësimore e shkronjave, jo përkthyes i plotë për shenjat, shkronjat e mëdha apo shkurtimet.',
-          'Educational letter display; not a complete translator for punctuation, capitals or contractions.'), size: 22, color: const Color(0xFFCBD5E1)),
+        if (_labInput.isNotEmpty) ...[
+          const SizedBox(height: 14),
+          // Лента хартија што излегува од брајевата машина.
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            decoration: BoxDecoration(
+              color: hc ? Colors.black : const Color(0xFFFFFCF4),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: hc ? Colors.white : LabPalette.paperEdge, width: 2),
+            ),
+            child: Wrap(spacing: 6, runSpacing: 12, alignment: WrapAlignment.center, children: _labConverted()),
+          ),
+          const SizedBox(height: 12),
+          _labText(_secretText('Едукативен приказ на букви; не претставува целосен преведувач на интерпункција, големи букви и скратеници.',
+            'Paraqitje mësimore e shkronjave, jo përkthyes i plotë për shenjat, shkronjat e mëdha apo shkurtimet.',
+            'Educational letter display; not a complete translator for punctuation, capitals or contractions.'), size: 22, color: _inkSoft),
+        ],
       ],
-    ],
-  ));
+    ));
+  }
+
+  /// Насловна страница: пергамент со портрет на Луј Брај и зборот BRAILLE
+  /// во точки.
+  Widget _labHero(double width) {
+    final hc = _labHc;
+    const brailleWord = <List<int>>[[1, 2], [1, 2, 3, 5], [1], [2, 4], [1, 2, 3], [1, 2, 3], [1, 5]];
+    final narrow = width < 640;
+    final texts = Column(
+      crossAxisAlignment: narrow ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(_secretText('Светлина низ допир', 'Dritë përmes prekjes', 'Light through touch'),
+          textAlign: narrow ? TextAlign.center : TextAlign.start,
+          style: TextStyle(color: _ink, fontSize: 40, fontWeight: FontWeight.w900, height: 1.15)),
+        const SizedBox(height: 8),
+        Text(_secretText('Тајните на Брајовата азбука', 'Sekretet e alfabetit Braille', 'Secrets of the Braille alphabet'),
+          textAlign: narrow ? TextAlign.center : TextAlign.start,
+          style: TextStyle(color: _inkAccent, fontSize: 29, fontWeight: FontWeight.w800)),
+        const SizedBox(height: 12),
+        Text(_secretText('Шест точки. Безброј можности. Откриј ја логиката преку допир и поврзување.',
+          'Gjashtë pika. Mundësi të panumërta. Zbulo logjikën përmes prekjes.',
+          'Six dots. Endless possibilities. Discover patterns through touch and connections.'),
+          textAlign: narrow ? TextAlign.center : TextAlign.start,
+          style: TextStyle(color: _inkSoft, fontSize: 25, height: 1.35)),
+      ],
+    );
+    return PaperPanel(
+      hc: hc,
+      margin: const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+      child: _paperTheme(Column(children: [
+        if (narrow) ...[
+          ExcludeSemantics(child: LouisBraillePortrait(size: 170, hc: hc)),
+          const SizedBox(height: 14),
+          texts,
+        ] else Row(children: [
+          ExcludeSemantics(child: LouisBraillePortrait(size: 190, hc: hc)),
+          const SizedBox(width: 24),
+          Expanded(child: texts),
+        ]),
+        const SizedBox(height: 18),
+        // BRAILLE - втиснато во хартијата.
+        Semantics(label: 'BRAILLE', child: ExcludeSemantics(child: Column(children: [
+          BrailleWordStrip(cells: brailleWord, hc: hc, dotSize: 11),
+          const SizedBox(height: 6),
+          Text('B   R   A   I   L   L   E', style: TextStyle(color: _inkAccent, fontSize: 18,
+            fontWeight: FontWeight.w900, letterSpacing: 2)),
+        ]))),
+      ])),
+    );
+  }
+
+  /// Мал наслов врз темната маса (меѓу деловите).
+  Widget _labDeskTitle(String text) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 10, 4, 16),
+    child: Row(children: [
+      Expanded(child: Container(height: 2, color: (_labHc ? Colors.white : LabPalette.gold).withValues(alpha: 0.5))),
+      const SizedBox(width: 12),
+      Flexible(flex: 4, child: Text(text, textAlign: TextAlign.center, style: TextStyle(
+        color: _labHc ? LabPalette.hcYellow : LabPalette.gold, fontSize: 34, fontWeight: FontWeight.w900))),
+      const SizedBox(width: 12),
+      Expanded(child: Container(height: 2, color: (_labHc ? Colors.white : LabPalette.gold).withValues(alpha: 0.5))),
+    ]),
+  );
 
   Widget _buildSecrets(BuildContext context) {
     final fg = _fg(context);
@@ -2645,58 +2917,25 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         _labStopAudio();
         setState(() => _view = _View.categorySelect);
       }),
-      Expanded(child: Container(color: _labNavy,
+      Expanded(child: LabDeskBackdrop(hc: _labHc,
         child: LayoutBuilder(builder: (context, size) => ListView(
           padding: _brailleSidePad(size.maxWidth, top: 18, bottom: 44),
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 30),
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFF0F5663), Color(0xFF173451)],
-                  begin: Alignment.topLeft, end: Alignment.bottomRight),
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: _labYellow, width: 2.5),
-              ),
-              child: Column(children: [
-                const Icon(Icons.auto_awesome_rounded, color: _labYellow, size: 54),
-                const SizedBox(height: 12),
-                _labText(_secretText('Светлина низ допир', 'Dritë përmes prekjes', 'Light through touch'),
-                  size: 39, weight: FontWeight.w900, align: TextAlign.center),
-                const SizedBox(height: 10),
-                _labText(_secretText('Тајните на Брајовата азбука',
-                  'Sekretet e alfabetit Braille', 'Secrets of the Braille alphabet'),
-                  size: 30, color: _labYellow, weight: FontWeight.w800, align: TextAlign.center),
-                const SizedBox(height: 16),
-                _labText('⠁   ⠃   ⠉   ⠙', size: 50, color: _labYellow, align: TextAlign.center),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(onPressed: _labStopAudio,
-                  icon: const Icon(Icons.stop_circle_rounded, size: 30),
-                  label: Text(_secretText('Прекини звук', 'Ndalo audion', 'Stop audio'),
-                    style: const TextStyle(fontSize: 24))),
-                const SizedBox(height: 10),
-                _labText(_secretText('Шест точки. Безброј можности. Откриј ја логиката преку допир и поврзување.',
-                  'Gjashtë pika. Mundësi të panumërta. Zbulo logjikën përmes prekjes.',
-                  'Six dots. Endless possibilities. Discover patterns through touch and connections.'),
-                  size: 26, align: TextAlign.center),
-              ]),
-            ),
+            _labHero(size.maxWidth),
             _labFold('lab-history', _secretText('Приказната за Луј Брај', 'Historia e Louis Braille', 'The story of Louis Braille'), _labHistory(), introSection: 'history'),
             _labFold('lab-explorer', _secretText('Истражи ја шесточката', 'Eksploro gjashtë pikat', 'Explore the six-dot cell'), _labExplorer(), introSection: 'explorer'),
             _labFold('lab-transform', _secretText('Точките оживуваат', 'Pikat marrin jetë', 'Watch the dots change'), _labTransformation(), introSection: 'transformation'),
-            _labText(_secretText('Едукативни категории', 'Kategoritë mësimore', 'Learning collections'),
-              size: 36, color: _labYellow, weight: FontWeight.w900),
-            const SizedBox(height: 14),
+            _labDeskTitle(_secretText('Едукативни категории', 'Kategoritë mësimore', 'Learning collections')),
             _secretSection('topic-letters', _secretText('01 · Букви', '01 · Shkronja', '01 · Letters'), [
-                            _secretAccordionContent('letters', _secretLetters()),
+              _secretAccordionContent('letters', _secretLetters()),
             ]),
             _secretSection('topic-numbers', _secretText('02 · Броеви', '02 · Numra', '02 · Numbers'), [
-                            _secretAccordionContent('numbers', _secretNumbers()),
+              _secretAccordionContent('numbers', _secretNumbers()),
             ]),
             _secretSection('topic-signs', _secretText('03 · Знаци', '03 · Shenja', '03 · Signs'), [
-                            _secretAccordionContent('signs', _secretSigns()),
+              _secretAccordionContent('signs', _secretSigns()),
             ]),
-            const SizedBox(height: 10),
+            const SizedBox(height: 6),
             _labFold('lab-converter', _secretText('Брајов конвертор', 'Konvertuesi Braille', 'Braille converter'), _labConverter(), introSection: 'converter'),
           ],
         )),
@@ -2704,97 +2943,444 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     ]);
   }
 
+  // =====================================================================
+  // Главно мени: голема Брајова „шесточка“. Секоја точка е еден дел.
+  // =====================================================================
+
+  /// Податоци за една точка од менито.
+  List<({int dot, IconData icon, String title, String desc, VoidCallback onTap})> _sixMenuItems() => [
+    (dot: 1, icon: Icons.waving_hand_rounded, title: 'braille.menu_intro'.tr(), desc: 'braille.menu_intro_desc'.tr(), onTap: _openIntroPage),
+    (dot: 2, icon: Icons.history_edu_rounded, title: 'braille.menu_secrets'.tr(), desc: 'braille.menu_secrets_desc'.tr(), onTap: _openSecrets),
+    (dot: 3, icon: Icons.abc_rounded, title: 'braille.menu_letters'.tr(), desc: 'braille.menu_letters_desc'.tr(), onTap: () => _openSubMenu(_View.menuLetters)),
+    (dot: 4, icon: Icons.format_quote_rounded, title: 'braille.menu_signs'.tr(), desc: 'braille.menu_signs_desc'.tr(), onTap: () => _openSubMenu(_View.menuSigns)),
+    (dot: 5, icon: Icons.menu_book_rounded, title: 'braille.menu_reference'.tr(), desc: 'braille.menu_reference_desc'.tr(), onTap: () => _openReference(_View.categorySelect)),
+    (dot: 6, icon: Icons.sports_esports_rounded, title: 'braille.menu_games'.tr(), desc: 'braille.menu_games_desc'.tr(), onTap: () => _openSubMenu(_View.menuGames)),
+  ];
+
+  void _openSecrets() {
+    _narrationToken++;
+    _voicePlayer.stop();
+    setState(() {
+      _view = _View.secrets;
+      _secretLesson = 0;
+      _secretTopic = 0;
+      _secretExample = 0;
+      _secretShowChange = false;
+      _secretExpanded.clear();
+    });
+  }
+
+  void _openSubMenu(_View v) {
+    _narrationToken++;
+    _voicePlayer.stop();
+    setState(() => _view = v);
+  }
+
+  void _openIntroPage() {
+    _narrationToken++;
+    _voicePlayer.stop();
+    setState(() => _view = _View.introPage);
+    // Воведот (game_name.mp3; на телефон game_name_touch.mp3 ако постои)
+    // се кажува САМО кога ќе се притисне точката „Вовед“.
+    _playClip('game_name');
+  }
+
+  void _backToSixMenu() {
+    _narrationToken++;
+    _voicePlayer.stop();
+    setState(() => _view = _View.categorySelect);
+  }
+
+  /// Каде води „Назад“ од група / вежба / игра: во подменито од кое е
+  /// отворено (букви, знаци или игри).
+  _View get _parentMenuView {
+    switch (_view) {
+      case _View.wordRound:
+      case _View.expressThought:
+      case _View.sentenceGame:
+      case _View.savedSentences:
+        return _View.menuGames;
+      case _View.explore:
+      case _View.practiceModeSelect:
+      case _View.practiceCompose:
+      case _View.practiceRecognize:
+      case _View.practiceWrite:
+        return _group.titleKey == 'braille.group_punct' ? _View.menuSigns : _View.menuLetters;
+      default:
+        return _View.categorySelect;
+    }
+  }
+
   Widget _buildCategorySelect(BuildContext context) {
     final contrast = _fg(context);
     final hc = AccessibilityUtils.isHighContrast(context);
+    final items = _sixMenuItems();
     return LayoutBuilder(
-      builder: (context, viewport) => ListView(
-      padding: _brailleSidePad(viewport.maxWidth, top: 20, bottom: 28),
-      children: [
-        // Насловот „напишан“ на Брајово писмо, со буквите под точките.
-        if (!hc)
-          Center(
-            child: BrailleWordReveal(
-              text: 'braille.title'.tr(),
-              lang: brailleLangFor(_langCode),
-              cellSize: 30,
-              alignment: WrapAlignment.center,
+      builder: (context, viewport) {
+        final wide = viewport.maxWidth >= 820;
+        final avail = min(viewport.maxWidth, _kBrailleMaxContent) - 32;
+        // Големина на точката: на телефон околу 100 px, на компјутер 130.
+        final dotD = wide ? 132.0 : min(118.0, max(88.0, (avail - 64) / 2.5));
+        final cell = _sixCell(items, dotD, hc);
+        return ListView(
+          padding: _brailleSidePad(viewport.maxWidth, top: 20, bottom: 32),
+          children: [
+            // Насловот „напишан“ на Брајово писмо, со буквите под точките.
+            if (!hc)
+              Center(
+                child: BrailleWordReveal(
+                  text: 'braille.title'.tr(),
+                  lang: brailleLangFor(_langCode),
+                  cellSize: 30,
+                  alignment: WrapAlignment.center,
+                ),
+              ),
+            if (!hc) const SizedBox(height: 10),
+            Text('braille.menu_hint'.tr(), textAlign: TextAlign.center,
+              style: GameTypography.body(context, contrast.withValues(alpha: 0.9), 17 * _kBrailleText)),
+            const SizedBox(height: 14),
+            Center(
+              child: CategoryVoiceCommandButton(
+                options: _categoryVoiceOptions(),
+                onBack: () => Navigator.of(context).pop(),
+                background: hc ? null : _gold,
+                foreground: hc ? null : Playful.ink,
+              ),
             ),
-          ),
-        if (!hc) const SizedBox(height: 16),
-        Text('braille.intro_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
-        const SizedBox(height: 12),
-        _buildIntroArea(contrast, hc),
-        const SizedBox(height: 22),
-        AbsorbPointer(
-          absorbing: _introLocked,
-          child: Opacity(
-            opacity: _introLocked ? 0.35 : 1.0,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'braille.choose_group'.tr(),
-                  textAlign: TextAlign.center,
-                  style: GameTypography.heading(context, contrast, 24 * _kBrailleText),
-                ),
-                const SizedBox(height: 16),
-                Center(
-                  child: CategoryVoiceCommandButton(
-                    options: _categoryVoiceOptions(),
-                    onBack: () => Navigator.of(context).pop(),
-                    background: hc ? null : _gold,
-                    foreground: hc ? null : Playful.ink,
+            const SizedBox(height: 18),
+            if (_introLocked)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 14),
+                  child: OutlinedButton.icon(
+                    onPressed: _stopIntroNow,
+                    icon: const Icon(Icons.stop_rounded, size: 32),
+                    label: Text('braille.intro_stop'.tr()),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Semantics(
-                  label: 'braille.reference_button'.tr(),
-                  button: true,
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _openReference(_View.categorySelect),
-                      icon: Icon(Icons.menu_book_rounded, size: 36, color: hc ? null : _gold),
-                      label: Text(
-                        'braille.reference_button'.tr(),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 19 * _kBrailleText, fontWeight: FontWeight.w800),
-                      ),
-                      style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Групите и игрите - по една во ред, на цела ширина.
-                Builder(
-                  builder: (context) {
-                    const gap = 18.0;
-                    final cards = <Widget>[
-                      _secretsMenuCard(hc),
-                      for (var i = 0; i < _groups.length; i++) _groupCard(context, i, contrast, hc),
-                      _wordGameCard(contrast, hc),
-                      _expressThoughtCard(contrast, hc),
-                      _sentenceGameCard(contrast, hc),
-                    ];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = 0; i < cards.length; i++) ...[
-                          if (i > 0) const SizedBox(height: gap),
-                          PopIn(index: i, child: cards[i]),
+              ),
+            AbsorbPointer(
+              absorbing: _introLocked,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: _introLocked ? 0.4 : 1.0,
+                child: wide
+                    ? Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: _sixTagColumn(items.sublist(0, 3), dotD, hc, alignRight: true)),
+                          const SizedBox(width: 18),
+                          cell,
+                          const SizedBox(width: 18),
+                          Expanded(child: _sixTagColumn(items.sublist(3, 6), dotD, hc, alignRight: false)),
                         ],
-                      ],
-                    );
-                  },
+                      )
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Center(child: cell),
+                          const SizedBox(height: 22),
+                          // На телефон: опис на секоја точка под шесточката.
+                          for (final it in items) ...[
+                            _sixTag(it, hc, compact: false),
+                            const SizedBox(height: 12),
+                          ],
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Самата шесточка: месингана рамка (како плочата на Луј Брај) со хартија
+  /// внатре и шест испакнати точки-копчиња со икона.
+  Widget _sixCell(List<({int dot, IconData icon, String title, String desc, VoidCallback onTap})> items, double dotD, bool hc) {
+    final gap = dotD * 0.22;
+    Widget dotAt(int n) {
+      final it = items.firstWhere((e) => e.dot == n);
+      return Padding(padding: EdgeInsets.all(gap / 2), child: _sixDot(it, dotD, hc));
+    }
+    return Container(
+      padding: EdgeInsets.all(dotD * 0.14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(dotD * 0.42),
+        color: hc ? Colors.black : null,
+        gradient: hc
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFF3D28A), Color(0xFFB8862F), Color(0xFF8A5E1E)],
+              ),
+        border: Border.all(color: hc ? Colors.white : const Color(0xFF6B4515), width: hc ? 3 : 2),
+        boxShadow: hc ? null : const [BoxShadow(color: Color(0x99000000), blurRadius: 24, offset: Offset(0, 12))],
+      ),
+      child: Container(
+        padding: EdgeInsets.all(gap / 2),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(dotD * 0.32),
+          color: hc ? Colors.black : null,
+          gradient: hc
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [LabPalette.paper, LabPalette.paperDeep],
                 ),
-              ],
+          border: Border.all(color: hc ? Colors.white : LabPalette.paperEdge, width: 1.5),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var row = 0; row < 3; row++)
+              Row(mainAxisSize: MainAxisSize.min, children: [dotAt(row + 1), dotAt(row + 4)]),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Една точка-копче: златна испакната точка со икона и број.
+  Widget _sixDot(({int dot, IconData icon, String title, String desc, VoidCallback onTap}) it, double d, bool hc) {
+    return Semantics(
+      button: true,
+      label: '${'braille.dot'.tr()} ${it.dot}: ${it.title}. ${it.desc}',
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: it.onTap,
+              child: Container(
+                width: d,
+                height: d,
+                decoration: hc
+                    ? BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black,
+                        border: Border.all(color: const Color(0xFFFFFF00), width: 3),
+                      )
+                    : BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const RadialGradient(
+                          center: Alignment(-0.35, -0.4),
+                          radius: 0.95,
+                          colors: [Color(0xFFFFE6A3), Color(0xFFE2A845), Color(0xFF9A5B22)],
+                          stops: [0.0, 0.6, 1.0],
+                        ),
+                        boxShadow: const [
+                          BoxShadow(color: Color(0x80000000), blurRadius: 10, offset: Offset(3, 6)),
+                          BoxShadow(color: Color(0xCCFFFFFF), blurRadius: 3, offset: Offset(-2, -2)),
+                        ],
+                      ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Icon(it.icon, size: d * 0.46, color: hc ? const Color(0xFFFFFF00) : LabPalette.ink),
+                    // Бројот на точката - мал печат долу десно.
+                    Positioned(
+                      right: d * 0.04,
+                      bottom: d * 0.04,
+                      child: Container(
+                        width: d * 0.3,
+                        height: d * 0.3,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: hc ? Colors.black : LabPalette.ink,
+                          border: Border.all(color: hc ? Colors.white : LabPalette.goldLight, width: 2),
+                        ),
+                        child: Text('${it.dot}', style: TextStyle(
+                          fontSize: d * 0.17, fontWeight: FontWeight.w900,
+                          color: hc ? Colors.white : LabPalette.goldLight)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-      ],
       ),
     );
+  }
+
+  /// Колона со 3 описи - секој во иста висина со својата точка.
+  Widget _sixTagColumn(List<({int dot, IconData icon, String title, String desc, VoidCallback onTap})> items, double dotD, bool hc, {required bool alignRight}) {
+    final rowH = dotD * 1.22;
+    final topPad = dotD * 0.14 + dotD * 0.11 + 2;
+    return Padding(
+      padding: EdgeInsets.only(top: topPad),
+      child: Column(children: [
+        for (final it in items)
+          SizedBox(
+            height: rowH,
+            // Ако описот е подолг, етикетата се смалува за да собере во
+            // висината на својата точка (без overflow).
+            child: LayoutBuilder(builder: (context, cons) => FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+              child: SizedBox(
+                width: cons.maxWidth,
+                child: _sixTag(it, hc, compact: true, pointRight: alignRight),
+              ),
+            )),
+          ),
+      ]),
+    );
+  }
+
+  /// Хартиена етикета со наслов и опис на точката (може да се допре).
+  Widget _sixTag(({int dot, IconData icon, String title, String desc, VoidCallback onTap}) it, bool hc,
+      {required bool compact, bool pointRight = false}) {
+    final tag = PaperPanel(
+      hc: hc,
+      radius: 16,
+      foldCorner: !compact,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: compact ? 10 : 14),
+      child: Row(
+        children: [
+          if (!pointRight) ...[
+            _tagBadge(it.dot, hc),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: pointRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(it.title, textAlign: pointRight ? TextAlign.end : TextAlign.start,
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: hc ? Colors.white : LabPalette.ink,
+                    fontSize: 17 * _kBrailleText, fontWeight: FontWeight.w900, height: 1.15)),
+                const SizedBox(height: 4),
+                Text(it.desc, textAlign: pointRight ? TextAlign.end : TextAlign.start,
+                  maxLines: compact ? null : 5, overflow: compact ? null : TextOverflow.ellipsis,
+                  style: TextStyle(color: hc ? Colors.white : LabPalette.inkSoft,
+                    fontSize: 12.5 * _kBrailleText, fontWeight: FontWeight.w600, height: 1.25)),
+              ],
+            ),
+          ),
+          if (pointRight) ...[
+            const SizedBox(width: 12),
+            _tagBadge(it.dot, hc),
+          ],
+        ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      label: '${it.title}. ${it.desc}',
+      child: ExcludeSemantics(
+        child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: it.onTap, child: tag),
+      ),
+    );
+  }
+
+  /// Мала клетка што покажува која точка е (на пр. точка 4 - горе десно).
+  Widget _tagBadge(int dot, bool hc) => Container(
+    padding: const EdgeInsets.all(5),
+    decoration: BoxDecoration(
+      color: hc ? Colors.black : LabPalette.ink,
+      borderRadius: BorderRadius.circular(10),
+      border: hc ? Border.all(color: Colors.white, width: 2) : null,
+    ),
+    child: Column(mainAxisSize: MainAxisSize.min, children: [
+      for (var row = 0; row < 3; row++)
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          for (final d in [row + 1, row + 4])
+            Container(
+              width: 11, height: 11, margin: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: d == dot
+                    ? (hc ? const Color(0xFFFFFF00) : LabPalette.gold)
+                    : (hc ? Colors.white24 : const Color(0x40FFFFFF)),
+              ),
+            ),
+        ]),
+    ]),
+  );
+
+  /// Точка 1 - Вовед: текстот и кои точки на кои копчиња се.
+  Widget _buildIntroPage(BuildContext context) {
+    final contrast = _fg(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    return Column(children: [
+      _buildBackRow(contrast, onBack: _backToSixMenu),
+      Expanded(child: LayoutBuilder(builder: (context, viewport) => ListView(
+        padding: _brailleSidePad(viewport.maxWidth, top: 8, bottom: 28),
+        children: [
+          Text('braille.intro_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
+          const SizedBox(height: 12),
+          _buildIntroArea(contrast, hc),
+          const SizedBox(height: 16),
+          Wrap(alignment: WrapAlignment.center, spacing: 14, runSpacing: 10, children: [
+            OutlinedButton.icon(
+              onPressed: () => _playClip('game_name'),
+              icon: const Icon(Icons.volume_up_rounded, size: 32),
+              label: Text('braille.repeat'.tr()),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => _voicePlayer.stop(),
+              icon: const Icon(Icons.stop_rounded, size: 32),
+              label: Text('braille.intro_stop'.tr()),
+            ),
+          ]),
+        ],
+      ))),
+    ]);
+  }
+
+  /// Точка 3 / 4 - групите (букви и броеви, или знаци).
+  Widget _buildGroupMenu(BuildContext context, {required bool signs}) {
+    final contrast = _fg(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final indexes = [
+      for (var i = 0; i < _groups.length; i++)
+        if ((_groups[i].titleKey == 'braille.group_punct') == signs) i,
+    ];
+    return Column(children: [
+      _buildBackRow(contrast, onBack: _backToSixMenu),
+      Expanded(child: LayoutBuilder(builder: (context, viewport) => ListView(
+        padding: _brailleSidePad(viewport.maxWidth, top: 8, bottom: 28),
+        children: [
+          Text((signs ? 'braille.menu_signs' : 'braille.menu_letters').tr(), textAlign: TextAlign.center,
+            style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
+          const SizedBox(height: 18),
+          for (var k = 0; k < indexes.length; k++) ...[
+            if (k > 0) const SizedBox(height: 18),
+            PopIn(index: k, child: _groupCard(context, indexes[k], contrast, hc)),
+          ],
+        ],
+      ))),
+    ]);
+  }
+
+  /// Точка 6 - трите игри.
+  Widget _buildGamesMenu(BuildContext context) {
+    final contrast = _fg(context);
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final cards = [_wordGameCard(contrast, hc), _expressThoughtCard(contrast, hc), _sentenceGameCard(contrast, hc)];
+    return Column(children: [
+      _buildBackRow(contrast, onBack: _backToSixMenu),
+      Expanded(child: LayoutBuilder(builder: (context, viewport) => ListView(
+        padding: _brailleSidePad(viewport.maxWidth, top: 8, bottom: 28),
+        children: [
+          Text('braille.menu_games'.tr(), textAlign: TextAlign.center,
+            style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
+          const SizedBox(height: 18),
+          for (var k = 0; k < cards.length; k++) ...[
+            if (k > 0) const SizedBox(height: 18),
+            PopIn(index: k, child: cards[k]),
+          ],
+        ],
+      ))),
+    ]);
   }
 
   /// Воведот е СЕКОГАШ целосно видлив (текст + асоцијации точки↔тастатура).
@@ -2903,6 +3489,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   /// Голема картичка во стилот на апликацијата: градиент во бојата, бел раб,
   /// сјај, бледа икона во аголот. `trailing` е десниот дел (пр. „Вежба“).
+  /// Брајова картотека: секоја опција е картичка од стара хартија со
+  /// кожен „рбет“ во бојата на опцијата (боите од претходната верзија),
+  /// медалјон-печат со икона и втисната Брајова клетка на првата буква од
+  /// насловот во аголот. `trailing` е десниот дел (пр. „Вежба“).
   Widget _menuCard({
     required Color color,
     required IconData icon,
@@ -2915,89 +3505,134 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     bool done = false,
   }) {
     final deep = Color.lerp(color, Colors.black, 0.35)!;
-    final fg = hc ? const Color(0xFFFFFF00) : Colors.white;
+    final ink = hc ? const Color(0xFFFFFF00) : LabPalette.ink;
+    final inkSoft = hc ? Colors.white : LabPalette.inkSoft;
+    // Првата буква од насловот на Брај - мал втиснат знак во аголот.
+    BrailleSymbol? firstLetter;
+    if (title.isNotEmpty) {
+      final c = title.characters.first.toLowerCase();
+      for (final s in BrailleData.lettersFor(_lang)) {
+        if (s.char == c) {
+          firstLetter = s;
+          break;
+        }
+      }
+    }
     return LayoutBuilder(builder: (context, constraints) {
-    // Тесна картичка (телефон): помал круг и наслов, „Вежба“ под содржината.
-    final narrow = constraints.maxWidth < 560;
-    final circle = narrow ? 64.0 : 100.0;
-    return PressableScale(
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(28),
-        child: Ink(
+      final narrow = constraints.maxWidth < 560;
+      final circle = narrow ? 66.0 : 96.0;
+      final spine = narrow ? 18.0 : 26.0;
+      final seal = Container(
+        width: circle,
+        height: circle,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: hc ? Colors.black : null,
+          gradient: hc
+              ? null
+              : RadialGradient(
+                  center: const Alignment(-0.3, -0.35),
+                  colors: [Color.lerp(color, Colors.white, 0.25)!, color, deep],
+                  stops: const [0.0, 0.6, 1.0],
+                ),
+          border: Border.all(color: hc ? Colors.white : LabPalette.gold, width: 3),
+          boxShadow: hc ? null : const [BoxShadow(color: Color(0x55000000), blurRadius: 6, offset: Offset(2, 4))],
+        ),
+        child: Icon(done ? Icons.check_rounded : icon,
+          color: hc ? const Color(0xFFFFFF00) : LabPalette.goldLight, size: circle * 0.52),
+      );
+      final texts = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: Playful.display((narrow ? 20 : 26) * _kBrailleText, color: ink)),
+          const SizedBox(height: 6),
+          Text(subtitle, style: Playful.body((narrow ? 15 : 16) * _kBrailleText, color: inkSoft)),
+          if (preview != null) ...[
+            const SizedBox(height: 12),
+            preview,
+          ],
+        ],
+      );
+      return PressableScale(
+        child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            gradient: hc ? null : LinearGradient(colors: [color, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
-            color: hc ? Colors.black : null,
-            border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
-            boxShadow: hc ? null : [BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 10))],
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: hc ? null : [
+              BoxShadow(color: Colors.black.withValues(alpha: 0.45), blurRadius: 18, offset: const Offset(0, 9)),
+              BoxShadow(color: color.withValues(alpha: 0.35), blurRadius: 24),
+            ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(26),
-            child: Stack(
-              children: [
-                if (!hc)
-                  Positioned(
-                    right: -18,
-                    bottom: -26,
-                    child: ExcludeSemantics(child: Icon(icon, size: 130, color: Colors.white.withValues(alpha: 0.10))),
-                  ),
-                Padding(
-                  padding: EdgeInsets.all(narrow ? 16 : 20),
-                  child: Flex(
-                    direction: narrow ? Axis.vertical : Axis.horizontal,
-                    crossAxisAlignment: narrow ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
-                    children: [
-                      // flex 0 на тесен екран (вертикално, во листа без висина).
-                      Flexible(
-                        flex: narrow ? 0 : 1,
-                        fit: narrow ? FlexFit.loose : FlexFit.tight,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: onTap,
-                          child: Padding(
-                            padding: const EdgeInsets.all(4),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: circle,
-                                  height: circle,
-                                  decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white),
-                                  child: Icon(done ? Icons.check_circle_rounded : icon, color: hc ? const Color(0xFFFFFF00) : (done ? const Color(0xFF16A34A) : deep), size: circle * 0.55),
-                                ),
-                                SizedBox(width: narrow ? 12 : 18),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(title, style: Playful.display((narrow ? 20 : 26) * _kBrailleText, color: fg)),
-                                      const SizedBox(height: 6),
-                                      Text(subtitle, style: Playful.body((narrow ? 15 : 16) * _kBrailleText, color: fg.withValues(alpha: 0.95))),
-                                      if (preview != null) ...[
-                                        const SizedBox(height: 10),
-                                        preview,
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+            borderRadius: BorderRadius.circular(22),
+            child: Material(
+              color: hc ? Colors.black : LabPalette.paper,
+              child: InkWell(
+                onTap: onTap,
+                child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  gradient: hc ? null : const LinearGradient(
+                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                    colors: [LabPalette.paper, LabPalette.paperDeep]),
+                  border: Border.all(color: hc ? Colors.white : (done ? const Color(0xFF16A34A) : LabPalette.paperEdge), width: hc ? 2 : (done ? 3 : 1.5)),
+                ),
+                child: Stack(
+                  children: [
+                    // Кожен рбет во бојата на опцијата.
+                    Positioned(
+                      left: 0, top: 0, bottom: 0, width: spine,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: hc ? Colors.white : null,
+                          gradient: hc ? null : LinearGradient(colors: [deep, color, deep]),
+                        ),
+                        child: hc ? null : Align(
+                          alignment: Alignment.center,
+                          child: Container(width: 2, color: LabPalette.gold.withValues(alpha: 0.6)),
                         ),
                       ),
-                      if (trailing != null) ...[
-                        SizedBox(width: 10, height: narrow ? 10 : 0),
-                        if (narrow) Align(alignment: Alignment.centerRight, child: trailing) else trailing,
-                      ],
-                    ],
-                  ),
+                    ),
+                    // Втисната буква во горниот десен агол.
+                    if (firstLetter != null && trailing == null)
+                      Positioned(
+                        right: 12, top: 10,
+                        child: ExcludeSemantics(
+                          child: EmbossedCell(dots: firstLetter.dots, hc: hc, dotSize: narrow ? 9 : 11, strong: true),
+                        ),
+                      ),
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(spine + (narrow ? 12 : 18), narrow ? 14 : 18, narrow ? 14 : 20, narrow ? 14 : 18),
+                      child: Flex(
+                        direction: narrow ? Axis.vertical : Axis.horizontal,
+                        crossAxisAlignment: narrow ? CrossAxisAlignment.stretch : CrossAxisAlignment.center,
+                        children: [
+                          Flexible(
+                            flex: narrow ? 0 : 1,
+                            fit: narrow ? FlexFit.loose : FlexFit.tight,
+                            child: Padding(
+                                padding: EdgeInsets.only(right: firstLetter != null && trailing == null ? (narrow ? 34 : 44) : 4, top: 2, bottom: 2),
+                                child: Row(children: [
+                                  seal,
+                                  SizedBox(width: narrow ? 12 : 18),
+                                  Expanded(child: texts),
+                                ]),
+                              ),
+                          ),
+                          if (trailing != null) ...[
+                            SizedBox(width: 10, height: narrow ? 10 : 0),
+                            if (narrow) Align(alignment: Alignment.centerRight, child: trailing) else trailing,
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
     });
   }
 
@@ -3043,8 +3678,8 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                   builder: (context, v, _) => LinearProgressIndicator(
                     value: v,
                     minHeight: 10,
-                    backgroundColor: Colors.white.withValues(alpha: 0.25),
-                    valueColor: AlwaysStoppedAnimation(hc ? const Color(0xFFFFFF00) : _gold),
+                    backgroundColor: hc ? Colors.white24 : LabPalette.paperEdge,
+                    valueColor: AlwaysStoppedAnimation(hc ? const Color(0xFFFFFF00) : LabPalette.sepia),
                   ),
                 ),
               ),
@@ -3088,36 +3723,21 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     );
   }
 
-  /// Мала испакната ќелија + знакот под неа (преглед на групата).
-  /// Неистражените се бледи, истражените светат.
+  /// Мала втисната клетка + знакот под неа (преглед на групата).
+  /// Неистражените се бледи, истражените се цели.
   Widget _miniCell(List<int> dots, String label, {bool explored = true}) {
-    Widget dot(int n) => Container(
-          width: 11,
-          height: 11,
-          margin: const EdgeInsets.all(1.5),
-          decoration: _studDecoration(on: dots.contains(n), hc: false),
-        );
+    final hc = AccessibilityUtils.isHighContrast(context);
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 300),
       opacity: explored ? 1.0 : 0.45,
       child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.25), borderRadius: BorderRadius.circular(8)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(mainAxisSize: MainAxisSize.min, children: [dot(1), dot(4)]),
-              Row(mainAxisSize: MainAxisSize.min, children: [dot(2), dot(5)]),
-              Row(mainAxisSize: MainAxisSize.min, children: [dot(3), dot(6)]),
-            ],
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(fontSize: 14 * _kBrailleText, fontWeight: FontWeight.w800, color: Colors.white)),
-      ],
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          EmbossedCell(dots: dots, hc: hc, dotSize: 10, strong: true),
+          const SizedBox(height: 2),
+          Text(label, style: TextStyle(fontSize: 14 * _kBrailleText, fontWeight: FontWeight.w900,
+            color: hc ? Colors.white : LabPalette.ink)),
+        ],
       ),
     );
   }
@@ -3176,10 +3796,10 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
           height: 62,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: hc ? 0.1 : 0.22),
-            border: Border.all(color: Colors.white, width: 2),
+            color: hc ? Colors.black : LabPalette.ink,
+            border: Border.all(color: hc ? Colors.white : LabPalette.gold, width: 2.5),
           ),
-          child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 36),
+          child: Icon(Icons.arrow_forward_rounded, color: hc ? Colors.white : LabPalette.goldLight, size: 34),
         ),
       );
 
@@ -3212,44 +3832,27 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
     );
   }
 
+  /// Страница од сликовницата за буквите: лист стара хартија (како оние
+  /// од времето на Луј Брај) со втиснатата клетка, буквата и објаснувањето.
+  /// Лево и десно - тркалезни копчиња-печати за листање.
   Widget _exploreCard(BuildContext context, Color contrastColor, int index) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final s = _group.symbols[index];
     final hasPrev = index > 0;
     final hasNext = index < _group.symbols.length - 1;
-
-    final groupColor = _groupColors[_groupIndex % _groupColors.length];
-
-    // Тесен екран (телефон): потесни зони за листање (свајп и онака
-    // работи), повеќе место за средината.
     final narrow = MediaQuery.sizeOf(context).width < 600;
+    final ink = hc ? Colors.white : LabPalette.ink;
+    final inkSoft = hc ? Colors.white : LabPalette.inkSoft;
+    final sepia = hc ? const Color(0xFFFFFF00) : LabPalette.sepia;
 
-    // Темна „плоча“ во бојата на групата, со бел раб и сјај.
-    return Container(
-      margin: EdgeInsets.all(narrow ? 6 : 12),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: Colors.white.withValues(alpha: hc ? 1 : 0.85), width: 3),
-        color: hc ? Colors.black : null,
-        gradient: hc
-            ? null
-            : LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color.lerp(groupColor, Playful.night, 0.25)!, Color.lerp(groupColor, Playful.night, 0.7)!],
-              ),
-        boxShadow: hc ? null : [BoxShadow(color: groupColor.withValues(alpha: 0.5), blurRadius: 30, spreadRadius: 2)],
-      ),
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: narrow ? 4 : 12, vertical: narrow ? 6 : 12),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _pageArrow(left: true, enabled: hasPrev, onTap: _goPrevExplore, hc: hc, size: narrow ? 50 : 76,
+            label: 'braille.previous_item'.tr()),
+          SizedBox(width: narrow ? 4 : 12),
           Expanded(
-            flex: narrow ? 1 : 2,
-            child: _NavZone(enabled: hasPrev, icon: Icons.chevron_left_rounded, onTap: _goPrevExplore, label: 'braille.previous_item'.tr(), highContrast: hc, iconSize: narrow ? 36 : 64),
-          ),
-          Expanded(
-            flex: 6,
             child: GestureDetector(
               onTap: () => _playCharExplanationSequence(s),
               behavior: HitTestBehavior.opaque,
@@ -3258,68 +3861,93 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
                 button: true,
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final textColor = hc ? Colors.white : contrastColor;
-                    // Средната зона на телефон е тесна (~200 px) - таму
-                    // помало зголемување, за долгите зборови да не се кршат.
-                    final k = constraints.maxWidth < 420 ? 1.2 : (constraints.maxWidth < 640 ? 1.4 : _kBrailleText);
-                    // Телефон (тесно или ниско): сè се смалува - името и
-                    // точките и онака се изговараат. Клетката се собира во
-                    // ширината (една клетка ≈ 152 × scale px широка) и
-                    // зафаќа најмногу ~40% од висината; ако пак не собере,
-                    // страницата се лизга нагоре-надолу (без преклопување).
                     final compact = constraints.maxWidth < 420 || constraints.maxHeight < 560;
-                    final textK = compact ? 0.75 : k;
-                    final widthScale = (constraints.maxWidth - 24) / 160;
-                    final heightScale = constraints.maxHeight.isFinite ? constraints.maxHeight * 0.4 / 214 : 2.0;
-                    final cellScale = compact ? min(2.0, max(0.7, min(widthScale, heightScale))) : 2.0;
-                    return SingleChildScrollView(
-                      padding: EdgeInsets.symmetric(horizontal: compact ? 6 : 12, vertical: compact ? 8 : 16),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                        child: Center(
+                    final innerW = constraints.maxWidth - 48;
+                    final cellsCount = s.cells.length;
+                    // Една клетка ≈ 2.9 точки широка и 3.9 висока.
+                    final byWidth = innerW / (cellsCount * 2.9 + (cellsCount - 1) * 0.6);
+                    final byHeight = constraints.maxHeight.isFinite ? constraints.maxHeight * 0.36 / 3.9 : 64.0;
+                    final dotSize = min(byWidth, byHeight).clamp(18.0, 64.0).toDouble();
+                    return PaperPanel(
+                      hc: hc,
+                      radius: 18,
+                      padding: EdgeInsets.fromLTRB(compact ? 14 : 24, compact ? 14 : 22, compact ? 14 : 24, compact ? 10 : 16),
+                      child: SingleChildScrollView(
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight.isFinite ? max(0.0, constraints.maxHeight - (compact ? 24 : 38)) : 0,
+                          ),
                           child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              FittedBox(fit: BoxFit.scaleDown, child: _bigCellsDisplay(s.cells, hc, scale: cellScale)),
-                              SizedBox(height: compact ? 10 : 26),
+                              // Горе: украсна линија со ознака на групата.
+                              Row(children: [
+                                Expanded(child: Container(height: 1.5, color: sepia.withValues(alpha: 0.5))),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                                  child: Text(_group.titleKey.tr(), style: TextStyle(color: sepia,
+                                    fontSize: (compact ? 13 : 16) * _kBrailleText * 0.8, fontWeight: FontWeight.w800,
+                                    fontStyle: FontStyle.italic)),
+                                ),
+                                Expanded(child: Container(height: 1.5, color: sepia.withValues(alpha: 0.5))),
+                              ]),
+                              SizedBox(height: compact ? 10 : 18),
+                              // Втиснатите клетки.
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                spacing: dotSize * 0.6,
+                                runSpacing: dotSize * 0.4,
+                                children: [
+                                  for (final c in s.cells)
+                                    ExcludeSemantics(child: EmbossedCell(dots: c, hc: hc, dotSize: dotSize, strong: true)),
+                                ],
+                              ),
+                              SizedBox(height: compact ? 8 : 16),
+                              // Буквата - отпечатена со мастило.
                               FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: Text(s.displayChar, style: TextStyle(fontSize: compact ? 64 : 110, fontWeight: FontWeight.w900, color: hc ? textColor : _gold, height: 1.0)),
+                                child: Text(s.displayChar, style: TextStyle(
+                                  fontSize: compact ? 70 : 112, fontWeight: FontWeight.w900, color: ink, height: 1.0,
+                                  fontFamily: 'serif')),
                               ),
                               if (s.kind != BrailleKind.letter && s.kind != BrailleKind.digit) ...[
-                                const SizedBox(height: 6),
-                                Text(
-                                  _symbolName(s),
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 30 * textK, fontWeight: FontWeight.w800, color: textColor),
-                                ),
+                                const SizedBox(height: 4),
+                                Text(_symbolName(s), textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: (compact ? 20 : 26) * 1.2, fontWeight: FontWeight.w800, color: sepia)),
                               ],
-                              SizedBox(height: compact ? 8 : 18),
-                              Text(
-                                _explanationFor(s),
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontSize: 28 * textK, fontWeight: FontWeight.w600, color: textColor),
-                              ),
-                              SizedBox(height: compact ? 12 : 22),
-                              Semantics(
-                                label: 'braille.repeat'.tr(),
-                                button: true,
-                                child: PressableScale(
-                                  child: Material(
-                                    color: hc ? Colors.black : _gold,
-                                    shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
-                                    elevation: 4,
-                                    child: InkWell(
-                                      customBorder: const CircleBorder(),
-                                      onTap: () => _playCharExplanationSequence(s),
-                                      child: Padding(
-                                        padding: EdgeInsets.all(compact ? 12 : 18),
-                                        child: Icon(Icons.replay_rounded, size: compact ? 28 : 36, color: hc ? Colors.white : Playful.ink),
+                              SizedBox(height: compact ? 8 : 14),
+                              Text(_explanationFor(s), textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: (compact ? 20 : 25) * 1.2, fontWeight: FontWeight.w600,
+                                  color: inkSoft, height: 1.35)),
+                              SizedBox(height: compact ? 10 : 18),
+                              // Долу: повтори + број на страницата.
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Semantics(
+                                    label: 'braille.repeat'.tr(),
+                                    button: true,
+                                    child: PressableScale(
+                                      child: Material(
+                                        color: hc ? Colors.black : LabPalette.ink,
+                                        shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
+                                        elevation: hc ? 0 : 3,
+                                        child: InkWell(
+                                          customBorder: const CircleBorder(),
+                                          onTap: () => _playCharExplanationSequence(s),
+                                          child: Padding(
+                                            padding: EdgeInsets.all(compact ? 12 : 16),
+                                            child: Icon(Icons.replay_rounded, size: compact ? 28 : 34,
+                                              color: hc ? Colors.white : LabPalette.goldLight),
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
+                                  const SizedBox(width: 16),
+                                  Text('— ${index + 1} / ${_group.symbols.length} —', style: TextStyle(
+                                    color: sepia, fontSize: compact ? 18 : 22, fontWeight: FontWeight.w800)),
+                                ],
                               ),
                             ],
                           ),
@@ -3331,11 +3959,43 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
               ),
             ),
           ),
-          Expanded(
-            flex: narrow ? 1 : 2,
-            child: _NavZone(enabled: hasNext, icon: Icons.chevron_right_rounded, onTap: _goNextExplore, label: 'braille.next_item'.tr(), highContrast: hc, iconSize: narrow ? 36 : 64),
-          ),
+          SizedBox(width: narrow ? 4 : 12),
+          _pageArrow(left: false, enabled: hasNext, onTap: _goNextExplore, hc: hc, size: narrow ? 50 : 76,
+            label: 'braille.next_item'.tr()),
         ],
+      ),
+    );
+  }
+
+  /// Тркалезно копче за листање - восочен печат со златна стрелка.
+  Widget _pageArrow({required bool left, required bool enabled, required VoidCallback onTap, required bool hc,
+      required double size, required String label}) {
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: ExcludeSemantics(
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
+          opacity: enabled ? 1 : 0.3,
+          child: PressableScale(
+            child: Material(
+              color: hc ? Colors.black : LabPalette.seal,
+              shape: CircleBorder(side: BorderSide(color: hc ? Colors.white : LabPalette.gold, width: hc ? 3 : 2.5)),
+              elevation: hc || !enabled ? 0 : 6,
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: enabled ? onTap : null,
+                child: SizedBox(
+                  width: size,
+                  height: size,
+                  child: Icon(left ? Icons.arrow_back_ios_new_rounded : Icons.arrow_forward_ios_rounded,
+                    size: size * 0.45, color: hc ? const Color(0xFFFFFF00) : LabPalette.goldLight),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -3470,58 +4130,18 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   /// во обоен круг и темен текст.
   Widget _practiceModeCard({required IconData icon, required String title, required String desc, required VoidCallback onTap}) {
     final hc = AccessibilityUtils.isHighContrast(context);
-    final fg = hc ? Colors.white : Playful.ink;
     return Semantics(
       label: '$title. $desc',
       button: true,
-      child: PressableScale(
-        child: Material(
-          color: hc ? Colors.black : Colors.white,
-          borderRadius: BorderRadius.circular(26),
-          elevation: hc ? 0 : 8,
-          shadowColor: Colors.black.withValues(alpha: 0.5),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(26),
-            onTap: onTap,
-            child: LayoutBuilder(builder: (context, constraints) {
-              // Тесна картичка (телефон): помал круг, без стрелка, помала маргина.
-              final narrow = constraints.maxWidth < 520;
-              final circle = narrow ? 64.0 : 100.0;
-              return Container(
-                padding: EdgeInsets.all(narrow ? 16 : 24),
-                constraints: const BoxConstraints(minHeight: 130),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(26),
-                  border: hc ? Border.all(color: Colors.white, width: 2) : const Border(bottom: BorderSide(color: _accent, width: 8)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: circle,
-                      height: circle,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : _accent),
-                      child: Icon(icon, color: hc ? const Color(0xFFFFFF00) : Colors.white, size: circle * 0.54),
-                    ),
-                    SizedBox(width: narrow ? 12 : 20),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(title, style: Playful.display((narrow ? 22 : 26) * _kBrailleText, color: fg)),
-                          const SizedBox(height: 6),
-                          Text(desc, style: Playful.body((narrow ? 16 : 17) * _kBrailleText, color: hc ? Colors.white : const Color(0xFF34336B))),
-                        ],
-                      ),
-                    ),
-                    if (!narrow) ...[
-                      const SizedBox(width: 12),
-                      Icon(Icons.arrow_forward_rounded, color: hc ? Colors.white : _accent, size: 42),
-                    ],
-                  ],
-                ),
-              );
-            }),
-          ),
+      child: ExcludeSemantics(
+        child: _menuCard(
+          color: _accent,
+          icon: icon,
+          title: title,
+          subtitle: desc,
+          onTap: onTap,
+          hc: hc,
+          trailing: _cardArrow(hc),
         ),
       ),
     );
@@ -5456,4 +6076,44 @@ class _Dot extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Наслов на поглавје во „Тајните на Брајовата азбука“ - само ознака;
+/// [_BrailleLearningScreenState._secretAccordionContent] го претвора во дел
+/// што се отвора.
+class _SecretHeading extends StatelessWidget {
+  const _SecretHeading(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(text);
+}
+
+/// Обележувач од панделка (поглавјата во Брајовата лабораторија).
+class _RibbonPainter extends CustomPainter {
+  _RibbonPainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..lineTo(size.width / 2, size.height - size.width * 0.45)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawShadow(path, Colors.black, 2, false);
+    canvas.drawPath(path, Paint()..color = color);
+    canvas.drawLine(
+      Offset(size.width * 0.2, 0),
+      Offset(size.width * 0.2, size.height * 0.8),
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.25)
+        ..strokeWidth = 2,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _RibbonPainter oldDelegate) => oldDelegate.color != color;
 }
