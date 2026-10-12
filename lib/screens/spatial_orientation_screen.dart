@@ -2058,6 +2058,7 @@ import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
+import 'package:hear_and_see_safe/widgets/spatial_art.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 
 /// Зголемување на читливиот текст (наслови, табови, упатства, копчиња).
@@ -2116,14 +2117,11 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     'left': Icons.keyboard_arrow_left_rounded,
     'right': Icons.keyboard_arrow_right_rounded,
   };
-  /// Број на вибрации за секоја насока: лево 1, горе 2, десно 3, долу 4.
-  /// Секој удар трае 180 ms, со пауза од 220 ms - лесно се бројат.
-  static const Map<String, List<int>> _directionVibrationPatterns = {
-    'left': [0, 180],
-    'up': [0, 180, 220, 180],
-    'right': [0, 180, 220, 180, 220, 180],
-    'down': [0, 180, 220, 180, 220, 180, 220, 180],
-  };
+  /// Број на вибрации за секоја насока: лево 1, горе 2, десно 3, долу 4
+  /// (како во објаснувањето). Секој удар е посебна вибрација (200 ms, пауза
+  /// 320 ms) - на телефоните што не поддржуваат шеми, порано сите насоки
+  /// вибрираа само еднаш.
+  static const Map<String, int> _directionPulses = {'left': 1, 'up': 2, 'right': 3, 'down': 4};
 
   late final List<int> _simonLengthPerRound =
       List.generate(_simonTotalRounds, (i) => 2 + (i % 6));
@@ -2479,10 +2477,10 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     });
   }
 
+  /// Вибрира насоката и чека да завршат сите удари.
   Future<void> _vibrateDirection(String dir) async {
     if (await VibrationUtils.hasVibrator()) {
-      final pattern = _directionVibrationPatterns[dir]!;
-      await VibrationUtils.vibrate(pattern: pattern);
+      await VibrationUtils.pulses(_directionPulses[dir]!);
     }
   }
 
@@ -2496,12 +2494,11 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
     for (final dir in _simonSequence) {
       if (!mounted) return;
       setState(() => _simonFlashingDir = dir);
+      // Ударите (1-4) веќе се дочекани; потоа јасна пауза за броење.
+      final hasVib = await VibrationUtils.hasVibrator();
       await _vibrateDirection(dir);
-      // Чекај да завршат сите удари (до 4) пред следната насока, плус
-      // јасна пауза за детето да ги изброи.
-      final pattern = _directionVibrationPatterns[dir]!;
-      final patternMs = pattern.fold<int>(0, (a, b) => a + b);
-      await Future.delayed(Duration(milliseconds: patternMs + 600));
+      // Без вибрации (компјутер) - насоката светнува исто толку долго.
+      await Future.delayed(Duration(milliseconds: hasVib ? 750 : 520 * _directionPulses[dir]! + 400));
       if (!mounted) return;
       setState(() => _simonFlashingDir = null);
       await Future.delayed(const Duration(milliseconds: 250));
@@ -3343,10 +3340,8 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
       title: 'spatial.title'.tr(),
       // Копчето за гласовна команда е во редот со рундите (_voiceButton).
       voiceCommand: false,
-      bodyBackground: const EmojiBackdrop(
-        emojis: ['🧭', '⬆️', '➡️', '🗺️', '📡', '⭐'],
-        tint: _moduleAccent,
-      ),
+      // „Навигаторска карта“: меридијани, ѕвезди, патека и роза на ветровите.
+      bodyBackground: const SpatialMapBackdrop(tint: _moduleAccent),
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -3906,26 +3901,12 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
               const SizedBox(height: 10),
               row(
                 _dirZone('left', contrast, hc, interactive),
+                // Роза на ветровите: иглата покажува кон насоката што
+                // вибрира; точките околу = колку удари има секоја насока.
                 Center(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: hc ? Colors.black : Colors.white.withValues(alpha: 0.08),
-                      border: Border.all(
-                        color: hc ? Colors.white : Playful.sun.withValues(alpha: _simonIsPlaying ? 0.95 : 0.45),
-                        width: 2,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.vibration_rounded,
-                      size: 40,
-                      color: hc ? Colors.white : Playful.sun.withValues(alpha: _simonIsPlaying ? 1.0 : 0.6),
-                    ),
-                    ),
+                    child: CompassRoseNeedle(dir: _simonFlashingDir, active: _simonIsPlaying, size: 104),
                   ),
                 ),
                 _dirZone('right', contrast, hc, interactive),
@@ -3942,18 +3923,31 @@ class _SpatialOrientationScreenState extends State<SpatialOrientationScreen> {
   Widget _dirZone(String dir, Color contrast, bool hc, bool interactive) {
     final isFlashing = _simonFlashingDir == dir;
     final label = _directionLabelKeys[dir]!.tr();
-    return _withKeyBadge(
-      SoundTile(
-        icon: _directionIcons[dir]!,
-        label: label,
-        color: _moveColors[dir]!,
-        onTap: interactive ? () => _onTapDirection(dir) : null,
-        enabled: interactive,
-        flash: isFlashing,
-        showLabel: false,
-      ),
-      _keyFor(dir),
-      hc,
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(
+          child: _withKeyBadge(
+            SoundTile(
+              icon: _directionIcons[dir]!,
+              label: label,
+              color: _moveColors[dir]!,
+              onTap: interactive ? () => _onTapDirection(dir) : null,
+              enabled: interactive,
+              flash: isFlashing,
+              showLabel: false,
+            ),
+            _keyFor(dir),
+            hc,
+          ),
+        ),
+        // Колку вибрации има насоката (лево 1, горе 2, десно 3, долу 4).
+        Positioned(
+          right: 6,
+          bottom: 6,
+          child: IgnorePointer(child: DirectionPips(count: _directionPulses[dir]!)),
+        ),
+      ],
     );
   }
 

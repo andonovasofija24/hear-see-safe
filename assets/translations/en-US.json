@@ -1084,6 +1084,12 @@
     "compass_turn_west": "Turn to the west"
   },
   "sound": {
+  "belt_hint": "In front of the ear each card stops and plays its sound. When you hear the same sound – stop! You can also tap a card or say its name.",
+  "belt_start_hint": "Tap “Play sound” – then the cards start moving toward the ear.",
+  "belt_fast": "Faster",
+  "belt_slow": "Slower",
+  "belt_continue": "Continue",
+  "belt_stop": "Stop – this is it!",
     "listen": "Listen carefully",
     "playing_sound": "Playing sound now",
     "what_is_this": "What is this sound? Choose from the buttons below.",
@@ -1102,7 +1108,7 @@
     "final_summary": "You got {} correct and {} wrong out of {} rounds.",
     "play_again": "Play again",
     "explanation_title": "How to play",
-    "explanation_text": "The game has 20 rounds in total. Tap Play sound to hear a sound, then choose what you heard from the buttons below. If you want to hear it again before answering, tap Replay sound. At the end you'll see how many you got right and how many wrong.",
+    "explanation_text": "The game has 20 rounds. Tap “Play sound” and listen. Then the cards start moving along the curved ribbon toward the ear. Before each card goes into the ear, it stops and plays its own sound. When you hear the same sound you heard at the start, tap “Stop – this is it!” or say “stop”. If it is not the one, tap “Continue” or wait a moment and the ribbon moves on by itself. You can also tap a card directly or say its name. With “Slower” the ribbon moves slowly. At the end you will see how many you got right.",
     "explanation_toggle_open": "Show explanation",
     "explanation_toggle_close": "Hide explanation",
     "speech_not_available": "Speech recognition not available",

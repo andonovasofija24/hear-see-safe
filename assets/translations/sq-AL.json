@@ -1084,6 +1084,12 @@
     "compass_turn_west": "Kthehu drejt perëndimit"
   },
   "sound": {
+  "belt_hint": "Para veshit çdo kartë ndalon dhe luan tingullin e saj. Kur dëgjon të njëjtin tingull – ndalo! Mund edhe të prekësh një kartë ose të thuash emrin e saj.",
+  "belt_start_hint": "Prek “Luaj zërin” – pastaj kartat nisen drejt veshit.",
+  "belt_fast": "Më shpejt",
+  "belt_slow": "Më ngadalë",
+  "belt_continue": "Vazhdo",
+  "belt_stop": "Ndalo – ky është!",
     "listen": "Dëgjoni me kujdes",
     "playing_sound": "Po luhet zëri tani",
     "what_is_this": "Çfarë është ky zë? Zgjidhni nga butonat më poshtë.",
@@ -1102,7 +1108,7 @@
     "final_summary": "Ke {} të sakta dhe {} të gabuara nga {} raunde.",
     "play_again": "Luaj përsëri",
     "explanation_title": "Si luhet",
-    "explanation_text": "Loja ka gjithsej 20 raunde. Prek Luaj zërin për të dëgjuar një tingull, pastaj zgjidh nga butonat më poshtë çfarë dëgjove. Nëse do ta dëgjosh përsëri para se të përgjigjesh, prek Luaj përsëri zërin. Në fund do të shohësh sa ke saktë dhe sa gabim.",
+    "explanation_text": "Loja ka 20 raunde. Prek “Luaj zërin” dhe dëgjo. Pastaj kartat nisen nëpër shiritin e lakuar drejt veshit. Para se çdo kartë të hyjë në vesh, ajo ndalon dhe luan tingullin e vet. Kur dëgjon të njëjtin tingull që dëgjove në fillim, prek “Ndalo – ky është!” ose thuaj “ndalo”. Nëse nuk është ai, prek “Vazhdo” ose prit pak dhe shiriti vazhdon vetë. Mund edhe ta prekësh kartën drejtpërdrejt ose të thuash emrin e saj. Me “Më ngadalë” shiriti lëviz ngadalë. Në fund do të shohësh sa ke qëlluar.",
     "explanation_toggle_open": "Shfaq shpjegimin",
     "explanation_toggle_close": "Fshih shpjegimin",
     "speech_not_available": "Njohja e të folurit nuk është e disponueshme",

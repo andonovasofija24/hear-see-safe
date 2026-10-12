@@ -20,6 +20,17 @@ class VibrationUtils {
   /// Пробува прво со прилагодена шема (pattern) ако е дадена, инаку со
   /// едноставно траење (duration). Тивко не прави ништо ако вибрацијата
   /// не е достапна.
+  /// [count] одделни удари (секој [onMs], пауза [offMs]) - секој удар е
+  /// посебен повик, па бројот е ист на СЕКОЈ телефон (некои уреди не
+  /// поддржуваат шеми и би вибрирале само еднаш). Чека да завршат сите.
+  static Future<void> pulses(int count, {int onMs = 200, int offMs = 320}) async {
+    if (PlatformUtils.isWeb || kIsWeb) return;
+    for (var i = 0; i < count; i++) {
+      await vibrate(duration: onMs);
+      await Future.delayed(Duration(milliseconds: onMs + (i < count - 1 ? offMs : 0)));
+    }
+  }
+
   ///
   /// [amplitude] 1-255 (јачина) - на уредите што го поддржуваат; другите
   /// го игнорираат и вибрираат со стандардната јачина.
