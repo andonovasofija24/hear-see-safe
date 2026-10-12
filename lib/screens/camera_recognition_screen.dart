@@ -15,6 +15,7 @@ import 'package:hear_and_see_safe/services/camera_clip_player.dart';
 import 'package:hear_and_see_safe/utils/accessibility_utils.dart';
 import 'package:hear_and_see_safe/widgets/game_screen_chrome.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
+import 'package:hear_and_see_safe/widgets/camera_art.dart';
 import 'package:hear_and_see_safe/utils/vibration_utils.dart';
 import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
@@ -61,6 +62,15 @@ const Set<String> _kSearchStopWords = {
   'find', 'look', 'looking', 'for', 'search', 'the', 'a', 'an', 'my', 'me', 'please', 'i', 'want', 'to', 'where', 'is',
   // sq (без дијакритици - види _normSearch)
   'kerko', 'gjej', 'gjeje', 'gjeni', 'dua', 'te', 'ku', 'eshte', 'tim', 'time', 'tem', 'tende', 'ma',
+};
+
+/// Дополнителни зборови за поимите во режимот „Барај“ (на сите јазици),
+/// покрај името од преводот: „тоалет“ -> WC школка, „ќебе“ -> покривач...
+const Map<String, List<String>> _kSearchSynonyms = {
+  'camera.object_toilet': ['тоалет', 'wc'],
+  'camera.object_blanket': ['ќебе'],
+  'camera.object_light_switch': ['прекинувач'],
+  'camera.object_photo': ['фотка'],
 };
 
 /// Мали букви, без интерпункција и загради, ё/ѐ -> е, ѝ -> и, ë -> e, ç -> c
@@ -205,6 +215,10 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
   /// Колку често се слика и препознава додека се бара.
   static const Duration _scanInterval = Duration(milliseconds: 1200);
 
+  /// Број на сликања во тековното барање - за Cloud Vision (само за поими
+  /// што ML Kit ги нема) да се праша на секое второ (најмногу на ~2,4 s).
+  int _scanCount = 0;
+
   final TextEditingController _searchCtrl = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   List<_SearchConcept>? _conceptsCache;
@@ -288,6 +302,9 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
       );
 
       await _cameraController!.initialize();
+      // Блицот е исклучен; свети само додека трае барањето (режим „Барај“)
+      // и автоматски при едно сликање во темно.
+      await _setFlash(FlashMode.off);
 
       if (!mounted) return;
 
@@ -303,6 +320,15 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     } catch (_) {
       await _failInit('camera.error_camera_unavailable');
     }
+  }
+
+  /// Блиц / лампа. Тивко ако уредот (пр. предна камера) нема блиц.
+  Future<void> _setFlash(FlashMode mode) async {
+    final c = _cameraController;
+    if (kIsWeb || c == null || !c.value.isInitialized) return;
+    try {
+      await c.setFlashMode(mode);
+    } catch (_) {}
   }
 
   /// Заедничка логика кога иницијализацијата на камерата не успее - секогаш
@@ -351,6 +377,8 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
         await VibrationUtils.vibrate(duration: 150);
       }
 
+      // Едно сликање: блиц само ако е темно (автоматски), потоа исклучен.
+      await _setFlash(FlashMode.auto);
       final image = await controller.takePicture().timeout(
             const Duration(seconds: 8),
             onTimeout: () => throw const RecognitionException('camera.error_timeout'),
@@ -386,6 +414,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
       }
     } finally {
       _deleteTemp(shot);
+      if (!_isSearching) unawaited(_setFlash(FlashMode.off));
       if (mounted) setState(() => _isProcessing = false);
     }
   }
@@ -460,7 +489,11 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     if (cached != null && _conceptsLang == lang) return cached;
     final byName = <String, _SearchConcept>{};
     final list = <_SearchConcept>[];
+    // Без Cloud Vision (нема API клуч) - поимите што ML Kit не ги познава
+    // не се нудат, бидејќи никогаш не би биле пронајдени.
+    final cloud = _recognitionService.cloudEnabled;
     for (final key in [...RecognitionVocabulary.objectKeys, ...RecognitionVocabulary.clothingKeys]) {
+      if (!cloud && RecognitionVocabulary.cloudOnlyKeys.contains(key)) continue;
       final display = key.tr();
       final norm = _normSearch(display);
       if (norm.isEmpty) continue;
@@ -481,6 +514,10 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
         for (final raw in RecognitionVocabulary.rawLabelsFor(key)) {
           concept.addName(_normSearch(raw));
         }
+      }
+      // Други зборови за истиот поим („тоалет“, „ќебе“, „фотка“...).
+      for (final synonym in _kSearchSynonyms[key] ?? const <String>[]) {
+        concept.addName(_normSearch(synonym));
       }
     }
     _conceptsCache = list;
@@ -674,6 +711,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     _cancelSearchTimers();
     final session = ++_searchSession;
     _scanErrors = 0;
+    _scanCount = 0;
     _lastTickSecond = 0;
     _scanBusy = false;
     _searchWatch
@@ -685,6 +723,12 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
       _searchErrorKey = null;
       _lastResult = null;
     });
+    // Лампата свети САМО додека трае барањето (се гаси во _cancelSearchTimers).
+    await _setFlash(FlashMode.torch);
+    if (!_searchActive(session)) {
+      unawaited(_setFlash(FlashMode.off));
+      return;
+    }
     _searchTicker = Timer.periodic(const Duration(milliseconds: 500), (_) => _onSearchTick(session));
     _scanTimer = Timer.periodic(_scanInterval, (_) => unawaited(_scanOnce(session)));
     // „Барам… врти го телефонот полека наоколу.“
@@ -718,11 +762,23 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     if (controller == null || !controller.value.isInitialized || target == null) return;
     if (controller.value.isTakingPicture) return;
     _scanBusy = true;
+    // Cloud Vision само за поими што ML Kit не ги познава, и само на секое
+    // второ сликање (сликањата се барем 1,2 s одвоени -> најмногу на 2,4 s).
+    final useCloud = _recognitionService.cloudEnabled &&
+        RecognitionVocabulary.needsCloud(target.keys) &&
+        _scanCount.isEven;
+    _scanCount++;
     XFile? image;
     try {
       image = await controller.takePicture().timeout(const Duration(seconds: 8));
-      if (!_searchActive(session)) return;
-      final concepts = await _recognitionService.recognizeConcepts(image: image).timeout(const Duration(seconds: 12));
+      if (!_searchActive(session)) {
+        // Сликата заврши по крајот на барањето - лампата да не остане.
+        unawaited(_setFlash(FlashMode.off));
+        return;
+      }
+      final concepts = await _recognitionService
+          .recognizeConcepts(image: image, useCloud: useCloud)
+          .timeout(const Duration(seconds: 12));
       if (!_searchActive(session)) return;
       _scanErrors = 0;
       // Сите ознаки на сликата, не само најдобрата: доволно е еден од
@@ -752,6 +808,8 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     _scanTimer?.cancel();
     _scanTimer = null;
     _searchWatch.stop();
+    // Барањето завршило (пронајдено / 40 s / стоп / грешка) - лампата се гаси.
+    unawaited(_setFlash(FlashMode.off));
   }
 
   /// Крај на барањето со глас и вибрација (пронајдено / време истече /
@@ -878,10 +936,8 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
       accent: _accent,
       title: 'features.camera_recognition'.tr(),
       voiceOptions: _voiceOptions(),
-      bodyBackground: const EmojiBackdrop(
-        emojis: ['📷', '🎨', '👕', '🔍', '✨', '🧸'],
-        tint: _accent,
-      ),
+      // „Магичен објектив“: меки светла (боке) и бленда во позадина.
+      bodyBackground: const CameraBokehBackdrop(tint: _accent),
       child: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -936,7 +992,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     modes,
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 26),
                     SizedBox(height: viewfinderHeight, child: _buildViewfinder(hc)),
                     const SizedBox(height: 14),
                     _buildSearchPanel(hc, compact: shortScreen),
@@ -951,9 +1007,8 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   modes,
-                  const SizedBox(height: 14),
-                  // Визир: камерата во рамка со златни агли; при анализа -
-                  // златна линија што скенира.
+                  const SizedBox(height: 26),
+                  // Визир: камерата во тело на фотоапарат со објектив-ознаки.
                   Expanded(child: _buildViewfinder(hc)),
                   const SizedBox(height: 14),
                   if (_lastResult != null || _isProcessing) ...[
@@ -961,11 +1016,11 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                     const SizedBox(height: 12),
                   ],
                   Center(
-                    child: SoundOrb(
-                      icon: Icons.camera_alt_rounded,
+                    child: ApertureShutterButton(
                       label: _isProcessing ? 'camera.analyzing'.tr() : 'camera.capture'.tr(),
                       onTap: _isProcessing ? null : _captureAndRecognize,
-                      active: _isProcessing,
+                      busy: _isProcessing,
+                      color: _modeColors[_recognitionMode] ?? _accent,
                       size: shortScreen ? 76 : 96,
                     ),
                   ),
@@ -983,15 +1038,16 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
   Widget _buildViewfinder(bool hc) {
     final target = _target;
     final showFound = _recognitionMode == 'search' && _searchPhase == _SearchPhase.found && target != null;
-    return Container(
-      decoration: BoxDecoration(
+    final modeColor = _modeColors[_recognitionMode] ?? _accent;
+    final searchFraction = _isSearching
+        ? (1 - _searchWatch.elapsed.inMilliseconds / _searchLimit.inMilliseconds).clamp(0.0, 1.0)
+        : 1.0;
+    return CameraBezel(
+      color: modeColor,
+      label: 'camera.$_recognitionMode'.tr(),
+      icon: _modeIcons[_recognitionMode] ?? Icons.camera_alt_rounded,
+      child: ColoredBox(
         color: hc ? Colors.black : Playful.nightDeep,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: hc ? AccessibilityUtils.getContrastColor(context) : Colors.white, width: hc ? 4 : 3),
-        boxShadow: hc ? null : [BoxShadow(color: _accent.withValues(alpha: 0.45), blurRadius: 26)],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -999,11 +1055,18 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                 ? _buildErrorState(hc)
                 : (_isInitialized ? _buildCameraPreview() : _loading()),
             if (_cameraErrorKey == null)
-              IgnorePointer(
-                child: CustomPaint(painter: _ViewfinderPainter(highContrast: hc)),
+              LensOverlay(
+                color: modeColor,
+                busy: _isProcessing,
+                searching: _isSearching,
+                searchFraction: searchFraction,
+                found: showFound,
               ),
-            if ((_isProcessing || _isSearching) && !hc && !Playful.reduceMotion(context))
+            if (_isProcessing && !hc && !Playful.reduceMotion(context))
               const IgnorePointer(child: _ScanLine()),
+            // Мало облаче: вклучено е и препознавање преку интернет.
+            if (_cameraErrorKey == null && _recognitionService.cloudEnabled)
+              Positioned(top: 28, right: 28, child: _onlineBadge(hc)),
             if (showFound && target != null)
               IgnorePointer(
                 child: Center(
@@ -1040,6 +1103,28 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Мала ознака (облаче) во аголот на визирот кога е вклучен Cloud Vision.
+  Widget _onlineBadge(bool hc) {
+    final label = 'camera.online_recognition'.tr();
+    return Semantics(
+      label: label,
+      child: Tooltip(
+        message: label,
+        excludeFromSemantics: true,
+        child: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: hc ? Colors.black : Colors.black.withValues(alpha: 0.45),
+            border: Border.all(color: Colors.white, width: hc ? 2 : 1.5),
+          ),
+          child: const Icon(Icons.cloud_outlined, size: 20, color: Colors.white),
         ),
       ),
     );
@@ -1120,10 +1205,11 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
         Center(
           child: searching
               ? _searchStopButton(hc)
-              : SoundOrb(
+              : ApertureShutterButton(
                   icon: Icons.travel_explore_rounded,
                   label: 'camera.search_start'.tr(),
                   onTap: _voiceListening ? null : _startSearch,
+                  color: _modeColors['search']!,
                   size: compact ? 76 : 96,
                 ),
         ),
@@ -1529,6 +1615,41 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
     );
   }
 
+  /// Иконата на режимот во мал „објектив“ (стаклен круг со прстен).
+  Widget _lensIcon(String mode, Color color, bool active, bool hc, Color fg) {
+    if (hc) return Icon(_modeIcons[mode], size: 34, color: fg);
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: const Alignment(-0.35, -0.4),
+          colors: [Color.lerp(color, Colors.white, 0.35)!, Color.lerp(color, Colors.black, 0.2)!, const Color(0xFF0B0F17)],
+          stops: const [0.0, 0.55, 1.0],
+        ),
+        border: Border.all(color: active ? Playful.ink : Colors.white, width: 3),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 6, offset: const Offset(0, 3))],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Icon(_modeIcons[mode], size: 28, color: Colors.white),
+          // Одблесок на стаклото.
+          Positioned(
+            top: 7,
+            left: 10,
+            child: Container(
+              width: 12,
+              height: 7,
+              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.45), borderRadius: BorderRadius.circular(6)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Плочка за режим - во својата боја; избраната е златна со бел раб.
   Widget _modeButton(String mode, String label, bool hc, {bool stacked = false}) {
     final isActive = _recognitionMode == mode;
@@ -1595,7 +1716,7 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(_modeIcons[mode], size: 34, color: fg),
+                          _lensIcon(mode, color, isActive, hc, fg),
                           const SizedBox(height: 4),
                           // Три во ред (низок екран) - натписот се смалува ако не собира.
                           FittedBox(
@@ -1611,40 +1732,6 @@ class _CameraRecognitionScreenState extends State<CameraRecognitionScreen> with 
       ),
     );
   }
-}
-
-/// Златни агли на визирот (како кај камера).
-class _ViewfinderPainter extends CustomPainter {
-  _ViewfinderPainter({required this.highContrast});
-
-  final bool highContrast;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = highContrast ? Colors.white : Playful.sun
-      ..strokeWidth = 6
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    const inset = 18.0;
-    final len = (size.shortestSide * 0.14).clamp(18.0, 48.0);
-    final l = inset, t = inset, r = size.width - inset, b = size.height - inset;
-    // горе-лево
-    canvas.drawLine(Offset(l, t), Offset(l + len, t), paint);
-    canvas.drawLine(Offset(l, t), Offset(l, t + len), paint);
-    // горе-десно
-    canvas.drawLine(Offset(r, t), Offset(r - len, t), paint);
-    canvas.drawLine(Offset(r, t), Offset(r, t + len), paint);
-    // долу-лево
-    canvas.drawLine(Offset(l, b), Offset(l + len, b), paint);
-    canvas.drawLine(Offset(l, b), Offset(l, b - len), paint);
-    // долу-десно
-    canvas.drawLine(Offset(r, b), Offset(r - len, b), paint);
-    canvas.drawLine(Offset(r, b), Offset(r, b - len), paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _ViewfinderPainter old) => old.highContrast != highContrast;
 }
 
 /// Златна линија што оди горе-долу низ визирот додека се анализира.

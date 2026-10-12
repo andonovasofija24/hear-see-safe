@@ -5,6 +5,11 @@ import 'package:google_mlkit_image_labeling/google_mlkit_image_labeling.dart';
 import 'package:image/image.dart' as img;
 
 import 'package:hear_and_see_safe/models/recognition_result.dart';
+import 'package:hear_and_see_safe/services/cloud_vision_service.dart';
+
+/// Една сурова ознака (англиско име со мали букви + доверба 0-1), од ML Kit
+/// или од Cloud Vision.
+typedef _RawLabel = ({String label, double confidence});
 
 /// Се фрла кога препознавањето не можело да заврши (нечитлива слика, модел
 /// не успеал да се вчита итн). Екранот го фаќа ова и покажува соодветна
@@ -36,7 +41,15 @@ abstract class ImageRecognitionService {
   /// бараниот предмет да се најде и кога не е најгоре во листата на ML Kit.
   /// Праг не се применува тука; екранот го споредува со
   /// [defaultConfidenceThreshold].
-  Future<Map<String, double>> recognizeConcepts({required XFile image});
+  ///
+  /// [useCloud]: дали да се праша и Cloud Vision (само ако е вклучено -
+  /// види [cloudEnabled]). Екранот го бара ова само за поими што ML Kit
+  /// не ги познава ([RecognitionVocabulary.cloudOnlyKeys]), и најмногу на
+  /// секои 2,4 s.
+  Future<Map<String, double>> recognizeConcepts({required XFile image, bool useCloud = false});
+
+  /// Дали е вклучено и онлајн препознавањето (Cloud Vision, има API клуч).
+  bool get cloudEnabled;
 
   /// Се повикува кога екранот се уништува, за да се ослободат ресурсите на
   /// моделот (на пр. затворање на ML Kit labeler-от).
@@ -64,6 +77,33 @@ abstract final class RecognitionVocabulary {
         for (final e in _clothingTypeToKey.entries)
           if (e.value == key) e.key,
       ];
+
+  /// Поими што ML Kit (основниот модел, 446 ознаки) НЕ ги препознава -
+  /// се наоѓаат само преку Cloud Vision (кога има API клуч).
+  static const Set<String> cloudOnlyKeys = {
+    'camera.object_house',
+    'camera.object_window',
+    'camera.object_chimney',
+    'camera.object_sea',
+    'camera.object_blanket',
+    'camera.object_tea',
+    'camera.object_comb',
+    'camera.object_light_switch',
+    'camera.object_earring',
+    'camera.object_toothbrush',
+    'camera.object_toothpaste',
+    'camera.object_toilet_paper',
+    'camera.object_bathtub',
+    'camera.object_toilet',
+    'camera.object_door',
+    'camera.object_photo',
+    'camera.object_fence',
+    'camera.object_tap',
+  };
+
+  /// Дали поимот (сите негови клучеви) може да се најде само преку Cloud.
+  static bool needsCloud(Iterable<String> keys) =>
+      keys.isNotEmpty && keys.every(cloudOnlyKeys.contains);
 }
 
 /// Имплементација преку Google ML Kit "Image Labeling" - модел кој работи
@@ -85,13 +125,22 @@ abstract final class RecognitionVocabulary {
 /// 'camera.error_unsupported_platform'). За тестирање на препознавањето
 /// мора да се користи вистински телефон или Android/iOS емулатор
 /// (`flutter run` без `-d chrome`, со поврзан уред/емулатор).
+///
+/// Дополнително (ако при компајлирање е зададен API клуч) се прашува и
+/// Google Cloud Vision ([CloudVisionService]) - паралелно со ML Kit, за
+/// поимите што ML Kit ги нема. Без клуч / без интернет - само ML Kit.
 class MlKitRecognitionService implements ImageRecognitionService {
   final ImageLabeler _labeler;
+  final CloudVisionService _cloud;
 
-  MlKitRecognitionService()
+  MlKitRecognitionService({CloudVisionService? cloud})
       : _labeler = ImageLabeler(
           options: ImageLabelerOptions(confidenceThreshold: 0.5),
-        );
+        ),
+        _cloud = cloud ?? CloudVisionService();
+
+  @override
+  bool get cloudEnabled => _cloud.isEnabled;
 
   @override
   Future<RecognitionResult> recognize({
@@ -106,8 +155,8 @@ class MlKitRecognitionService implements ImageRecognitionService {
   }
 
   @override
-  Future<Map<String, double>> recognizeConcepts({required XFile image}) async {
-    final labels = await _processLabels(image);
+  Future<Map<String, double>> recognizeConcepts({required XFile image, bool useCloud = false}) async {
+    final labels = await _allLabels(image, useCloud: useCloud);
     final found = <String, double>{};
     void note(String? key, double confidence) {
       if (key == null) return;
@@ -116,11 +165,42 @@ class MlKitRecognitionService implements ImageRecognitionService {
     }
 
     for (final label in labels) {
-      final description = label.label.toLowerCase();
-      note(_matchLabel(description, _objectToKey), label.confidence);
-      note(_matchLabel(description, _clothingTypeToKey), label.confidence);
+      note(_matchLabel(label.label, _objectToKey), label.confidence);
+      note(_matchLabel(label.label, _clothingTypeToKey), label.confidence);
     }
     return found;
+  }
+
+  /// ML Kit ознаките (сортирани опаѓачки), па по нив ознаките од Cloud
+  /// Vision (ако [useCloud] и е вклучено) - двете паралелно. Грешка кај
+  /// ML Kit се фрла веднаш ([RecognitionException]); Cloud никогаш не
+  /// фрла (при грешка / без мрежа - празно).
+  Future<List<_RawLabel>> _allLabels(XFile image, {required bool useCloud}) async {
+    final withCloud = useCloud && _cloud.isEnabled;
+    final results = await Future.wait<List<_RawLabel>>(
+      [
+        _processLabels(image).then(_sortedMlKit),
+        if (withCloud) _cloudLabels(image),
+      ],
+      eagerError: true,
+    );
+    return [for (final list in results) ...list];
+  }
+
+  static List<_RawLabel> _sortedMlKit(List<ImageLabel> labels) {
+    final out = [
+      for (final l in labels) (label: l.label.toLowerCase(), confidence: l.confidence),
+    ];
+    // Сортирано опаѓачки по доверба - ML Kit не гарантира редослед сам.
+    out.sort((a, b) => b.confidence.compareTo(a.confidence));
+    return out;
+  }
+
+  Future<List<_RawLabel>> _cloudLabels(XFile image) async {
+    final labels = await _cloud.labels(image.readAsBytes);
+    final out = [for (final l in labels) (label: l.label, confidence: l.confidence)];
+    out.sort((a, b) => b.confidence.compareTo(a.confidence));
+    return out;
   }
 
   /// ML Kit ознаки за сликата; грешките се претвораат во [RecognitionException].
@@ -147,40 +227,42 @@ class MlKitRecognitionService implements ImageRecognitionService {
     required XFile image,
     required String mode,
   }) async {
-    List<ImageLabel> labels;
-    try {
-      final inputImage = InputImage.fromFilePath(image.path);
-      labels = await _labeler.processImage(inputImage);
-    } on RecognitionException {
-      rethrow;
-    } catch (e) {
-      // Најчеста причина за грешка тука е обид за употреба на веб (пакетот
-      // нема веб-имплементација) - платформски исклучок кој ML Kit не го
-      // фаќа сам, па го препознаваме овде преку текстот на грешката.
-      final message = e.toString().toLowerCase();
-      if (message.contains('missingplugin') || message.contains('not implemented')) {
-        throw const RecognitionException('camera.error_unsupported_platform');
-      }
-      throw const RecognitionException('camera.error');
-    }
-
-    // Сортирано опаѓачки по доверба - ML Kit не гарантира редослед сам.
-    labels.sort((a, b) => b.confidence.compareTo(a.confidence));
+    // ML Kit (офлајн) + Cloud Vision (онлајн, ако има клуч) паралелно.
+    // Грешките на ML Kit (пр. веб -> 'camera.error_unsupported_platform')
+    // се претвораат во RecognitionException во _processLabels.
+    final labels = await _allLabels(image, useCloud: true);
 
     final dictionary = mode == 'clothing' ? _clothingTypeToKey : _objectToKey;
+
+    // Двата извора низ истиот речник -> клучеви; за секој клуч најголемата
+    // доверба. Подредено опаѓачки по доверба; при еднаква доверба - кој
+    // прв се појавил (прво ML Kit, па Cloud).
+    final merged = <String, double>{};
+    for (final label in labels) {
+      final key = _matchLabel(label.label, dictionary);
+      if (key == null) continue;
+      final prev = merged[key];
+      if (prev == null || label.confidence > prev) merged[key] = label.confidence;
+    }
+    final order = merged.keys.toList();
+    final ranked = [
+      for (var i = 0; i < order.length; i++) (key: order[i], confidence: merged[order[i]]!, index: i),
+    ]..sort((a, b) {
+        final byConfidence = b.confidence.compareTo(a.confidence);
+        return byConfidence != 0 ? byConfidence : a.index.compareTo(b.index);
+      });
 
     // Прво се бара конкретен предмет (пр. „куче“, „топка“); општите ознаки
     // („човек“, „рака“, „храна“, „соба“...) се земаат само ако нема ништо
     // поконкретно - ML Kit честопати ги става нив најгоре.
     ({String key, double confidence})? specific;
     ({String key, double confidence})? generic;
-    for (final label in labels) {
-      final key = _matchLabel(label.label.toLowerCase(), dictionary);
-      if (key == null) continue;
+    for (final entry in ranked) {
+      final key = entry.key;
       if (_genericKeys.contains(key)) {
-        generic ??= (key: key, confidence: label.confidence);
+        generic ??= (key: key, confidence: entry.confidence);
       } else {
-        specific ??= (key: key, confidence: label.confidence);
+        specific ??= (key: key, confidence: entry.confidence);
       }
       if (specific != null) break;
     }
@@ -196,7 +278,11 @@ class MlKitRecognitionService implements ImageRecognitionService {
     if (pick == null) {
       // Ништо сигурно од нашиот речник (никогаш не читаме сурово англиско
       // име наместо ова).
-      final best = specific?.confidence ?? generic?.confidence ?? (labels.isEmpty ? 0.0 : labels.first.confidence);
+      var top = 0.0;
+      for (final label in labels) {
+        if (label.confidence > top) top = label.confidence;
+      }
+      final best = specific?.confidence ?? generic?.confidence ?? top;
       return RecognitionResult(labelKey: 'camera.uncertain', confidence: best, mode: mode);
     }
 
@@ -222,15 +308,25 @@ class MlKitRecognitionService implements ImageRecognitionService {
   /// Kit понекогаш враќа подолги имиња, пр. „stuffed toy“). Само цели
   /// зборови - „cat“ НЕ смее да се најде во „cattle“, ниту „cap“ во
   /// „cappuccino“.
+  ///
+  /// Ознаките во [_ignoredLabels] никогаш не се совпаѓаат, а имињата во
+  /// [_exactOnlyLabels] важат само како точно совпаѓање (Cloud Vision враќа
+  /// многу подолги имиња: „home appliance“ не е куќа, „sea lion“ не е море).
   String? _matchLabel(String description, Map<String, String> dictionary) {
+    if (_ignoredLabels.contains(description)) return null;
     final exact = dictionary[description];
     if (exact != null) return exact;
     for (final entry in dictionary.entries) {
-      final pattern = RegExp('(^|[^a-z])${RegExp.escape(entry.key)}([^a-z]|\$)');
+      if (_exactOnlyLabels.contains(entry.key)) continue;
+      final pattern = _wordPatterns[entry.key] ??=
+          RegExp('(^|[^a-z])${RegExp.escape(entry.key)}([^a-z]|\$)');
       if (pattern.hasMatch(description)) return entry.value;
     }
     return null;
   }
+
+  /// Кеш на регуларните изрази за [_matchLabel] (по едно англиско име).
+  static final Map<String, RegExp> _wordPatterns = {};
 
   // ---------------------------------------------------------------------
   // Бои - локална детекција на доминантна боја (без мрежа, без модел).
@@ -327,7 +423,10 @@ class MlKitRecognitionService implements ImageRecognitionService {
   }
 
   @override
-  void dispose() => _labeler.close();
+  void dispose() {
+    _cloud.dispose();
+    _labeler.close();
+  }
 }
 
 // ===========================================================================
@@ -556,6 +655,74 @@ const Map<String, String> _objectToKey = {
   'hair': 'camera.object_hair',
   'baby': 'camera.object_baby',
   'person': 'camera.object_person',
+  // --- Само преку Cloud Vision (ML Kit ги нема; види
+  // RecognitionVocabulary.cloudOnlyKeys). На крајот, за постоечките имиња
+  // да имаат предност кај совпаѓање по збор („house cat“ -> мачка).
+  'house': 'camera.object_house',
+  'home': 'camera.object_house',
+  'cottage': 'camera.object_house',
+  'villa': 'camera.object_house',
+  'window': 'camera.object_window',
+  'sash window': 'camera.object_window',
+  'chimney': 'camera.object_chimney',
+  'sea': 'camera.object_sea',
+  'ocean': 'camera.object_sea',
+  'coastal and oceanic landforms': 'camera.object_sea',
+  'wind wave': 'camera.object_sea',
+  'blanket': 'camera.object_blanket',
+  'duvet': 'camera.object_blanket',
+  'quilt': 'camera.object_blanket',
+  'duvet cover': 'camera.object_blanket',
+  'comforter': 'camera.object_blanket',
+  'tea': 'camera.object_tea',
+  'teacup': 'camera.object_tea',
+  'teapot': 'camera.object_tea', // нема поблизок поим (чајник)
+  'comb': 'camera.object_comb',
+  'light switch': 'camera.object_light_switch',
+  'switch': 'camera.object_light_switch',
+  'electrical switch': 'camera.object_light_switch',
+  'earrings': 'camera.object_earring',
+  'earring': 'camera.object_earring',
+  'toothbrush': 'camera.object_toothbrush',
+  'toothpaste': 'camera.object_toothpaste',
+  'toilet paper': 'camera.object_toilet_paper',
+  'toilet roll': 'camera.object_toilet_paper',
+  'bathtub': 'camera.object_bathtub',
+  'bath': 'camera.object_bathtub',
+  'toilet': 'camera.object_toilet',
+  'toilet seat': 'camera.object_toilet',
+  'door': 'camera.object_door',
+  'home door': 'camera.object_door',
+  'photograph': 'camera.object_photo',
+  'picture frame': 'camera.object_photo',
+  'fence': 'camera.object_fence',
+  'picket fence': 'camera.object_fence',
+  'home fence': 'camera.object_fence',
+  'chain-link fencing': 'camera.object_fence',
+  'tap': 'camera.object_tap',
+  'faucet': 'camera.object_tap',
+};
+
+/// Кратки / многузначни имиња што важат САМО како точна ознака, не како
+/// збор во подолго име („home appliance“, „sea lion“, „cottage cheese“,
+/// „nintendo switch“, „bath toy“, „tap dance“).
+const Set<String> _exactOnlyLabels = {
+  'home',
+  'cottage',
+  'sea',
+  'switch',
+  'bath',
+  'tap',
+};
+
+/// Ознаки што содржат збор од речникот, но значат нешто друго - се
+/// игнорираат („window blind“ е ролетна, не прозорец).
+const Set<String> _ignoredLabels = {
+  'window covering',
+  'window blind',
+  'window treatment',
+  'door handle',
+  'building material',
 };
 
 /// Општи предмети - се земаат само ако нема ништо поконкретно на сликата.
