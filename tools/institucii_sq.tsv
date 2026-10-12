@@ -1,0 +1,24 @@
+institution_city_hall_name	Komuna
+institution_city_hall_explanation	Komuna. Ndërtesa ku punojnë njerëzit që kujdesen për qytetin. Në komunë nxirren dokumente, për shembull kur lind një bebe, dhe vendoset për parqet, rrugët dhe shkollat.
+institution_city_hall_desc	Ndërtesë ku kujdesen për rrugët, parqet dhe dokumentet e qytetarëve.
+institution_hospital_name	Spitali
+institution_hospital_explanation	Spitali. Vend ku mjekët dhe infermierët kurojnë të sëmurët. Nëse dikush është lënduar rëndë ose është shumë i sëmurë, thirret ndihma e shpejtë në 194 ose 112.
+institution_hospital_desc	Vend ku mjekët dhe infermierët kurojnë të sëmurët dhe të lënduarit.
+institution_school_name	Shkolla
+institution_school_explanation	Shkolla. Vend ku fëmijët mësojnë të lexojnë, të shkruajnë dhe të llogarisin. Në shkollë gjen shokë, ndërsa mësuesit ndihmojnë çdo fëmijë të mësojë në mënyrën e vet.
+institution_school_desc	Vend ku fëmijët mësojnë me ndihmën e mësuesve.
+institution_library_name	Biblioteka
+institution_library_explanation	Biblioteka. Vend me shumë libra që mund të huazohen dhe të lexohen. Me kartë anëtarësie huazon libra falas, dhe në shumë biblioteka ka libra në Braille dhe libra me zë.
+institution_library_desc	Vend ku huazojmë libra dhe lexojmë në qetësi.
+institution_police_name	Stacioni i policisë
+institution_police_explanation	Stacioni i policisë. Vend ku punojnë policët që kujdesen për sigurinë tonë. Nëse je i humbur ose në rrezik, kërko ndihmë nga një polic ose thirr 192 ose 112.
+institution_police_desc	Vend nga ku policët nisen për t'i mbajtur njerëzit të sigurt.
+institution_fire_station_name	Stacioni i zjarrfikësve
+institution_fire_station_explanation	Stacioni i zjarrfikësve. Vend ku zjarrfikësit dhe automjetet e tyre të kuqe presin për të ndihmuar. Në rast zjarri dil jashtë, mos u fshih dhe thirr 193 ose 112.
+institution_fire_station_desc	Vend ku presin automjete të kuqe dhe njerëz që shuajnë zjarre.
+institution_post_office_name	Posta
+institution_post_office_explanation	Posta. Vend nga ku dërgohen letra dhe pako. Në letër shkruhet adresa dhe ngjitet pulla, ndërsa postieri e sjell deri te dera.
+institution_post_office_desc	Vend nga ku dërgojmë letra dhe pako.
+institution_museum_name	Muzeu
+institution_museum_explanation	Muzeu. Vend ku ruhen sende të vjetra e të çmuara dhe vepra arti. Në muze shikojmë me kujdes dhe në qetësi; në disa muze ka edhe sende që lejohet t'i prekësh.
+institution_museum_desc	Vend ku ruhen sende të vjetra e të çmuara që t'i shohim.
