@@ -1254,8 +1254,15 @@
     "new_record": "New record: {} hits!"
   },
   "melody": {
+  "confirm": "Confirm",
+  "clear": "Clear all",
+  "undo": "Undo",
+  "right_order": "The right order:",
+  "arrange_prompt": "Arrange the sequence in the field: tap the cards in order or say their names in order (e.g. “cat, dog, rain”). Tap a card in the field to take it out.",
+  "belt_listen_hint": "Listen! Before going into the ear, each card plays its sound.",
+  "belt_start_hint": "Tap “Start listening” – the cards of the sequence will move toward the ear.",
     "explanation_title": "How to play",
-    "explanation_text": "The game has 20 rounds in total. You will hear a sequence of sounds, one after another - for example cat, cat, dog, car. First tap Start listening. Then tap the same sounds below in the same order you heard them. Each round can have more sounds in the sequence - from 2 up to 7. At the end you'll see how many rounds you got right and how many wrong.",
+    "explanation_text": "The game has 20 rounds. Tap “Start listening”: the cards of the sequence move along the curved ribbon toward the ear, and before each one goes into the ear you hear its sound. Remember the order. Then arrange the sequence in the field - tap the cards in order, or say their names in order and the field fills itself. If you make a mistake, tap a card in the field to take it out or tap “Undo”. Finally tap “Confirm” or say “confirm”. The sequence grows from 2 to 7 sounds. You can hear it again with “Listen again”.",
     "explanation_toggle_open": "Show explanation",
     "explanation_toggle_close": "Hide explanation",
     "start_listening": "Start listening",

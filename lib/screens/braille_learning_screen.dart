@@ -1091,13 +1091,19 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
       );
     }
 
+    // Звук за точно/погрешно, па се кажува и која точка е притисната.
     if (!isCorrect) {
-      await _playPongEffect('miss.mp3');
+      unawaited(_playPongEffect('miss.mp3'));
+      await Future.delayed(const Duration(milliseconds: 220));
+      await _playClipAwaitingCompletion('dot_${dotIndex + 1}');
       return;
     }
 
     setState(() => _addDot(_wordCorrectDotsHit, pair, dotIndex));
-    await _playPongEffect('hit.mp3');
+    unawaited(_playPongEffect('hit.mp3'));
+    await Future.delayed(const Duration(milliseconds: 220));
+    await _playClipAwaitingCompletion('dot_${dotIndex + 1}');
+    if (!mounted || _view != _View.wordRound) return;
     if (!_pairsComplete(tok, _wordCorrectDotsHit)) {
       _autoAdvancePair(tok, _wordCorrectDotsHit);
       return;
@@ -1638,8 +1644,61 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
 
   /// Гласовни опции за екранот за избор на категорија. Броевите се
   /// препознаваат и како цифра („група 1“) и како збор („група еден“).
+  // Шесточката на главното мени со глас: „точка 1“ … „точка 6“ (бројка,
+  // број или реден број, на трите јазици) или името на точката
+  // („вовед“, „тајни“, „букви и броеви“, „знаци“, „потсетник“, „игри“).
+  static const List<String> _kwDotWord = ['точка', 'точката', 'точки', 'dot', 'point', 'pika', 'pikë', 'pike', 'pikën', 'piken'];
+  static const List<List<String>> _kwDotNumber = [
+    ['1', 'еден', 'една', 'прва', 'првата', 'one', 'first', 'një', 'nje', 'parë', 'pare', 'e para'],
+    ['2', 'два', 'две', 'втора', 'втората', 'two', 'second', 'dy', 'dytë', 'dyte'],
+    ['3', 'три', 'трета', 'третата', 'three', 'third', 'tre', 'tretë', 'trete'],
+    ['4', 'четири', 'четврта', 'четвртата', 'four', 'fourth', 'for', 'katër', 'kater', 'katërt', 'katert'],
+    ['5', 'пет', 'петта', 'петтата', 'five', 'fifth', 'pesë', 'pese', 'pestë', 'peste'],
+    ['6', 'шест', 'шеста', 'шестата', 'six', 'sixth', 'gjashtë', 'gjashte'],
+  ];
+  static const List<List<String>> _kwSixTitles = [
+    ['вовед', 'воведот', 'introduction', 'intro', 'hyrje', 'hyrja'],
+    ['тајни', 'тајните', 'тајна', 'secrets', 'secret', 'sekrete', 'sekretet', 'sekret'],
+    ['букви и броеви', 'букви и бројки', 'букви', 'буквите', 'letters and numbers', 'letters', 'shkronja dhe numra', 'shkronja', 'shkronjat'],
+    ['знаци', 'знаците', 'signs', 'shenja', 'shenjat'],
+    ['потсетник', 'потсетникот', 'reference', 'reminder', 'përkujtues', 'perkujtues', 'përkujtuesi'],
+    ['игри', 'игрите', 'games', 'lojëra', 'lojera', 'lojërat'],
+  ];
+
+  /// Која точка (1-6) е кажана: „точка 3“, „трета точка“, „dot three“...
+  static int? _spokenSixDot(String t) {
+    final tokens = t.toLowerCase().split(RegExp(r'[\s,.!?;:]+')).where((w) => w.isNotEmpty).toList();
+    if (!tokens.any(_kwDotWord.contains)) return null;
+    for (var d = 0; d < 6; d++) {
+      if (tokens.any(_kwDotNumber[d].contains)) return d + 1;
+    }
+    return null;
+  }
+
+  List<VoiceCategoryOption> _sixMenuVoiceOptions() {
+    // Само во менијата - во играта „точка 3“ не смее да води во менито.
+    const menus = {_View.categorySelect, _View.menuLetters, _View.menuSigns, _View.menuGames, _View.introPage, _View.secrets};
+    if (!menus.contains(_view)) return const [];
+    final items = _sixMenuItems();
+    return [
+      for (var i = 0; i < 6; i++)
+        VoiceCategoryOption(
+          keywords: const [],
+          beforeGlobal: true,
+          matches: (t) => _spokenSixDot(t) == i + 1,
+          onSelected: items[i].onTap,
+        ),
+      for (var i = 0; i < 6; i++)
+        VoiceCategoryOption(
+          keywords: [..._kwSixTitles[i], items[i].title.toLowerCase()],
+          onSelected: items[i].onTap,
+        ),
+    ];
+  }
+
   List<VoiceCategoryOption> _categoryVoiceOptions() {
-    final options = <VoiceCategoryOption>[];
+    // Прво точките од шесточката (и нивните имиња), па групите и игрите.
+    final options = <VoiceCategoryOption>[..._sixMenuVoiceOptions()];
     final groupKeywords = <List<String>>[];
     for (var i = 0; i < _groups.length; i++) {
       final key = _groups[i].titleKey;

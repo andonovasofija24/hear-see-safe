@@ -1254,8 +1254,15 @@
     "new_record": "Rekord i ri: {} goditje!"
   },
   "melody": {
+  "confirm": "Konfirmo",
+  "clear": "Fshi të gjitha",
+  "undo": "Kthe",
+  "right_order": "Radha e saktë:",
+  "arrange_prompt": "Rendit vargun në fushë: prek kartat me radhë ose thuaj emrat me radhë (p.sh. “mace, qen, shi”). Prek një kartë në fushë për ta hequr.",
+  "belt_listen_hint": "Dëgjo! Para se të hyjë në vesh, çdo kartë luan tingullin e saj.",
+  "belt_start_hint": "Prek “Fillo të dëgjosh” – kartat e vargut do të nisen drejt veshit.",
     "explanation_title": "Si luhet",
-    "explanation_text": "Loja ka gjithsej 20 raunde. Do të dëgjosh një sekuencë tingujsh, njëri pas tjetrit - për shembull mace, mace, qen, makinë. Fillimisht prek Fillo të dëgjosh. Pastaj prek të njëjtët tinguj më poshtë me të njëjtën radhë siç i dëgjove. Çdo raund mund të ketë më shumë tinguj në sekuencë - nga 2 deri në 7. Në fund do të shohësh sa raunde ke saktë dhe sa gabim.",
+    "explanation_text": "Loja ka 20 raunde. Prek “Fillo të dëgjosh”: kartat e vargut nisen nëpër shiritin e lakuar drejt veshit dhe para se secila të hyjë në vesh dëgjohet tingulli i saj. Mbaje mend radhën. Pastaj rendit vargun në fushë - prek kartat me radhë, ose thuaj emrat e tyre me radhë dhe fusha mbushet vetë. Nëse gabon, prek një kartë në fushë për ta hequr ose prek “Kthe”. Në fund prek “Konfirmo” ose thuaj “konfirmo”. Vargu rritet nga 2 deri në 7 tinguj. Mund ta dëgjosh përsëri me “Dëgjo përsëri”.",
     "explanation_toggle_open": "Shfaq shpjegimin",
     "explanation_toggle_close": "Fshih shpjegimin",
     "start_listening": "Fillo të dëgjosh",
