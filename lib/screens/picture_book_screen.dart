@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -40,7 +41,7 @@ class PictureBookScreen extends StatefulWidget {
 
 enum _View { categorySelect, stage, itemDetail, quiz, quizResult }
 
-class _PictureBookScreenState extends State<PictureBookScreen> {
+class _PictureBookScreenState extends State<PictureBookScreen> with TickerProviderStateMixin {
   late VoiceAssistantService _voiceAssistant;
   PageController? _itemPageController;
   final AudioPlayer _voicePlayer = AudioPlayer();
@@ -198,6 +199,14 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   _View _view = _View.categorySelect;
   int _categoryIndex = 0;
+
+  /// Отворената страница во менито-книга и насоката на прелистување.
+  int _bookPage = 0;
+  bool _bookForward = true;
+  int _bookFrom = 0;
+  bool _bookFlipping = false;
+  late final AnimationController _flipCtl =
+      AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
   int _itemIndex = 0;
   bool _explanationOpen = false;
   /// Дали моментално свири звукот на предметот (за копчето play/pause).
@@ -319,6 +328,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _voicePlayer.dispose();
     _effectsPlayer.dispose();
     _flipPlayer.dispose();
+    _flipCtl.dispose();
     _itemPageController?.dispose();
     _effectsStateSub.cancel();
     _clueProgress.dispose();
@@ -437,6 +447,7 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     _visitedByCategory.putIfAbsent(_categories[index].id, () => {});
     setState(() {
       _categoryIndex = index;
+      _bookPage = index;
       _stageIndex = 0;
       _view = _View.stage;
     });
@@ -1047,8 +1058,6 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final side = ((width - 980) / 2).clamp(20.0, double.infinity);
-        const gap = 18.0;
-        final compact = width - side * 2 < 560;
         return ListView(
           padding: EdgeInsets.fromLTRB(side, 20, side, 28),
           children: [
@@ -1073,10 +1082,8 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            for (var i = 0; i < _categories.length; i++) ...[
-              if (i > 0) const SizedBox(height: gap),
-              PopIn(index: 1 + i, child: _categoryCard(context, _categories[i], contrast, hc, compact: compact)),
-            ],
+            // Магична книга со обележувачи - една страница по категорија.
+            _buildBook(context, width - side * 2, hc),
           ],
         );
       },
@@ -1085,36 +1092,21 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
 
   /// Категориите со глас - во менито со категории, но и од внатре (горе
   /// десно / кај сликовницата), за директно префрлање меѓу категориите.
-  List<VoiceCategoryOption> _categoryVoiceOptions() => [
-      VoiceCategoryOption(
-        keywords: const ['животни', 'animals', 'kafshët', 'kafshet'],
-        onSelected: () => _selectCategoryByVoice(0),
-      ),
-      VoiceCategoryOption(
-        keywords: const ['природа', 'nature', 'natyra'],
-        onSelected: () => _selectCategoryByVoice(1),
-      ),
-      VoiceCategoryOption(
-        keywords: const [
-          'секојдневни предмети',
-          'предмети',
-          'everyday objects',
-          'objects',
-          'objekte të përditshme',
-          'objekte te perditshme',
-          'objekte',
-        ],
-        onSelected: () => _selectCategoryByVoice(2),
-      ),
-      VoiceCategoryOption(
-        keywords: const ['вселена', 'space', 'hapësira', 'hapesira'],
-        onSelected: () => _selectCategoryByVoice(3),
-      ),
-      VoiceCategoryOption(
-        keywords: const ['музика', 'music', 'muzika'],
-        onSelected: () => _selectCategoryByVoice(4),
-      ),
+  List<VoiceCategoryOption> _categoryVoiceOptions() {
+    int idx(String id) => _categories.indexWhere((c) => c.id == id);
+    VoiceCategoryOption opt(String id, List<String> kws) =>
+        VoiceCategoryOption(keywords: kws, onSelected: () => _selectCategoryByVoice(idx(id)));
+    return [
+      opt('institutions', const ['институции', 'институција', 'institutions', 'institution', 'institucionet', 'institucione']),
+      opt('cultures', const ['култури', 'културите', 'култура', 'cultures', 'culture', 'kulturat', 'kultura']),
+      opt('nutrition', const ['исхрана', 'храна', 'nutrition', 'food', 'ushqyerja', 'ushqimi', 'ushqim']),
+      opt('animals', const ['животни', 'animals', 'kafshët', 'kafshet']),
+      opt('nature', const ['природа', 'nature', 'natyra']),
+      opt('objects', const ['секојдневни предмети', 'предмети', 'everyday objects', 'objects', 'objekte të përditshme', 'objekte te perditshme', 'objekte']),
+      opt('space', const ['вселена', 'space', 'hapësira', 'hapesira']),
+      opt('music', const ['музика', 'music', 'muzika']),
     ];
+  }
 
   Widget _buildExplanationButton(Color contrast) {
     return PlayfulExplainButton(
@@ -1126,133 +1118,612 @@ class _PictureBookScreenState extends State<PictureBookScreen> {
     );
   }
 
-  Widget _categoryCard(BuildContext context, PictureBookCategory cat, Color contrast, bool hc, {bool compact = false}) {
-    final index = _categories.indexOf(cat);
-    final seen = _visitedByCategory[cat.id] ?? const <String>{};
-    final visitedCount = seen.length;
-    final total = cat.items.length;
-    final allSeen = visitedCount >= total;
-    final deep = Color.lerp(cat.color, Colors.black, 0.35)!;
-    final fg = hc ? const Color(0xFFFFFF00) : Colors.white;
-    final iconBox = compact ? 72.0 : 100.0;
-    final catIcon = Container(
-      width: iconBox,
-      height: iconBox,
-      decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : Colors.white),
-      child: Icon(cat.icon, color: hc ? const Color(0xFFFFFF00) : deep, size: compact ? 42 : 58),
-    );
-    final arrowBox = compact ? 52.0 : 60.0;
-    final arrow = Container(
-      width: arrowBox,
-      height: arrowBox,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: allSeen ? const Color(0xFF16A34A) : Colors.white.withValues(alpha: hc ? 0.1 : 0.22),
-        border: Border.all(color: Colors.white, width: 2),
-      ),
-      child: Icon(allSeen ? Icons.check_rounded : Icons.arrow_forward_rounded, color: Colors.white, size: 36),
-    );
-    final details = ExcludeSemantics(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  // ---------------------------------------------------------------------
+  // Мени „Магична книга“: шарена детска книга со обележувачи. Секоја
+  // категорија е една страница (на компјутер раширени два листа): лево
+  // илустрација на светот, името и напредокот; десно поимите „искокнуваат“
+  // како во расклоплива сликовница и големо копче „Влези“.
+  // ---------------------------------------------------------------------
+
+  void _turnBookPage(int index) {
+    if (_bookFlipping || index < 0 || index >= _categories.length || index == _bookPage) return;
+    _playFlipSound();
+    if (Playful.reduceMotion(context)) {
+      setState(() => _bookPage = index);
+      return;
+    }
+    setState(() {
+      _bookFrom = _bookPage;
+      _bookForward = index > _bookPage;
+      _bookPage = index;
+      _bookFlipping = true;
+    });
+    _flipCtl.forward(from: 0).whenComplete(() {
+      if (mounted) setState(() => _bookFlipping = false);
+    });
+  }
+
+  Widget _buildBook(BuildContext context, double width, bool hc) {
+    final reduce = Playful.reduceMotion(context);
+    final page = _bookPage.clamp(0, _categories.length - 1);
+    final cat = _categories[page];
+    final wide = width >= 760;
+    const yellow = Color(0xFFFFFF00);
+    final cover = Color.lerp(cat.color, Colors.black, 0.35)!;
+
+    // Обележувачите: шарени јазичиња што висат од горниот раб на книгата.
+    final tabs = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(cat.titleKey.tr(), style: GoogleFonts.lexend(fontSize: 30 * _kPbText, fontWeight: FontWeight.w800, color: fg, height: 1.15)),
-          const SizedBox(height: 12),
-          // Сликовниците од категоријата - прегледаните светат.
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (final item in cat.items)
-                Opacity(
-                  opacity: seen.contains(item.id) ? 1.0 : 0.45,
-                  child: Text(item.emoji, style: const TextStyle(fontSize: 32)),
+          for (var i = 0; i < _categories.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Semantics(
+                button: true,
+                selected: i == page,
+                label: _categories[i].titleKey.tr(),
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    onTap: () => _turnBookPage(i),
+                    child: AnimatedContainer(
+                      duration: Duration(milliseconds: reduce ? 0 : 220),
+                      width: i == page ? 66 : 54,
+                      height: i == page ? 74 : 58,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: hc ? Colors.black : _categories[i].color,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                        border: Border.all(
+                          color: hc ? (i == page ? yellow : Colors.white) : Colors.white.withValues(alpha: i == page ? 1 : 0.6),
+                          width: i == page ? 3 : 2,
+                        ),
+                        boxShadow: hc ? null : [BoxShadow(color: Colors.black.withValues(alpha: 0.35), blurRadius: 6, offset: const Offset(0, -2))],
+                      ),
+                      child: Icon(_categories[i].icon, color: hc ? (i == page ? yellow : Colors.white) : Colors.white, size: i == page ? 36 : 28),
+                    ),
+                  ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: total == 0 ? 0 : visitedCount / total,
-              minHeight: 11,
-              backgroundColor: Colors.white.withValues(alpha: 0.25),
-              valueColor: AlwaysStoppedAnimation(hc ? const Color(0xFFFFFF00) : Playful.sun),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text('$visitedCount / $total ${_t('seen')}',
-              style: GoogleFonts.lexend(fontSize: 16 * _kPbText, fontWeight: FontWeight.w600, color: fg)),
         ],
       ),
     );
-    // Категориите НЕ се заклучуваат - секогаш достапни за допир; прогресот
-    // (прегледано) се прикажува само визуелно.
-    return Semantics(
-      label: '${cat.titleKey.tr()}. $total ${_t('items_count')}. $visitedCount ${_t('seen')}.',
-      button: true,
-      child: PressableScale(
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(28),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(28),
-            onTap: () => _enterCategory(index),
-            child: Ink(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                gradient: hc ? null : LinearGradient(colors: [cat.color, deep], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                color: hc ? Colors.black : null,
-                border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
-                boxShadow: hc ? null : [BoxShadow(color: cat.color.withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 10))],
+
+    // Телото на книгата: вистинско 3D прелистување (компјутер - раширена
+    // книга; телефон - тефтер со спирала горе).
+    // Телото на книгата: вистинско 3D прелистување (компјутер - раширена
+    // книга; телефон - тефтер со спирала горе).
+    final body = GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      // Повлекување лево = следна страница, десно = претходна.
+      onHorizontalDragEnd: (d) {
+        final v = d.primaryVelocity ?? 0;
+        if (v < -200) _turnBookPage(page + 1);
+        if (v > 200) _turnBookPage(page - 1);
+      },
+      child: wide ? _bookSpread(hc, cover) : _notebook(hc, cover),
+    );
+    final coverEdge = Color.lerp(cover, Colors.black, 0.45)!;
+
+    // Целата книга лежи малку навалена (горниот раб подалеку), а корицата
+    // има видлива дебелина под себе - така изгледа како предмет на маса.
+    final book = Transform(
+      alignment: Alignment.bottomCenter,
+      transform: Matrix4.identity()
+        ..setEntry(3, 2, 0.0008)
+        ..rotateX(reduce ? 0 : -0.16),
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: reduce ? 0 : 400),
+        padding: EdgeInsets.fromLTRB(wide ? 18 : 14, wide ? 14 : 30, wide ? 18 : 14, wide ? 16 : 22),
+        decoration: BoxDecoration(
+          color: hc ? Colors.black : cover,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.85), width: 3),
+          boxShadow: hc ? null : [
+            // Дебелина на корицата (тврд картон).
+            BoxShadow(color: coverEdge, offset: const Offset(0, 10)),
+            const BoxShadow(color: Color(0x99000000), blurRadius: 30, offset: Offset(0, 24)),
+            BoxShadow(color: cat.color.withValues(alpha: 0.4), blurRadius: 34),
+          ],
+        ),
+        child: body,
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        tabs,
+        book,
+        const SizedBox(height: 22),
+        // Листање: претходна / следна страница.
+        Row(
+          children: [
+            _bookArrow(Icons.arrow_back_rounded, 'picture_book.previous_item'.tr(), page > 0, () => _turnBookPage(page - 1), hc),
+            Expanded(
+              child: Text('${page + 1} / ${_categories.length}', textAlign: TextAlign.center,
+                style: GoogleFonts.lexend(fontSize: 18 * _kPbText, fontWeight: FontWeight.w800,
+                  color: hc ? yellow : Colors.white)),
+            ),
+            _bookArrow(Icons.arrow_forward_rounded, 'picture_book.next_item'.tr(), page < _categories.length - 1, () => _turnBookPage(page + 1), hc),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// Хартија за страница (сенка кон рбетот / спиралата).
+  BoxDecoration _pageDeco(bool hc, {required bool left, bool top = false}) => BoxDecoration(
+    color: hc ? Colors.black : null,
+    gradient: hc ? null : LinearGradient(
+      begin: top ? Alignment.topCenter : (left ? Alignment.centerRight : Alignment.centerLeft),
+      end: top ? Alignment.bottomCenter : (left ? Alignment.centerLeft : Alignment.centerRight),
+      colors: const [Color(0xFFD8CFBA), Color(0xFFFFFDF7), Color(0xFFFFFDF7), Color(0xFFF0E9DA)],
+      stops: const [0.0, 0.13, 0.9, 1.0],
+    ),
+    border: Border.all(color: hc ? Colors.white : const Color(0xFFD9D0BC), width: hc ? 2 : 1),
+  );
+
+  /// Содржина со најмала висина [minH]: ако не собира, се смалува.
+  Widget _fitPage(Widget child, double w, double minH) => FittedBox(
+    fit: BoxFit.scaleDown,
+    alignment: Alignment.topCenter,
+    child: SizedBox(
+      width: max(10.0, w),
+      child: ConstrainedBox(constraints: BoxConstraints(minHeight: max(0.0, minH)), child: child),
+    ),
+  );
+
+  /// Еден лист од раширената книга со фиксна големина.
+  /// Десниот лист: поимите горе, „Влези“ најдолу.
+  Widget _leafBox(PictureBookCategory c, bool hc, {required bool left, required double w, required double h, bool pop = true}) => Container(
+    width: w,
+    height: h,
+    decoration: _pageDeco(hc, left: left),
+    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+    child: _fitPage(
+      left
+          ? _bookLeaf(c, hc, left: true, bare: true)
+          : Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [_leafItemsGrid(c, hc, pop: pop), const SizedBox(height: 16), _leafEnterButton(c, hc)],
+            ),
+      w - 32,
+      h - 30,
+    ),
+  );
+
+  /// Страница од тефтерот: светот горе, поимите под него, „Влези“ најдолу.
+  Widget _notebookPage(PictureBookCategory c, bool hc, double w, double h, {bool pop = true}) => Container(
+    width: w,
+    height: h,
+    decoration: _pageDeco(hc, left: false, top: true),
+    padding: const EdgeInsets.fromLTRB(14, 24, 14, 14),
+    child: _fitPage(
+      Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            _bookLeaf(c, hc, left: true, bare: true),
+            const SizedBox(height: 16),
+            _leafItemsGrid(c, hc, pop: pop),
+          ]),
+          const SizedBox(height: 16),
+          _leafEnterButton(c, hc),
+        ],
+      ),
+      w - 28,
+      h - 38,
+    ),
+  );
+
+  /// Задната страна на лист во тефтерот - празна хартија со линии.
+  Widget _blankBack(bool hc, double w, double h) => Container(
+    width: w,
+    height: h,
+    decoration: _pageDeco(hc, left: false, top: true),
+    child: hc ? null : CustomPaint(painter: _RuledPaperPainter()),
+  );
+
+  static const double _flipPerspective = 0.0016;
+
+  /// Куп листови под страницата - дебелината на книгата/тефтерот.
+  /// [dx], [dy] - во која насока се гледаат рабовите.
+  List<Widget> _pageStack(bool hc, int count, double w, double h, double x, double y, double dx, double dy) => [
+    for (var i = count; i >= 1; i--)
+      Positioned(
+        left: x + dx * i,
+        top: y + dy * i,
+        width: w,
+        height: h,
+        child: DecoratedBox(decoration: BoxDecoration(
+          color: hc ? Colors.black : Color.lerp(const Color(0xFFFFFDF7), const Color(0xFFBFB49C), i / (count + 1)),
+          border: Border.all(color: hc ? Colors.white : const Color(0xFFB8AD95), width: 1),
+        )),
+      ),
+  ];
+
+  /// Лист што се врти: една цела (крута) страница што се крева кон
+  /// гледачот околу рбетот/спиралата. Предната страна се гледа до 90°,
+  /// потоа задната (огледално превртена за да се чита правилно).
+  /// [vertical] = тефтер (оска горе); инаку книга (оска лево или десно).
+  Widget _turningLeaf({
+    required Widget front,
+    required Widget back,
+    required double angle,
+    required bool vertical,
+    bool hingeLeft = true,
+  }) {
+    final showBack = cos(angle) < 0;
+    final face = showBack
+        ? Transform(
+            alignment: Alignment.center,
+            transform: vertical ? Matrix4.rotationX(pi) : Matrix4.rotationY(pi),
+            child: back,
+          )
+        : front;
+    // Потемно кога листот е накосо, посветло кога е исправен кон нас.
+    final dark = (1 - cos(angle).abs()) * 0.3;
+    final m = Matrix4.identity()..setEntry(3, 2, _flipPerspective);
+    if (vertical) {
+      m.rotateX(angle);
+    } else {
+      m.rotateY(angle);
+    }
+    return Transform(
+      alignment: vertical ? Alignment.topCenter : (hingeLeft ? Alignment.centerLeft : Alignment.centerRight),
+      transform: m,
+      child: Stack(fit: StackFit.expand, children: [
+        face,
+        IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: dark))),
+      ]),
+    );
+  }
+
+  /// Раширена книга: лист што се крева од рбетот кон нас и се превртува
+  /// на другата страна (напред: десниот лист оди налево; назад: левиот
+  /// оди надесно). Под листовите се гледа купот страници.
+  Widget _bookSpread(bool hc, Color cover) {
+    final cat = _categories[_bookPage.clamp(0, _categories.length - 1)];
+    final from = _categories[_bookFrom.clamp(0, _categories.length - 1)];
+    const h = 470.0;
+    const spine = 14.0;
+    final int leftPages = 2 + min<int>(4, _bookPage);
+    final int rightPages = 2 + min<int>(4, _categories.length - 1 - _bookPage);
+    return LayoutBuilder(builder: (context, cons) {
+      const x0 = 10.0;
+      final half = (cons.maxWidth - spine - x0 * 2) / 2;
+      final xr = x0 + half + spine;
+      return AnimatedBuilder(
+        animation: _flipCtl,
+        builder: (context, _) {
+          final t = Curves.easeInOutCubic.transform(_flipCtl.value);
+          final flipping = _bookFlipping;
+          final fwd = _bookForward;
+          final staticLeft = !flipping ? cat : (fwd ? from : cat);
+          final staticRight = !flipping ? cat : (fwd ? cat : from);
+          // Сенката што листот ја фрла врз страниците под него.
+          final shade = flipping ? sin(t * pi) * 0.3 : 0.0;
+          Widget shaded(Widget child, double a) => Stack(children: [
+            child,
+            if (a > 0.005) Positioned.fill(child: IgnorePointer(child: ColoredBox(color: Colors.black.withValues(alpha: a)))),
+          ]);
+          final children = <Widget>[
+            // Купот страници: лево се гледаат кон лево-долу, десно кон десно-долу.
+            ..._pageStack(hc, leftPages, half, h, x0, 0, -1.6, 1.4),
+            ..._pageStack(hc, rightPages, half, h, xr, 0, 1.6, 1.4),
+            Positioned(left: x0, top: 0, width: half, height: h,
+              child: shaded(_leafBox(staticLeft, hc, left: true, w: half, h: h), fwd ? shade * (t > 0.5 ? 1 : 0.35) : shade)),
+            Positioned(left: xr, top: 0, width: half, height: h,
+              child: shaded(_leafBox(staticRight, hc, left: false, w: half, h: h), fwd ? shade : shade * (t > 0.5 ? 1 : 0.35))),
+            // Рбетот: длабок жлеб меѓу листовите.
+            Positioned(left: x0 + half, top: -4, width: spine, height: h + 8,
+              child: DecoratedBox(decoration: BoxDecoration(
+                color: hc ? Colors.white : null,
+                borderRadius: BorderRadius.circular(4),
+                gradient: hc ? null : LinearGradient(colors: [
+                  const Color(0xFFBDB29A), Color.lerp(cover, Colors.black, 0.55)!, const Color(0xFFBDB29A),
+                ]),
+              ))),
+          ];
+          if (flipping) {
+            // Позитивен z во Flutter е „навнатре“ во екранот, па листот
+            // се врти кон гледачот (над страниците, не под нив).
+            final angle = fwd ? pi * t : -pi * t;
+            children.add(Positioned(
+              left: fwd ? xr : x0,
+              top: 0,
+              width: half,
+              height: h,
+              child: _turningLeaf(
+                front: _leafBox(from, hc, left: !fwd, w: half, h: h, pop: false),
+                back: _leafBox(cat, hc, left: fwd, w: half, h: h, pop: false),
+                angle: angle,
+                vertical: false,
+                hingeLeft: fwd,
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(26),
-                child: Stack(
+            ));
+          }
+          return SizedBox(height: h + 10, child: Stack(clipBehavior: Clip.none, children: children));
+        },
+      );
+    });
+  }
+
+  /// Тефтер (телефон): спирала горе, листот се крева кон нас, се свиткува
+  /// и се превртува нагоре преку спиралата. Долу се гледа купот листови.
+  Widget _notebook(bool hc, Color cover) {
+    final cat = _categories[_bookPage.clamp(0, _categories.length - 1)];
+    final from = _categories[_bookFrom.clamp(0, _categories.length - 1)];
+    final int under = 2 + min<int>(4, _categories.length - 1 - _bookPage);
+    return LayoutBuilder(builder: (context, cons) {
+      final w = cons.maxWidth;
+      const h = 680.0;
+      return AnimatedBuilder(
+        animation: _flipCtl,
+        builder: (context, _) {
+          final t = Curves.easeInOutCubic.transform(_flipCtl.value);
+          final flipping = _bookFlipping;
+          final fwd = _bookForward;
+          final bottom = !flipping ? cat : (fwd ? cat : from);
+          final p = fwd ? t : 1 - t;
+          final children = <Widget>[
+            ..._pageStack(hc, under, w, h, 0, 0, 0, 1.8),
+            Positioned(left: 0, top: 0, width: w, height: h, child: Stack(children: [
+              _notebookPage(bottom, hc, w, h),
+              if (flipping) Positioned.fill(child: IgnorePointer(child: ColoredBox(
+                color: Colors.black.withValues(alpha: sin(p * pi) * 0.28)))),
+            ])),
+          ];
+          if (flipping) {
+            // Напред: тековниот лист се крева 0 → 180°; назад: претходниот
+            // се враќа 180 → 0°. Негативен агол = кон гледачот.
+            children.add(Positioned(
+              left: 0,
+              top: 0,
+              width: w,
+              height: h,
+              child: _turningLeaf(
+                front: _notebookPage(fwd ? from : cat, hc, w, h, pop: false),
+                back: _blankBack(hc, w, h),
+                angle: -pi * p,
+                vertical: true,
+              ),
+            ));
+          }
+          // Спиралата горе (над страниците).
+          children.add(Positioned(left: 0, right: 0, top: -24, height: 40,
+            child: IgnorePointer(child: CustomPaint(painter: _SpiralPainter(hc)))));
+          return SizedBox(height: h + 10, child: Stack(clipBehavior: Clip.none, children: children));
+        },
+      );
+    });
+  }
+
+  /// Поимите на категоријата: два реда по пет, големи плочки.
+  Widget _leafItemsGrid(PictureBookCategory cat, bool hc, {bool pop = true}) {
+    final seen = _visitedByCategory[cat.id] ?? const <String>{};
+    const perRow = 5;
+    final rows = (cat.items.length / perRow).ceil();
+    Widget tile(int i) {
+      final isSeen = seen.contains(cat.items[i].id);
+      final box = AspectRatio(
+          aspectRatio: 1,
+          child: Opacity(
+            opacity: isSeen ? 1.0 : 0.55,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: hc ? Colors.black : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: hc ? Colors.white : (isSeen ? cat.color : const Color(0xFFD9D0BC)),
+                  width: isSeen ? 3.5 : 2,
+                ),
+                boxShadow: hc ? null : const [BoxShadow(color: Color(0x40000000), blurRadius: 8, offset: Offset(2, 5))],
+              ),
+              child: FittedBox(
+                fit: BoxFit.contain,
+                child: Text(cat.items[i].emoji, style: const TextStyle(fontSize: 60, height: 1.0)),
+              ),
+            ),
+          ),
+        );
+      // Листот што се врти е копија - без „искокнување“, за да нема
+      // двојни/трепкави слики додека се листа.
+      if (!pop) return box;
+      return PopIn(key: ValueKey('pop-${cat.id}-$i'), index: i, stepMs: 55, child: box);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var r = 0; r < rows; r++) ...[
+          if (r > 0) const SizedBox(height: 10),
+          Row(children: [
+            for (var c = 0; c < perRow; c++) ...[
+              if (c > 0) const SizedBox(width: 10),
+              Expanded(child: r * perRow + c < cat.items.length ? tile(r * perRow + c) : const SizedBox.shrink()),
+            ],
+          ]),
+        ],
+      ],
+    );
+  }
+
+  /// Големото копче „Влези“ најдолу на страницата.
+  Widget _leafEnterButton(PictureBookCategory cat, bool hc) {
+    final index = _categories.indexOf(cat);
+    final seen = _visitedByCategory[cat.id] ?? const <String>{};
+    final total = cat.items.length;
+    final visited = seen.length;
+    const yellow = Color(0xFFFFFF00);
+    return Semantics(
+      button: true,
+      label: '${'picture_book.enter_category'.tr()}: ${cat.titleKey.tr()}. $total ${_t('items_count')}. $visited ${_t('seen')}.',
+      child: ExcludeSemantics(
+        child: PressableScale(
+          child: Material(
+            color: hc ? Colors.black : cat.color,
+            borderRadius: BorderRadius.circular(22),
+            elevation: hc ? 0 : 6,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(22),
+              onTap: () => _enterCategory(index),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: hc ? yellow : Colors.white, width: 3),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // Голема бледа слика во аголот - украс.
-                    Positioned(
-                      right: -10,
-                      bottom: -24,
-                      child: ExcludeSemantics(
-                        child: Opacity(opacity: hc ? 0 : 0.18, child: Text(cat.items.first.emoji, style: const TextStyle(fontSize: 150))),
-                      ),
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(compact ? 18 : 22),
-                      child: compact
-                          // Телефон: иконата и стрелката горе, текстот под нив
-                          // во цела ширина (големите букви да собере).
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Row(
-                                  children: [
-                                    catIcon,
-                                    const Spacer(),
-                                    arrow,
-                                  ],
-                                ),
-                                const SizedBox(height: 14),
-                                details,
-                              ],
-                            )
-                          : Row(
-                              children: [
-                                catIcon,
-                                const SizedBox(width: 22),
-                                Expanded(child: details),
-                                const SizedBox(width: 12),
-                                arrow,
-                              ],
-                            ),
-                    ),
+                    Icon(Icons.auto_stories_rounded, color: hc ? yellow : Colors.white, size: 38),
+                    const SizedBox(width: 12),
+                    Flexible(child: Text('picture_book.enter_category'.tr(), style: GoogleFonts.lexend(
+                      fontSize: 24 * _kPbText, fontWeight: FontWeight.w900, color: hc ? yellow : Colors.white))),
                   ],
                 ),
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _bookArrow(IconData icon, String label, bool enabled, VoidCallback onTap, bool hc) => Semantics(
+    button: true,
+    enabled: enabled,
+    label: label,
+    child: ExcludeSemantics(
+      child: Opacity(
+        opacity: enabled ? 1 : 0.35,
+        child: Material(
+          color: hc ? Colors.black : Colors.white,
+          shape: CircleBorder(side: BorderSide(color: hc ? Colors.white : Playful.ink, width: 2.5)),
+          elevation: hc ? 0 : 4,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: enabled ? onTap : null,
+            child: SizedBox(width: 64, height: 64, child: Icon(icon, size: 36, color: hc ? Colors.white : Playful.ink)),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  /// Еден лист од книгата. Левиот: светот, името, напредокот и печатот.
+  /// Десниот: поимите што искокнуваат + копчето „Влези“.
+  Widget _bookLeaf(PictureBookCategory cat, bool hc, {required bool left, bool bare = false}) {
+    final seen = _visitedByCategory[cat.id] ?? const <String>{};
+    final total = cat.items.length;
+    final visited = seen.length;
+    final allSeen = total > 0 && visited >= total;
+    const yellow = Color(0xFFFFFF00);
+    final ink = hc ? Colors.white : Playful.ink;
+    final paper = bare ? const BoxDecoration() : BoxDecoration(
+      color: hc ? Colors.black : null,
+      gradient: hc ? null : LinearGradient(
+        begin: left ? Alignment.centerRight : Alignment.centerLeft,
+        end: left ? Alignment.centerLeft : Alignment.centerRight,
+        // Сенка кон рбетот, светло кон работ.
+        colors: const [Color(0xFFE9E2D2), Color(0xFFFFFDF7), Color(0xFFFFFDF7)],
+        stops: const [0.0, 0.12, 1.0],
+      ),
+      border: hc ? Border.all(color: Colors.white, width: 2) : null,
+    );
+
+    if (left) {
+      return Container(
+        decoration: paper,
+        padding: bare ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Илустрација на светот во рамка.
+            Container(
+              height: 170,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: hc ? Colors.white : cat.color, width: 3),
+                color: hc ? Colors.black : null,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: Stack(children: [
+                  if (!hc) Positioned.fill(child: CustomPaint(painter: _WorldPainter(cat.id, cat.color))),
+                  Center(child: Icon(cat.icon, size: 64, color: hc ? yellow : Colors.white.withValues(alpha: 0.0))),
+                  // Печат „Прегледано“ кога сè е видено.
+                  if (allSeen)
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Transform.rotate(
+                        angle: -0.2,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: hc ? Colors.black : Colors.white.withValues(alpha: 0.85),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: hc ? yellow : const Color(0xFFC62828), width: 3),
+                          ),
+                          child: Text(_t('seen').toUpperCase(), style: GoogleFonts.lexend(fontSize: 18,
+                            fontWeight: FontWeight.w900, color: hc ? yellow : const Color(0xFFC62828))),
+                        ),
+                      ),
+                    ),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(children: [
+              Container(
+                width: 58, height: 58,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: hc ? Colors.black : cat.color,
+                  border: Border.all(color: hc ? Colors.white : Colors.white, width: 2)),
+                child: Icon(cat.icon, color: hc ? yellow : Colors.white, size: 32),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(cat.titleKey.tr(), style: GoogleFonts.lexend(fontSize: 26 * _kPbText,
+                fontWeight: FontWeight.w800, color: hc ? yellow : ink, height: 1.1))),
+            ]),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: total == 0 ? 0 : visited / total,
+                minHeight: 12,
+                backgroundColor: hc ? Colors.white24 : const Color(0xFFE5DCC8),
+                valueColor: AlwaysStoppedAnimation(hc ? yellow : cat.color),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text('$visited / $total ${_t('seen')}', style: GoogleFonts.lexend(fontSize: 16 * _kPbText,
+              fontWeight: FontWeight.w700, color: hc ? Colors.white : const Color(0xFF5B5B6B))),
+          ],
+        ),
+      );
+    }
+
+    // Десниот лист: поимите (два реда по пет) и „Влези“.
+    return Container(
+      decoration: paper,
+      padding: bare ? EdgeInsets.zero : const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _leafItemsGrid(cat, hc),
+          const SizedBox(height: 18),
+          _leafEnterButton(cat, hc),
+        ],
       ),
     );
   }
@@ -3270,4 +3741,234 @@ class _TactileAnswerButtonState extends State<_TactileAnswerButton> with SingleT
       child: button,
     );
   }
+}
+
+/// Мал насликан предел за секоја категорија (позадина на станицата).
+class _WorldPainter extends CustomPainter {
+  _WorldPainter(this.id, this.color);
+  final String id;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final rect = Offset.zero & size;
+    final night = id == 'space';
+    // Небо.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: night
+              ? const [Color(0xFF0B1033), Color(0xFF2B2A6B)]
+              : [Color.lerp(color, const Color(0xFF9FD8FF), 0.55)!, const Color(0xFFE8F6FF)],
+        ).createShader(rect),
+    );
+    final rnd = Random(id.hashCode);
+    if (night) {
+      for (var i = 0; i < 40; i++) {
+        canvas.drawCircle(Offset(rnd.nextDouble() * w, rnd.nextDouble() * h * 0.6), 1 + rnd.nextDouble() * 1.6,
+          Paint()..color = Colors.white.withValues(alpha: 0.5 + rnd.nextDouble() * 0.5));
+      }
+      canvas.drawCircle(Offset(w * 0.82, h * 0.22), h * 0.08, Paint()..color = const Color(0xFFFFF3C4));
+    } else {
+      canvas.drawCircle(Offset(w * 0.86, h * 0.2), h * 0.08, Paint()..color = const Color(0xFFFFE082));
+      // Облачиња.
+      final cloud = Paint()..color = Colors.white.withValues(alpha: 0.85);
+      for (final c in [Offset(w * 0.18, h * 0.24), Offset(w * 0.55, h * 0.16)]) {
+        canvas.drawCircle(c, h * 0.05, cloud);
+        canvas.drawCircle(c + Offset(h * 0.06, h * 0.01), h * 0.04, cloud);
+        canvas.drawCircle(c - Offset(h * 0.06, -h * 0.01), h * 0.035, cloud);
+      }
+    }
+    // Ридови / тло.
+    final groundTop = h * 0.58;
+    final groundColor = switch (id) {
+      'space' => const Color(0xFF4B4F6B),
+      'institutions' || 'objects' => const Color(0xFFC9BFAE),
+      'cultures' => const Color(0xFFE7D3A1),
+      'nutrition' => const Color(0xFF8BC34A),
+      'music' => const Color(0xFF9CCC65),
+      _ => const Color(0xFF66BB6A),
+    };
+    final hills = Path()
+      ..moveTo(0, groundTop + h * 0.06)
+      ..quadraticBezierTo(w * 0.25, groundTop - h * 0.06, w * 0.5, groundTop + h * 0.02)
+      ..quadraticBezierTo(w * 0.78, groundTop + h * 0.08, w, groundTop - h * 0.02)
+      ..lineTo(w, h)
+      ..lineTo(0, h)
+      ..close();
+    canvas.drawPath(hills, Paint()..color = groundColor);
+    canvas.drawPath(hills, Paint()..color = Colors.black.withValues(alpha: 0.12)..style = PaintingStyle.stroke..strokeWidth = 2);
+
+    final ink = Paint()..color = Colors.black.withValues(alpha: 0.25)..style = PaintingStyle.stroke..strokeWidth = 1.5;
+    void tree(Offset base, double s) {
+      canvas.drawRect(Rect.fromCenter(center: base + Offset(0, -s * 0.4), width: s * 0.18, height: s * 0.8), Paint()..color = const Color(0xFF795548));
+      canvas.drawCircle(base + Offset(0, -s * 1.0), s * 0.55, Paint()..color = const Color(0xFF2E7D32));
+      canvas.drawCircle(base + Offset(-s * 0.2, -s * 1.15), s * 0.3, Paint()..color = const Color(0xFF43A047));
+    }
+    void house(Offset base, double s, Color wall, Color roof) {
+      final body = Rect.fromLTWH(base.dx - s / 2, base.dy - s * 0.7, s, s * 0.7);
+      canvas.drawRect(body, Paint()..color = wall);
+      canvas.drawRect(body, ink);
+      final r = Path()
+        ..moveTo(body.left - s * 0.08, body.top)
+        ..lineTo(body.center.dx, body.top - s * 0.45)
+        ..lineTo(body.right + s * 0.08, body.top)
+        ..close();
+      canvas.drawPath(r, Paint()..color = roof);
+      canvas.drawRect(Rect.fromLTWH(body.center.dx - s * 0.1, body.bottom - s * 0.32, s * 0.2, s * 0.32), Paint()..color = const Color(0xFF6D4C41));
+    }
+
+    final gy = groundTop + h * 0.04;
+    switch (id) {
+      case 'institutions':
+        // Мал град со купола.
+        house(Offset(w * 0.18, gy), h * 0.2, const Color(0xFFF5E6CC), const Color(0xFFC0503A));
+        house(Offset(w * 0.36, gy - 2), h * 0.24, const Color(0xFFE3F2FD), const Color(0xFF1E5AA8));
+        canvas.drawRect(Rect.fromLTWH(w * 0.5, gy - h * 0.26, w * 0.16, h * 0.26), Paint()..color = const Color(0xFFEDE3CF));
+        canvas.drawArc(Rect.fromCenter(center: Offset(w * 0.58, gy - h * 0.26), width: w * 0.1, height: h * 0.16), pi, pi, true, Paint()..color = const Color(0xFF7FA6A0));
+        house(Offset(w * 0.78, gy), h * 0.22, const Color(0xFFFFF3E0), const Color(0xFFB7322C));
+        break;
+      case 'cultures':
+        // Пристаниште: море, брод, светилник.
+        canvas.drawRect(Rect.fromLTWH(0, groundTop + h * 0.02, w * 0.45, h * 0.2), Paint()..color = const Color(0xFF4FA3D9));
+        final hull = Path()
+          ..moveTo(w * 0.08, gy - h * 0.02)
+          ..lineTo(w * 0.36, gy - h * 0.02)
+          ..lineTo(w * 0.32, gy + h * 0.05)
+          ..lineTo(w * 0.12, gy + h * 0.05)
+          ..close();
+        canvas.drawPath(hull, Paint()..color = const Color(0xFF8D4E2A));
+        canvas.drawLine(Offset(w * 0.22, gy - h * 0.02), Offset(w * 0.22, gy - h * 0.3), Paint()..color = const Color(0xFF5D4037)..strokeWidth = 3);
+        canvas.drawPath(Path()..moveTo(w * 0.22, gy - h * 0.28)..lineTo(w * 0.34, gy - h * 0.06)..lineTo(w * 0.22, gy - h * 0.06)..close(), Paint()..color = Colors.white);
+        canvas.drawRect(Rect.fromLTWH(w * 0.7, gy - h * 0.34, w * 0.06, h * 0.34), Paint()..color = Colors.white);
+        for (var i = 0; i < 3; i++) {
+          canvas.drawRect(Rect.fromLTWH(w * 0.7, gy - h * 0.3 + i * h * 0.1, w * 0.06, h * 0.04), Paint()..color = const Color(0xFFD62828));
+        }
+        canvas.drawCircle(Offset(w * 0.6, gy - h * 0.1), h * 0.09, Paint()..color = const Color(0xFF64B5F6));
+        canvas.drawCircle(Offset(w * 0.6, gy - h * 0.1), h * 0.09, ink);
+        break;
+      case 'nutrition':
+        // Фарма: ниви со редови, овошка и амбар.
+        for (var i = 0; i < 5; i++) {
+          canvas.drawLine(Offset(w * (0.05 + i * 0.06), h), Offset(w * (0.2 + i * 0.05), gy), Paint()..color = const Color(0xFF558B2F)..strokeWidth = 3);
+        }
+        house(Offset(w * 0.62, gy), h * 0.26, const Color(0xFFC62828), const Color(0xFF6D1B1B));
+        tree(Offset(w * 0.84, gy), h * 0.22);
+        for (final p in [Offset(w * 0.8, gy - h * 0.24), Offset(w * 0.88, gy - h * 0.2), Offset(w * 0.84, gy - h * 0.3)]) {
+          canvas.drawCircle(p, h * 0.02, Paint()..color = const Color(0xFFE53935));
+        }
+        break;
+      case 'animals':
+        // Ливада со ограда.
+        for (var x = w * 0.05; x < w * 0.95; x += w * 0.08) {
+          canvas.drawLine(Offset(x, gy - h * 0.08), Offset(x, gy + h * 0.02), Paint()..color = const Color(0xFF8D6E63)..strokeWidth = 4);
+        }
+        canvas.drawLine(Offset(w * 0.05, gy - h * 0.06), Offset(w * 0.95, gy - h * 0.06), Paint()..color = const Color(0xFF8D6E63)..strokeWidth = 3);
+        canvas.drawLine(Offset(w * 0.05, gy - h * 0.02), Offset(w * 0.95, gy - h * 0.02), Paint()..color = const Color(0xFF8D6E63)..strokeWidth = 3);
+        tree(Offset(w * 0.85, gy - h * 0.06), h * 0.22);
+        break;
+      case 'nature':
+        // Шума со река.
+        final river = Path()
+          ..moveTo(w * 0.42, gy)
+          ..quadraticBezierTo(w * 0.5, h * 0.8, w * 0.38, h);
+        canvas.drawPath(river, Paint()..color = const Color(0xFF4FC3F7)..style = PaintingStyle.stroke..strokeWidth = 18..strokeCap = StrokeCap.round);
+        for (final x in [0.1, 0.22, 0.62, 0.74, 0.88]) {
+          tree(Offset(w * x, gy + (x * 37 % 1) * 6), h * (0.18 + (x * 13 % 1) * 0.08));
+        }
+        break;
+      case 'objects':
+        // Улица со работилница и лента.
+        house(Offset(w * 0.22, gy), h * 0.26, const Color(0xFFFFE0B2), const Color(0xFF8D6E63));
+        canvas.drawRect(Rect.fromLTWH(w * 0.42, gy - h * 0.06, w * 0.46, h * 0.06), Paint()..color = const Color(0xFF455A64));
+        for (var x = w * 0.44; x < w * 0.88; x += w * 0.05) {
+          canvas.drawCircle(Offset(x, gy - h * 0.03), h * 0.018, Paint()..color = const Color(0xFF90A4AE));
+        }
+        canvas.drawRect(Rect.fromLTWH(w * 0.72, gy - h * 0.34, w * 0.05, h * 0.28), Paint()..color = const Color(0xFF8D6E63));
+        break;
+      case 'space':
+        // Опсерваторија на рид.
+        canvas.drawRect(Rect.fromLTWH(w * 0.55, gy - h * 0.16, w * 0.18, h * 0.16), Paint()..color = const Color(0xFFCFD8DC));
+        canvas.drawArc(Rect.fromCenter(center: Offset(w * 0.64, gy - h * 0.16), width: w * 0.18, height: h * 0.2), pi, pi, true, Paint()..color = const Color(0xFFB0BEC5));
+        canvas.drawLine(Offset(w * 0.66, gy - h * 0.22), Offset(w * 0.76, gy - h * 0.34), Paint()..color = const Color(0xFF37474F)..strokeWidth = 6);
+        break;
+      case 'music':
+        // Летна сцена (амфитеатар) со ноти.
+        canvas.drawArc(Rect.fromCenter(center: Offset(w * 0.5, gy), width: w * 0.5, height: h * 0.4), pi, pi, true, Paint()..color = const Color(0xFFEDE7F6));
+        canvas.drawArc(Rect.fromCenter(center: Offset(w * 0.5, gy), width: w * 0.5, height: h * 0.4), pi, pi, false, ink);
+        final note = TextPainter(
+          text: const TextSpan(text: '♪ ♫ ♪', style: TextStyle(fontSize: 26, color: Color(0xFF5E35B1), fontWeight: FontWeight.w900)),
+          textDirection: ui.TextDirection.ltr,
+        )..layout();
+        note.paint(canvas, Offset(w * 0.5 - note.width / 2, gy - h * 0.34));
+        break;
+      default:
+        tree(Offset(w * 0.8, gy), h * 0.22);
+    }
+    // Мала патека низ пределот (продолжение на големиот пат).
+    final trail = Path()
+      ..moveTo(w * 0.5, h)
+      ..quadraticBezierTo(w * 0.45, h * 0.86, w * 0.5, gy + h * 0.02);
+    canvas.drawPath(trail, Paint()..color = const Color(0x99D9B27C)..style = PaintingStyle.stroke..strokeWidth = 16..strokeCap = StrokeCap.round);
+  }
+
+  @override
+  bool shouldRepaint(covariant _WorldPainter old) => old.id != id || old.color != color;
+}
+
+/// Линии на празна хартија (задна страна на лист од тефтерот).
+class _RuledPaperPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = const Color(0x334A90C2)
+      ..strokeWidth = 1.2;
+    for (var y = 48.0; y < size.height; y += 30) {
+      canvas.drawLine(Offset(16, y), Offset(size.width - 16, y), line);
+    }
+    canvas.drawLine(const Offset(46, 0), Offset(46, size.height), Paint()..color = const Color(0x44E53935)..strokeWidth = 1.5);
+  }
+
+  @override
+  bool shouldRepaint(covariant _RuledPaperPainter oldDelegate) => false;
+}
+
+/// Метална спирала на горниот раб на тефтерот.
+class _SpiralPainter extends CustomPainter {
+  _SpiralPainter(this.hc);
+  final bool hc;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const step = 26.0;
+    final count = ((size.width - 20) / step).floor();
+    final start = (size.width - (count - 1) * step) / 2;
+    final ring = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    for (var i = 0; i < count; i++) {
+      final x = start + i * step;
+      // Дупка во хартијата.
+      canvas.drawCircle(Offset(x, size.height - 6), 4, Paint()..color = hc ? Colors.white : const Color(0xFF3E3A36));
+      // Прстен.
+      final r = Rect.fromCenter(center: Offset(x, size.height * 0.45), width: 12, height: size.height * 0.9);
+      if (hc) {
+        ring.color = Colors.white;
+      } else {
+        ring.shader = const LinearGradient(colors: [Color(0xFF8C8C8C), Color(0xFFF2F2F2), Color(0xFF7A7A7A)])
+            .createShader(r);
+      }
+      canvas.drawArc(r, -pi / 2, pi, false, ring);
+      canvas.drawArc(r, pi / 2, pi * 0.6, false, ring);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SpiralPainter oldDelegate) => oldDelegate.hc != hc;
 }
