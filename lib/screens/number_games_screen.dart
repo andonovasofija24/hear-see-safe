@@ -15,6 +15,7 @@ import 'package:hear_and_see_safe/widgets/category_voice_command_button.dart';
 import 'package:hear_and_see_safe/widgets/playful_ui.dart';
 import 'package:hear_and_see_safe/widgets/braille_digit_input.dart';
 import 'package:hear_and_see_safe/widgets/sphere_menu.dart';
+import 'package:hear_and_see_safe/widgets/number_games_art.dart';
 import 'package:hear_and_see_safe/utils/arrow_scroll.dart';
 import 'package:hear_and_see_safe/utils/voice_hotkey.dart';
 
@@ -69,7 +70,7 @@ class NumberGamesScreen extends StatefulWidget {
   State<NumberGamesScreen> createState() => _NumberGamesScreenState();
 }
 
-class _NumberGamesScreenState extends State<NumberGamesScreen> {
+class _NumberGamesScreenState extends State<NumberGamesScreen> with TickerProviderStateMixin {
   static const Color _moduleAccent = Color(0xFF059669);
   static const int _questionsPerRound = 10;
 
@@ -115,6 +116,59 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   bool _inputLocked = false;
 
   // ---------------------------------------------------------------------
+  // Варијанти на игрите (копчињата под резултатот во игра). 0 = класично:
+  //  * Кој е бројот: 0 слушни и види, 1 по звук, 2 визуелно;
+  //  * Поголем/помал: 0 вага, 1 кули;
+  //  * Собирање/одземање: 0 задача, 1 балони;
+  //  * Множење/делење: 0 задача, 1 ласер (делење).
+  // ---------------------------------------------------------------------
+  final Map<_GameMode, int> _variants = {};
+  int get _variant => _variants[_mode] ?? 0;
+
+  /// Кој е бројот - визуелно: како е „скриен“ бројот (0-5) и навалување.
+  int _visStyle = 0;
+  double _visTilt = 0;
+
+  /// Топло-ладно над копчињата со бројки (Кој е бројот - по звук): колку
+  /// е прстот поблиску до точната цифра, толку побрзо и повисоко чука
+  /// срцето (и посилно вибрира).
+  final AudioPlayer _beatPlayer = AudioPlayer();
+  Timer? _beatTimer;
+  String? _hoverDigit;
+  int _beatDistance = 9;
+  double _beatPan = 0;
+
+  /// Локатор - топло-ладно: истото срце чука побрзо и повисоко колку е
+  /// прстот поблиску до полето со бројот (0 = на полето, 1 = најдалеку).
+  double _gridHeat = 1;
+  double _gridPan = 0;
+  bool _gridBeatOn = false;
+  Timer? _gridBeatTimer;
+
+  /// Звучни ефекти на варијантите (пукање, ласер, рушење, сеф, пинг) и
+  /// три плеера за брзите удари на тапан во Магична низа.
+  final AudioPlayer _fxPlayer = AudioPlayer();
+  final List<AudioPlayer> _drums = [AudioPlayer(), AudioPlayer(), AudioPlayer()];
+  int _drumNext = 0;
+
+  // Поголем/помал - кули.
+  late final AnimationController _collapseCtl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500));
+  int? _collapsedSide; // 0 = левата кула (A), 1 = десната (B)
+  bool? _towerSign; // избраниот знак: true = „>“, false = „<“
+
+  // Собирање/одземање - балони.
+  late final AnimationController _balloonCtl = AnimationController(vsync: this, duration: const Duration(seconds: 60));
+  List<int> _balloonValues = [];
+  List<double> _balloonPhase = [];
+  List<double> _balloonSpeed = [];
+  List<int> _balloonCol = [];
+  final List<int> _balloonPicked = [];
+  int _balloonTarget = 0;
+
+  // Множење/делење - ласер: сечење по блокот со тој индекс.
+  final Set<int> _laserCuts = {};
+
+  // ---------------------------------------------------------------------
   // Нови игри (аудио-тактилни) - целиот говор е ИСКЛУЧИВО од твои снимки
   // (assets/audio/number_games/<mk|en|sq>/<клуч>.mp3), без TTS.
   // ---------------------------------------------------------------------
@@ -130,12 +184,12 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   bool get _isExtraMode => const {_GameMode.tally, _GameMode.grid, _GameMode.sequence, _GameMode.sort}.contains(_mode);
 
   /// Режимите во кои се внесува број (бројки / Брајово) и „Потврди“.
-  bool get _hasNumberInput => const {
-        _GameMode.recognize,
-        _GameMode.operations,
-        _GameMode.multiplyDivide,
-        _GameMode.countObjects,
-      }.contains(_mode);
+  bool get _hasNumberInput => switch (_mode) {
+        _GameMode.recognize || _GameMode.countObjects => true,
+        // Балоните и ласерот се одговараат со допир, без внес на број.
+        _GameMode.operations || _GameMode.multiplyDivide => _variant == 0,
+        _ => false,
+      };
 
   // Тактилен бројач.
   int _tallyCount = 0;
@@ -203,6 +257,15 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     _voicePlayer.dispose();
     _effectsPlayer.dispose();
     _markerPlayer.dispose();
+    _beatTimer?.cancel();
+    _gridBeatTimer?.cancel();
+    _beatPlayer.dispose();
+    _fxPlayer.dispose();
+    for (final d in _drums) {
+      d.dispose();
+    }
+    _collapseCtl.dispose();
+    _balloonCtl.dispose();
     _inputController.dispose();
     _seqInputController.dispose();
     _playScroll.dispose();
@@ -241,6 +304,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   void _startRound(_GameMode mode) {
     _narrationToken++;
+    _stopBeat();
+    _balloonCtl.stop();
     // Може да се повика и од друг режим (со глас) - прекини го броењето.
     _countToken++;
     setState(() {
@@ -274,6 +339,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   }
 
   void _backToModeSelect() {
+    _stopBeat();
+    _balloonCtl.stop();
     _narrationToken++;
     _countToken++;
     _voicePlayer.stop();
@@ -287,6 +354,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   void _pickNewQuestion() {
     final r = _activeRange;
+    _stopBeat();
     setState(() {
       _inputController.clear();
       _lastAnswerCorrect = null;
@@ -296,6 +364,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       switch (_mode) {
         case _GameMode.recognize:
           _displayNumber = r.min + _random.nextInt(r.max - r.min + 1);
+          _visStyle = _random.nextInt(6);
+          _visTilt = (_random.nextBool() ? 1 : -1) * (0.3 + _random.nextDouble() * 0.35);
           break;
         case _GameMode.biggerSmaller:
           _numA = r.min + _random.nextInt(r.max - r.min + 1);
@@ -303,6 +373,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             _numB = r.min + _random.nextInt(r.max - r.min + 1);
           } while (_numB == _numA);
           _askBigger = _random.nextBool();
+          _collapsedSide = null;
+          _towerSign = null;
+          _collapseCtl.value = 0;
           break;
         case _GameMode.operations:
           _isAddition = _random.nextBool();
@@ -313,11 +386,13 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             _opA = r.min + _random.nextInt(r.max - r.min + 1);
             _opB = r.min + _random.nextInt(_opA - r.min + 1);
           }
+          if (_variant == 1) _genBalloons(r);
           break;
         case _GameMode.multiplyDivide:
           _isMultiply = _random.nextBool();
           _mulA = r.min + _random.nextInt(r.max - r.min + 1);
           _mulB = r.min + _random.nextInt(r.max - r.min + 1);
+          if (_variant == 1) _genLaser();
           break;
         case _GameMode.sudoku:
           break;
@@ -351,14 +426,21 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   Future<void> _announceQuestion() async {
     switch (_mode) {
       case _GameMode.recognize:
-        await _playSequence(['number_word', ..._numKeys(_displayNumber), 'what_number']);
+        // Визуелно: бројот не се кажува - само се гледа.
+        await _playSequence(_variant == 2 ? const ['what_number'] : ['number_word', ..._numKeys(_displayNumber), 'what_number']);
         break;
       case _GameMode.biggerSmaller:
         await _playSequence([
           ..._numKeys(_numA),
           ..._numKeys(_numB),
-          _askBigger ? 'which_bigger' : 'which_smaller',
+          if (_variant == 1) 'which_sign' else (_askBigger ? 'which_bigger' : 'which_smaller'),
         ]);
+        break;
+      case _GameMode.operations when _variant == 1:
+        await _playSequence([_isAddition ? 'balloons_sum' : 'balloons_diff', ..._numKeys(_balloonTarget)]);
+        break;
+      case _GameMode.multiplyDivide when _variant == 1:
+        await _playSequence([..._numKeys(_mulA * _mulB), 'divided_by', ..._numKeys(_mulB), 'laser_prompt']);
         break;
       case _GameMode.operations:
         await _playSequence([
@@ -390,8 +472,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           await _playSequence(_promptKeys());
         }
         break;
-      case _GameMode.grid:
       case _GameMode.sequence:
+        await _playSequenceRhythm();
+        break;
+      case _GameMode.grid:
       case _GameMode.sort:
         await _playSequence(_promptKeys());
         break;
@@ -439,6 +523,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   }
 
   Future<void> _answer(bool isCorrect, int correctValue) async {
+    _stopBeat();
     // Го запира демото за "Броење предмети" (следен циклус на пулсирање
     // веќе нема да почне) и го прекинува тековниот звук веднаш.
     _countToken++;
@@ -495,12 +580,105 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     }
   }
 
+  // ---------------------------------------------------------------------
+  // Топло-ладно (Кој е бројот - по звук).
+  // ---------------------------------------------------------------------
+
+  bool get _hotColdOn => _mode == _GameMode.recognize && _variant == 1 && !_inputLocked && !_brailleInput;
+
+  /// Следната цифра што треба да се внесе; null ако бројот е веќе внесен.
+  /// Ако досега внесеното е погрешно, -1 (секогаш „ладно“).
+  int? get _hotTarget {
+    final target = _displayNumber.toString();
+    final typed = _inputController.text;
+    if (!target.startsWith(typed)) return -1;
+    if (typed.length >= target.length) return null;
+    return int.parse(target[typed.length]);
+  }
+
+  /// Прстот (или глушецот) е над копчето [digit] (null = надвор).
+  void _hotColdAt(String? digit, double pan) {
+    if (!_hotColdOn) digit = null;
+    if (digit == _hoverDigit) return;
+    _hoverDigit = digit;
+    if (digit == null) {
+      _stopBeat();
+      return;
+    }
+    final target = _hotTarget;
+    if (target == null) {
+      _stopBeat();
+      return;
+    }
+    final d = target < 0 ? 9 : (int.parse(digit) - target).abs();
+    _beatDistance = d;
+    _beatPan = pan;
+    // Вибрација: колку поблиску, толку подолга и посилна.
+    if (d == 0) {
+      unawaited(VibrationUtils.vibrate(pattern: const [0, 90, 60, 90, 60, 140], amplitude: 255));
+    } else {
+      unawaited(VibrationUtils.vibrate(duration: max(25, 110 - d * 10), amplitude: max(40, 255 - d * 24)));
+    }
+    if (_beatTimer == null) _beat();
+  }
+
+  void _beat() {
+    _beatTimer = null;
+    if (!mounted || _hoverDigit == null || !_hotColdOn) return;
+    final d = _beatDistance;
+    () async {
+      try {
+        await _beatPlayer.stop();
+        await _beatPlayer.setBalance(_beatPan.clamp(-1.0, 1.0));
+        await _beatPlayer.setVolume((1.0 - d * 0.05).clamp(0.5, 1.0));
+        await _beatPlayer.play(AssetSource('sounds/number_games/heartbeat.mp3'));
+        await _beatPlayer.setPlaybackRate((1.25 - d * 0.055).clamp(0.7, 1.3));
+      } catch (_) {}
+    }();
+    // Блиску = брзо (≈ 4 удари во секунда), далеку = бавно.
+    final ms = d == 0 ? 240 : 320 + d * 125;
+    _beatTimer = Timer(Duration(milliseconds: ms), _beat);
+  }
+
+  void _stopBeat() {
+    _beatTimer?.cancel();
+    _beatTimer = null;
+    _hoverDigit = null;
+    _gridBeatOn = false;
+    _gridBeatTimer?.cancel();
+    _gridBeatTimer = null;
+    try {
+      _beatPlayer.stop();
+    } catch (_) {}
+  }
+
+  /// Каде е прстот на таблата со бројки (2 реда x 5, со празнини 10).
+  void _padPointer(Offset p, Size size) {
+    const rows = [
+      ['1', '2', '3', '4', '5'],
+      ['6', '7', '8', '9', '0'],
+    ];
+    if (p.dx < 0 || p.dy < 0 || p.dx > size.width || p.dy > size.height) {
+      _hotColdAt(null, 0);
+      return;
+    }
+    final r = p.dy < size.height / 2 ? 0 : 1;
+    final col = (p.dx / ((size.width + 10) / 5)).floor().clamp(0, 4).toInt();
+    _hotColdAt(rows[r][col], (col - 2) / 2);
+  }
+
   void _appendDigit(String digit) {
     if (_inputLocked) return;
     final now = _inputController.text;
     if (now.length >= 3) return;
     setState(() => _inputController.text = now + digit);
     _playSequence(['d_$digit']);
+    // Топло-ладно: следната цифра е друга - пресметај одново.
+    final h = _hoverDigit;
+    if (h != null) {
+      _hoverDigit = null;
+      _hotColdAt(h, _beatPan);
+    }
   }
 
   void _clearInput() {
@@ -692,6 +870,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   void _replayPrompt() {
     if (_inputLocked) return;
+    if (_mode == _GameMode.sequence) {
+      _playSequenceRhythm();
+      return;
+    }
     _playSequence(_promptKeys());
   }
 
@@ -1260,6 +1442,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     if (cell == _gridLastCell) return;
     _gridLastCell = cell;
     setState(() => _gridCurrent = cell);
+    // Аудио-компас: лево/десно во стерео, горе = повисок тон, долу = понизок.
+    final pan = _gridCols == 1 ? 0.0 : (col / (_gridCols - 1)) * 2 - 1;
+    final rate = _gridRows == 1 ? 1.0 : 1.3 - (row / (_gridRows - 1)) * 0.5;
+    unawaited(_fx('locator_ping', balance: pan, rate: rate, volume: 0.8));
 
     if (cell == _gridTarget) {
       _gridSuccess();
@@ -1270,8 +1456,49 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     }
   }
 
+  /// Локатор: колку е прстот далеку од точното поле -> брзина на срцето.
+  void _gridHeatAt(Offset pos, Size size) {
+    if (_inputLocked || _gridFound || size.isEmpty) {
+      _stopBeat();
+      return;
+    }
+    final cw = size.width / _gridCols, ch = size.height / _gridRows;
+    final tc = Offset((_gridTarget % _gridCols + 0.5) * cw, (_gridTarget ~/ _gridCols + 0.5) * ch);
+    final maxD = Offset(size.width, size.height).distance;
+    _gridHeat = ((pos - tc).distance / maxD * 1.6).clamp(0.0, 1.0);
+    _gridPan = ((pos.dx / size.width) * 2 - 1).clamp(-1.0, 1.0);
+    if (!_gridBeatOn) {
+      _gridBeatOn = true;
+      _gridBeat();
+    }
+  }
+
+  void _gridBeat() {
+    _gridBeatTimer = null;
+    if (!mounted || !_gridBeatOn || _gridFound || _inputLocked || _mode != _GameMode.grid || _view != _View.playing) {
+      _gridBeatOn = false;
+      return;
+    }
+    final h = _gridHeat;
+    () async {
+      try {
+        await _beatPlayer.stop();
+        await _beatPlayer.setBalance(_gridPan);
+        await _beatPlayer.setVolume(1.0 - 0.4 * h);
+        await _beatPlayer.play(AssetSource('sounds/number_games/heartbeat.mp3'));
+        await _beatPlayer.setPlaybackRate(1.3 - 0.55 * h);
+      } catch (_) {}
+    }();
+    // Кратка вибрација со секој удар - посилна кога си поблиску.
+    unawaited(VibrationUtils.vibrate(duration: 30 + ((1 - h) * 50).round(), amplitude: (40 + (1 - h) * 215).round()));
+    _gridBeatTimer = Timer(Duration(milliseconds: (220 + h * 1100).round()), _gridBeat);
+  }
+
   Future<void> _gridSuccess() async {
+    _stopBeat();
     setState(() => _gridFound = true);
+    // Звук на отклучена благајна.
+    unawaited(_fx('safe_unlock'));
     final ok = _gridWrong.length <= _gridAllowedWrong;
     await _finishExtraRound(
       correct: true,
@@ -1292,10 +1519,24 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             child: LayoutBuilder(
               builder: (context, c) {
                 final size = Size(c.maxWidth, c.maxHeight);
-                return Listener(
+                return MouseRegion(
+                  // Глушец: топло-ладно и само со лебдење.
+                  onHover: (e) => _gridHeatAt(e.localPosition, size),
+                  onExit: (_) => _stopBeat(),
+                  child: Listener(
                   behavior: HitTestBehavior.opaque,
-                  onPointerDown: (e) => _gridPointer(e.localPosition, size),
-                  onPointerMove: (e) => _gridPointer(e.localPosition, size),
+                  onPointerDown: (e) {
+                    _gridPointer(e.localPosition, size);
+                    _gridHeatAt(e.localPosition, size);
+                  },
+                  onPointerMove: (e) {
+                    _gridPointer(e.localPosition, size);
+                    _gridHeatAt(e.localPosition, size);
+                  },
+                  onPointerUp: (e) {
+                    if (e.kind != ui.PointerDeviceKind.mouse) _stopBeat();
+                  },
+                  onPointerCancel: (_) => _stopBeat(),
                   child: Column(
                     children: [
                       for (var r = 0; r < _gridRows; r++)
@@ -1308,6 +1549,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                           ),
                         ),
                     ],
+                  ),
                   ),
                 );
               },
@@ -1846,7 +2088,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
   static const List<String> _kwClear = ['избриши', 'бриши', 'исчисти', 'delete', 'clear', 'erase', 'fshi', 'pastro'];
 
   List<VoiceCategoryOption> _answerVoiceOptions() {
-    final canConfirm = _hasNumberInput || _mode == _GameMode.sequence || _mode == _GameMode.sort || _mode == _GameMode.sudoku;
+    final canConfirm = _hasNumberInput ||
+        _mode == _GameMode.sequence ||
+        _mode == _GameMode.sort ||
+        _mode == _GameMode.sudoku ||
+        (_mode == _GameMode.multiplyDivide && _variant == 1);
     final canClear = _hasNumberInput || _mode == _GameMode.sequence || _mode == _GameMode.sudoku;
     return [
       if (_hasInputChoice) ...[
@@ -1862,6 +2108,107 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       ],
       if (canConfirm) VoiceCategoryOption(keywords: _kwConfirm, onSelected: _voiceConfirm),
       if (canClear) VoiceCategoryOption(keywords: _kwClear, onSelected: _voiceClear),
+      ..._variantVoiceOptions(),
+    ];
+  }
+
+  // Гласовни команди за варијантите: избор на варијанта („по звук“,
+  // „визуелно“, „кули“, „балони“, „ласер“...), знакот кај кулите
+  // („поголемо“ / „помало“) и пукање балон со кажување на бројот.
+  static const List<String> _kwVarBoth = ['слушни и види', 'двете', 'hear and see', 'both', 'dëgjo dhe shiko', 'degjo dhe shiko'];
+  static const List<String> _kwVarSound = ['по звук', 'со звук', 'само звук', 'by sound', 'sound only', 'me zë', 'me ze'];
+  static const List<String> _kwVarVisual = ['визуелно', 'визуелна', 'со очи', 'visual', 'vizuale', 'vizual'];
+  static const List<String> _kwVarScale = ['вага', 'scale', 'peshore', 'peshojë'];
+  static const List<String> _kwVarTowers = ['кули', 'кула', 'towers', 'tower', 'kulla', 'kullë', 'kulle'];
+  static const List<String> _kwVarClassic = ['задача', 'класично', 'класична', 'problem', 'classic', 'detyrë', 'detyre'];
+  static const List<String> _kwVarBalloons = ['балони', 'балон', 'balloons', 'balloon', 'balona', 'balon'];
+  static const List<String> _kwVarLaser = ['ласер', 'laser', 'lazer'];
+  static const List<String> _kwGreater = ['поголемо', 'поголем', 'голем', 'greater', 'bigger', 'larger', 'më e madhe', 'më i madh', 'madhe', 'madh'];
+  static const List<String> _kwLess = ['помало', 'помал', 'мало', 'less', 'smaller', 'më e vogël', 'më i vogël', 'vogël', 'vogel'];
+
+  static const Map<String, int> _voiceNumberWords = {
+    'нула': 0, 'еден': 1, 'една': 1, 'два': 2, 'две': 2, 'три': 3, 'четири': 4, 'пет': 5, 'шест': 6, 'седум': 7,
+    'осум': 8, 'девет': 9, 'десет': 10, 'единаесет': 11, 'дванаесет': 12, 'тринаесет': 13, 'четиринаесет': 14,
+    'петнаесет': 15, 'шеснаесет': 16, 'седумнаесет': 17, 'осумнаесет': 18, 'деветнаесет': 19, 'дваесет': 20,
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6, 'seven': 7, 'eight': 8, 'nine': 9,
+    'ten': 10, 'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15, 'sixteen': 16,
+    'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+    'një': 1, 'nje': 1, 'dy': 2, 'tre': 3, 'katër': 4, 'kater': 4, 'pesë': 5, 'pese': 5, 'gjashtë': 6,
+    'gjashte': 6, 'shtatë': 7, 'shtate': 7, 'tetë': 8, 'tete': 8, 'nëntë': 9, 'nente': 9, 'dhjetë': 10, 'dhjete': 10,
+    'njëmbëdhjetë': 11, 'dymbëdhjetë': 12, 'trembëdhjetë': 13, 'katërmbëdhjetë': 14, 'pesëmbëdhjetë': 15,
+    'gjashtëmbëdhjetë': 16, 'shtatëmbëdhjetë': 17, 'tetëmbëdhjetë': 18, 'nëntëmbëdhjetë': 19, 'njëzet': 20, 'njezet': 20,
+  };
+
+  /// Првиот број во командата (цифри „7“ или збор „седум“), или null.
+  static int? _voiceNumber(String t) {
+    final m = RegExp(r'\d{1,3}').firstMatch(t);
+    if (m != null) return int.parse(m.group(0)!);
+    for (final w in t.split(RegExp(r'[\s,.!?]+'))) {
+      final n = _voiceNumberWords[w];
+      if (n != null) return n;
+    }
+    return null;
+  }
+
+  /// Балонот што гласовната команда го бара (го поставува `matches`).
+  int? _voiceBalloon;
+
+  void _voiceVariant(int v) {
+    if (_view != _View.playing || v == _variant) return;
+    setState(() => _variants[_mode] = v);
+    _startRound(_mode);
+  }
+
+  List<VoiceCategoryOption> _variantVoiceOptions() {
+    if (_view != _View.playing) return const [];
+    VoiceCategoryOption variant(List<String> kw, int v) =>
+        VoiceCategoryOption(keywords: kw, onSelected: () => _voiceVariant(v), beforeGlobal: true);
+    return [
+      if (_mode == _GameMode.recognize) ...[
+        variant(_kwVarBoth, 0),
+        variant(_kwVarSound, 1),
+        variant(_kwVarVisual, 2),
+      ],
+      if (_mode == _GameMode.biggerSmaller) ...[
+        variant(_kwVarScale, 0),
+        variant(_kwVarTowers, 1),
+        // Кули: знакот со глас. Пред имињата на игрите („поголем“ е и име
+        // на играта Поголем/помал).
+        if (_variant == 1) ...[
+          VoiceCategoryOption(keywords: _kwGreater, onSelected: () => _answerTowerSign(true), beforeGlobal: true),
+          VoiceCategoryOption(keywords: _kwLess, onSelected: () => _answerTowerSign(false), beforeGlobal: true),
+        ],
+      ],
+      if (_mode == _GameMode.operations) ...[
+        variant(_kwVarClassic, 0),
+        variant(_kwVarBalloons, 1),
+        // Балони: „седум“ / „7“ - го пука балонот со тој број.
+        if (_variant == 1)
+          VoiceCategoryOption(
+            keywords: const [],
+            beforeGlobal: true,
+            matches: (t) {
+              final n = _voiceNumber(t);
+              if (n == null) return false;
+              for (var i = 0; i < _balloonValues.length; i++) {
+                if (_balloonValues[i] == n && !_balloonPicked.contains(i)) {
+                  _voiceBalloon = i;
+                  return true;
+                }
+              }
+              return false;
+            },
+            onSelected: () {
+              final i = _voiceBalloon;
+              _voiceBalloon = null;
+              if (i != null) _popBalloon(i);
+            },
+          ),
+      ],
+      if (_mode == _GameMode.multiplyDivide) ...[
+        variant(_kwVarClassic, 0),
+        variant(_kwVarLaser, 1),
+      ],
     ];
   }
 
@@ -1884,6 +2231,8 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       _seqConfirm();
     } else if (_mode == _GameMode.sort) {
       _sortConfirm();
+    } else if (_mode == _GameMode.multiplyDivide && _variant == 1) {
+      _laserConfirm();
     }
   }
 
@@ -2782,10 +3131,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       voiceCommand: _view != _View.modeSelect,
       voiceOptions: _modeVoiceOptions(),
       onVoiceBack: _backToModeSelect,
-      bodyBackground: const EmojiBackdrop(
-        emojis: ['🔢', '➕', '➖', '🧮', '⭐', '🎲'],
-        tint: _moduleAccent,
-      ),
+      // Менито: тетратка на квадратчиња со соѕвездие од бројки; во игра -
+      // шарата на таа игра (вага, абакус, цртички, мапа...).
+      bodyBackground: _view == _View.playing
+          ? NumberModeBackdrop(mode: NumArt.values[_mode.index], tint: _modeColor(_mode))
+          : const NumberModeBackdrop(tint: _moduleAccent),
       child: SafeArea(
         child: Builder(
           builder: (context) {
@@ -2939,6 +3289,20 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
 
   // --- Избор на режим ---
 
+  /// Бојата (и амблемот) на секоја игра - иста како на топката во менито.
+  Color _modeColor(_GameMode m) => switch (m) {
+        _GameMode.recognize => const Color(0xFF047857),
+        _GameMode.biggerSmaller => const Color(0xFF6D28D9),
+        _GameMode.operations => const Color(0xFFC2410C),
+        _GameMode.multiplyDivide => const Color(0xFFB91C1C),
+        _GameMode.countObjects => const Color(0xFFBE185D),
+        _GameMode.tally => const Color(0xFF0E7490),
+        _GameMode.grid => const Color(0xFF1D4ED8),
+        _GameMode.sequence => const Color(0xFFB45309),
+        _GameMode.sort => const Color(0xFF4338CA),
+        _GameMode.sudoku => const Color(0xFF0F766E),
+      };
+
   final SphereMenuController _sphere = SphereMenuController();
 
   /// Додека прстот е на топката - страницата не се лизга.
@@ -3038,7 +3402,23 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               index: 2,
               child: SphereMenu(
                 controller: _sphere,
-                items: [for (final m in modes) SphereItem(label: m.$3, icon: m.$2, color: m.$4)],
+                items: [
+                  for (final m in modes)
+                    SphereItem(
+                      label: m.$3,
+                      icon: m.$2,
+                      color: m.$4,
+                      // Жива икона - заштитниот знак на играта.
+                      art: (size, yaw, front) => NumberSphereIcon(mode: NumArt.values[m.$1.index], size: size, yaw: yaw, front: front),
+                    ),
+                ],
+                // Заштитен знак: „бројна планета“ - прстен од мониста со
+                // бројките 0-9 кружи околу топката, а под неа е бројна права.
+                ring: SphereRing(
+                  labels: const ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+                  colors: [for (final m in modes) m.$4],
+                ),
+                numberLine: true,
                 onOpen: (i) => _startRound(modes[i].$1),
                 onHoldChanged: (held) {
                   if (_sphereHeld != held) setState(() => _sphereHeld = held);
@@ -3148,7 +3528,10 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
+                    // Живиот амблем на играта.
+                    NumberModeEmblem(mode: NumArt.values[_mode.index], color: _modeColor(_mode), size: 52),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: _mode == _GameMode.sudoku
                           ? Padding(
@@ -3184,6 +3567,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
                         ],
                 ),
               ),
+              if (_variantLabels.isNotEmpty) _variantBar(hc),
               if (_lastAnswerCorrect != null) _buildFeedbackBanner(context),
               Expanded(
                 child: _hasNumberInput
@@ -3194,6 +3578,80 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Варијантите на тековната игра (икона + име); празно = нема избор.
+  List<(IconData, String)> get _variantLabels => switch (_mode) {
+        _GameMode.recognize => [
+            (Icons.visibility_rounded, 'number_extra.variant_both'.tr()),
+            (Icons.hearing_rounded, 'number_extra.variant_sound'.tr()),
+            (Icons.remove_red_eye_outlined, 'number_extra.variant_visual'.tr()),
+          ],
+        _GameMode.biggerSmaller => [
+            (Icons.balance_rounded, 'number_extra.variant_scale'.tr()),
+            (Icons.domain_rounded, 'number_extra.variant_towers'.tr()),
+          ],
+        _GameMode.operations => [
+            (Icons.calculate_rounded, 'number_extra.variant_classic'.tr()),
+            (Icons.bubble_chart_rounded, 'number_extra.variant_balloons'.tr()),
+          ],
+        _GameMode.multiplyDivide => [
+            (Icons.calculate_rounded, 'number_extra.variant_classic'.tr()),
+            (Icons.flash_on_rounded, 'number_extra.variant_laser'.tr()),
+          ],
+        _ => const [],
+      };
+
+  /// Избор на варијанта - мали копчиња под резултатот. Промена = нова рунда.
+  Widget _variantBar(bool hc) {
+    final labels = _variantLabels;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Semantics(
+              button: true,
+              selected: i == _variant,
+              label: labels[i].$2,
+              child: ExcludeSemantics(
+                child: PressableScale(
+                  child: Material(
+                    color: i == _variant ? (hc ? const Color(0xFFFFFF00) : Playful.sun) : (hc ? Colors.black : Colors.white.withValues(alpha: 0.12)),
+                    borderRadius: BorderRadius.circular(22),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () {
+                        if (i == _variant) return;
+                        setState(() => _variants[_mode] = i);
+                        _startRound(_mode);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: i == _variant ? 1 : 0.55), width: 2),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(labels[i].$1, size: 24, color: i == _variant ? Playful.ink : (hc ? Colors.white : Colors.white)),
+                            const SizedBox(width: 6),
+                            Text(labels[i].$2, style: Playful.title(14 * 1.4, color: i == _variant ? Playful.ink : Colors.white)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -3365,11 +3823,11 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       case _GameMode.recognize:
         return _buildRecognizeView(context, contrast);
       case _GameMode.biggerSmaller:
-        return _buildBiggerSmallerView(context, contrast);
+        return _variant == 1 ? _buildTowersView(context, contrast) : _buildBiggerSmallerView(context, contrast);
       case _GameMode.operations:
-        return _buildOperationsView(context, contrast);
+        return _variant == 1 ? _buildBalloonsView(context, contrast) : _buildOperationsView(context, contrast);
       case _GameMode.multiplyDivide:
-        return _buildMultiplyView(context, contrast);
+        return _variant == 1 ? _buildLaserView(context, contrast) : _buildMultiplyView(context, contrast);
       case _GameMode.sudoku:
         return _buildSudokuView(context, contrast);
       case _GameMode.countObjects:
@@ -3426,35 +3884,188 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     final hc = AccessibilityUtils.isHighContrast(context);
     final size = MediaQuery.of(context).size;
     final numberSize = (size.height * 0.24).clamp(90.0, 200.0).toDouble();
-    return _questionCard(
-      hc,
-      _writtenNumber(_displayNumber.toString(), size: numberSize, color: hc ? contrast : Playful.ink),
-    );
+    final ink = hc ? contrast : Playful.ink;
+    final revealed = _inputLocked && _lastAnswerCorrect != null;
+    if (_variant == 1 && !revealed) {
+      // По звук: бројот не се гледа - уво и „повтори“; топло-ладно е долу.
+      return _questionCard(
+        hc,
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.hearing_rounded, size: numberSize * 0.6, color: hc ? const Color(0xFFFFFF00) : _moduleAccent),
+                Text('?', style: Playful.display(numberSize * 0.8, color: ink)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Semantics(
+              button: true,
+              label: 'number_extra.replay'.tr(),
+              child: ExcludeSemantics(
+                child: TextButton.icon(
+                  onPressed: () => _playSequence(['number_word', ..._numKeys(_displayNumber)]),
+                  icon: Icon(Icons.replay_rounded, size: 34, color: ink),
+                  label: Text('number_extra.replay'.tr(), style: Playful.title(20 * _kNumText, color: ink)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    final number = _writtenNumber(_displayNumber.toString(), size: numberSize, color: ink);
+    if (_variant != 2 || revealed) return _questionCard(hc, number);
+    // Визуелно: секој пат поинаква видливост (потешко на повисока тежина).
+    final strength = [0.6, 0.8, 1.0][_d];
+    final Widget hidden = switch (_visStyle) {
+      0 => Opacity(opacity: 1 - 0.65 * strength, child: number),
+      1 => ImageFiltered(imageFilter: ui.ImageFilter.blur(sigmaX: 1.5 + 3 * strength, sigmaY: 1.5 + 3 * strength), child: number),
+      2 => Transform.scale(scale: 1 - 0.55 * strength, child: number),
+      3 => Transform.rotate(angle: _visTilt * (0.6 + strength), child: number),
+      4 => Stack(alignment: Alignment.center, children: [
+          number,
+          Positioned.fill(child: IgnorePointer(child: CustomPaint(painter: _FogPainter(seed: _displayNumber + _asked * 31, strength: strength, hc: hc)))),
+        ]),
+      _ => Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.003)
+            ..rotateX(0.75 * strength)
+            ..rotateZ(_visTilt * 0.3),
+          child: number,
+        ),
+    };
+    return _questionCard(hc, hidden);
   }
 
+  /// Поголем/помал - вага: двата броја се на тасовите; по одговорот
+  /// вагата секогаш се спушта кон поголемиот број.
   Widget _buildBiggerSmallerView(BuildContext context, Color contrast) {
     final hc = AccessibilityUtils.isHighContrast(context);
     final prompt = _askBigger ? 'number_games.which_bigger'.tr() : 'number_games.which_smaller'.tr();
+    final answered = _inputLocked && _lastAnswerCorrect != null;
+    final tilt = answered ? (_numA > _numB ? -0.2 : 0.2) : 0.0;
+    final metal = hc ? Colors.white : Playful.sun;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(prompt, textAlign: TextAlign.center, style: Playful.display(24 * _kNumText, color: _fgOn(hc))),
-          const SizedBox(height: 20),
-          Row(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: LayoutBuilder(
+        builder: (context, outer) {
+          final scaleH = (outer.maxHeight - 90).clamp(200.0, 340.0).toDouble();
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Expanded(child: PopIn(index: 0, child: _bigNumberButton(context, _numA, hc, _tileColors[0]))),
-              const SizedBox(width: 16),
-              Expanded(child: PopIn(index: 1, child: _bigNumberButton(context, _numB, hc, _tileColors[1]))),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(prompt, textAlign: TextAlign.center, style: Playful.display(24 * _kNumText, color: _fgOn(hc))),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: scaleH,
+                child: LayoutBuilder(
+                  builder: (context, c) {
+                    final w = c.maxWidth;
+                    final arm = w * 0.29;
+                    final panW = w * 0.38;
+                    final panH = min(130.0, scaleH * 0.42);
+                    final pivot = Offset(w / 2, 40);
+                    return TweenAnimationBuilder<double>(
+                      tween: Tween(end: tilt),
+                      duration: Duration(milliseconds: Playful.reduceMotion(context) ? 0 : 1100),
+                      curve: Curves.elasticOut,
+                      builder: (context, th, _) {
+                        final left = pivot + Offset(-arm * cos(th), -arm * sin(th));
+                        final right = pivot + Offset(arm * cos(th), arm * sin(th));
+                        Widget hang(Offset end, int value, Color color) => Positioned(
+                              left: end.dx - panW / 2,
+                              top: end.dy + 30,
+                              width: panW,
+                              height: panH,
+                              child: _bigNumberButton(context, value, hc, color, height: panH),
+                            );
+                        Widget rope(Offset end) => Positioned(
+                              left: end.dx - 1.5,
+                              top: end.dy,
+                              width: 3,
+                              height: 32,
+                              child: ColoredBox(color: metal.withValues(alpha: 0.85)),
+                            );
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            // Столб и подножје.
+                            Positioned(
+                              left: w / 2 - 9,
+                              top: pivot.dy,
+                              bottom: 12,
+                              width: 18,
+                              child: DecoratedBox(decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(6),
+                                color: hc ? Colors.white : null,
+                                gradient: hc ? null : const LinearGradient(colors: [Color(0xFFB7791F), Color(0xFFFFD36B), Color(0xFFB7791F)]),
+                              )),
+                            ),
+                            Positioned(
+                              left: w / 2 - 70,
+                              bottom: 0,
+                              width: 140,
+                              height: 18,
+                              child: DecoratedBox(decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(9),
+                                color: hc ? Colors.white : const Color(0xFFB7791F),
+                              )),
+                            ),
+                            // Гредата.
+                            Positioned(
+                              left: pivot.dx - arm - 10,
+                              top: pivot.dy - 7,
+                              width: arm * 2 + 20,
+                              height: 14,
+                              child: Transform.rotate(
+                                angle: th,
+                                child: DecoratedBox(decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(7),
+                                  color: hc ? Colors.white : null,
+                                  gradient: hc ? null : const LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [Color(0xFFFFE08A), Color(0xFFB7791F)],
+                                  ),
+                                )),
+                              ),
+                            ),
+                            rope(left),
+                            rope(right),
+                            hang(left, _numA, _tileColors[0]),
+                            hang(right, _numB, _tileColors[1]),
+                            Positioned(
+                              left: pivot.dx - 15,
+                              top: pivot.dy - 15,
+                              width: 30,
+                              height: 30,
+                              child: DecoratedBox(decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: hc ? Colors.black : Colors.white,
+                                border: Border.all(color: metal, width: 4),
+                              )),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
-  Widget _bigNumberButton(BuildContext context, int value, bool hc, Color color) {
+  Widget _bigNumberButton(BuildContext context, int value, bool hc, Color color, {double height = 150}) {
     // По одговорот: точниот број позеленува, другиот се повлекува.
     final answered = _inputLocked && _lastAnswerCorrect != null;
     final isCorrectValue = answered && value == _lastCorrectValue;
@@ -3463,7 +4074,7 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
       semanticsLabel: value.toString(),
       onTap: _inputLocked ? null : () => _answerBiggerSmaller(value),
       dimmed: answered && !isCorrectValue,
-      height: 150,
+      height: height,
       radius: 24,
       color: hc ? (isCorrectValue ? const Color(0xFFFFFF00) : Colors.black) : c,
       gradient: _vivid(c),
@@ -3712,7 +4323,9 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560),
-        child: Column(
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final pad = Column(
           children: [
             for (var r = 0; r < rows.length; r++) ...[
               if (r > 0) const SizedBox(height: 10),
@@ -3728,6 +4341,24 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
               ),
             ],
           ],
+        );
+            if (!_hotColdOn) return pad;
+            // Топло-ладно: влечење на прстот (или глушецот) преку копчињата.
+            final size = Size(c.maxWidth, c.maxHeight);
+            return MouseRegion(
+              onHover: (e) => _padPointer(e.localPosition, size),
+              onExit: (_) => _hotColdAt(null, 0),
+              child: Listener(
+                onPointerDown: (e) => _padPointer(e.localPosition, size),
+                onPointerMove: (e) => _padPointer(e.localPosition, size),
+                onPointerUp: (e) {
+                  if (e.kind != ui.PointerDeviceKind.mouse) _hotColdAt(null, 0);
+                },
+                onPointerCancel: (_) => _hotColdAt(null, 0),
+                child: pad,
+              ),
+            );
+          },
         ),
       ),
     );
@@ -3847,6 +4478,568 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // =====================================================================
+  // Варијанти: звучни ефекти, кули, балони, ласер, ритам на низата.
+  // =====================================================================
+
+  /// Ефект од assets/sounds/number_games/ (стерео [balance], тон [rate]).
+  Future<void> _fx(String name, {double balance = 0, double rate = 1, double volume = 1}) async {
+    try {
+      await _fxPlayer.stop();
+      await _fxPlayer.setBalance(balance.clamp(-1.0, 1.0));
+      await _fxPlayer.setVolume(volume);
+      await _fxPlayer.play(AssetSource('sounds/number_games/$name.mp3'));
+      await _fxPlayer.setPlaybackRate(rate);
+    } catch (_) {}
+  }
+
+  /// Еден удар на тапан (три плеери наизменично - брзи удари без сечење).
+  Future<void> _drum(double rate) async {
+    final p = _drums[_drumNext];
+    _drumNext = (_drumNext + 1) % _drums.length;
+    try {
+      await p.stop();
+      await p.play(AssetSource('sounds/number_games/drum_hit.mp3'));
+      await p.setPlaybackRate(rate);
+    } catch (_) {}
+  }
+
+  /// Магична низа - ритам: по секој број толку удари на тапан колку што е
+  /// чекорот (+3 = тум-тум-тум). Нагоре - повисок тапан, надолу - понизок.
+  Future<void> _playSequenceRhythm() async {
+    final token = ++_narrationToken;
+    if (_seq.length < 2) return;
+    final step = _seq[1] - _seq[0];
+    final beats = step.abs();
+    final rate = step > 0 ? 1.15 : 0.8;
+    for (var i = 0; i < _seq.length; i++) {
+      for (final k in (i == _seqBlank ? const ['seq_blank'] : _numKeys(_seq[i]))) {
+        if (!mounted || token != _narrationToken) return;
+        await _playKey(k);
+      }
+      if (i == _seq.length - 1) break;
+      await Future.delayed(const Duration(milliseconds: 120));
+      for (var b = 0; b < beats; b++) {
+        if (!mounted || token != _narrationToken) return;
+        unawaited(_drum(rate));
+        unawaited(_vib(duration: 35));
+        await Future.delayed(const Duration(milliseconds: 190));
+      }
+      await Future.delayed(const Duration(milliseconds: 160));
+    }
+    if (!mounted || token != _narrationToken) return;
+    await _playKey('prompt_sequence');
+  }
+
+  // ---------------------------------------------------------------------
+  // Поголем/помал - кули.
+  // ---------------------------------------------------------------------
+
+  /// Тежината на бројот: подолга и посилна вибрација за поголем број.
+  void _feelTower(int value) {
+    final r = _activeRange;
+    final f = ((value - r.min) / max(1, r.max - r.min)).clamp(0.0, 1.0);
+    unawaited(VibrationUtils.vibrate(duration: (60 + f * 540).round(), amplitude: (40 + f * 215).round()));
+    _playSequence(_numKeys(value));
+  }
+
+  Future<void> _answerTowerSign(bool greater) async {
+    if (_inputLocked) return;
+    final ok = greater == (_numA > _numB);
+    setState(() {
+      _towerSign = greater;
+      // Точно: кулата со помалиот број се урива.
+      _collapsedSide = ok ? (_numA > _numB ? 1 : 0) : null;
+    });
+    if (ok) {
+      unawaited(_fx('tower_crash'));
+      if (!Playful.reduceMotion(context)) {
+        _collapseCtl.forward(from: 0);
+      } else {
+        _collapseCtl.value = 1;
+      }
+    }
+    await _finishExtraRound(
+      correct: ok,
+      detail: '$_numA ${_numA > _numB ? '>' : '<'} $_numB',
+      successPattern: const [0, 60, 40, 90, 40, 140, 40, 220],
+    );
+  }
+
+  int _towerBlocks(int value) {
+    final r = _activeRange;
+    final f = ((value - r.min) / max(1, r.max - r.min)).clamp(0.0, 1.0);
+    return 2 + (f * 8).round();
+  }
+
+  Widget _buildTowersView(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
+    Widget tower(int side, int value) => Semantics(
+          button: true,
+          label: 'number_extra.tower_label'.tr(args: [value.toString()]),
+          onTap: () => _feelTower(value),
+          child: ExcludeSemantics(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _feelTower(value),
+              child: AnimatedBuilder(
+                animation: _collapseCtl,
+                builder: (context, _) => CustomPaint(
+                  painter: _TowerPainter(
+                    blocks: _towerBlocks(value),
+                    value: value,
+                    color: _tileColors[side == 0 ? 0 : 1],
+                    collapse: _collapsedSide == side ? _collapseCtl.value : 0,
+                    outward: side == 0 ? -1 : 1,
+                    hc: hc,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        );
+    Widget signButton(bool greater) {
+      final label = (greater ? 'number_extra.sign_greater' : 'number_extra.sign_less').tr();
+      final color = _tileColors[greater ? 2 : 3];
+      return _tapCard(
+        semanticsLabel: label,
+        onTap: _inputLocked ? null : () => _answerTowerSign(greater),
+        dimmed: _inputLocked && _towerSign != greater,
+        height: 78,
+        radius: 20,
+        color: hc ? Colors.black : color,
+        gradient: _vivid(color),
+        glow: color,
+        borderColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        child: Center(
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(greater ? '>' : '<', style: Playful.display(46, color: hc ? const Color(0xFFFFFF00) : Colors.white)),
+                const SizedBox(width: 10),
+                Text(label, style: Playful.title(15 * 1.4, color: Colors.white)),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('number_extra.towers_prompt'.tr(), textAlign: TextAlign.center, style: Playful.display(20 * _kNumText, color: fg)),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Container(
+              decoration: _boardDecoration(hc),
+              padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: tower(0, _numA)),
+                  SizedBox(
+                    width: 74,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 250),
+                          child: Text(
+                            _towerSign == null ? '?' : (_towerSign! ? '>' : '<'),
+                            key: ValueKey(_towerSign),
+                            style: Playful.display(56, color: hc ? const Color(0xFFFFFF00) : Playful.sun),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Малото чудовиште меѓу кулите.
+                        Text(_lastAnswerCorrect == true ? '🥳' : '👾', style: const TextStyle(fontSize: 40)),
+                        const SizedBox(height: 6),
+                      ],
+                    ),
+                  ),
+                  Expanded(child: tower(1, _numB)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(child: signButton(true)),
+              const SizedBox(width: 12),
+              Expanded(child: signButton(false)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'number_extra.towers_hint'.tr(),
+            textAlign: TextAlign.center,
+            style: Playful.body(13 * 1.4, color: fg.withValues(alpha: 0.85)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Собирање/одземање - балони.
+  // ---------------------------------------------------------------------
+
+  void _genBalloons(_Range r) {
+    if (!_isAddition && _opA - _opB < 1) {
+      // Разликата не смее да е 0.
+      _opA = max(2, _opA);
+      _opB = 1 + _random.nextInt(_opA - 1);
+    }
+    _balloonTarget = _correctOpAnswer;
+    final count = const [4, 5, 6][_d];
+    final hi = max(r.max, _opA) + 2;
+    final vals = <int>[_opA, _opB];
+    var guard = 0;
+    while (vals.length < count && guard++ < 300) {
+      final v = 1 + _random.nextInt(hi);
+      if (!vals.contains(v)) vals.add(v);
+    }
+    vals.shuffle(_random);
+    _balloonValues = vals;
+    _balloonCol = List.generate(vals.length, (i) => i)..shuffle(_random);
+    _balloonPhase = List.generate(vals.length, (_) => _random.nextDouble());
+    // Цел број поминувања за 60 с - без скок кога анимацијата ќе почне одново.
+    _balloonSpeed = List.generate(vals.length, (_) => (3 + _random.nextInt(3)).toDouble());
+    _balloonPicked.clear();
+  }
+
+  void _popBalloon(int i) {
+    if (_inputLocked || _balloonPicked.contains(i) || _balloonPicked.length >= 2) return;
+    setState(() => _balloonPicked.add(i));
+    unawaited(_fx('balloon_pop'));
+    unawaited(_vib(duration: 70));
+    if (_balloonPicked.length == 1) {
+      _playSequence(_numKeys(_balloonValues[i]));
+      return;
+    }
+    final a = _balloonValues[_balloonPicked[0]];
+    final b = _balloonValues[_balloonPicked[1]];
+    final ok = _isAddition ? a + b == _balloonTarget : (a - b).abs() == _balloonTarget;
+    final hiV = max(a, b), loV = min(a, b);
+    final mine = _isAddition ? '$a + $b = ${a + b}' : '$hiV − $loV = ${hiV - loV}';
+    final right = _isAddition ? '$_opA + $_opB = $_balloonTarget' : '$_opA − $_opB = $_balloonTarget';
+    _finishExtraRound(correct: ok, detail: ok ? mine : '$mine  ·  ✓ $right');
+  }
+
+  Widget _buildBalloonsView(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
+    final reduce = Playful.reduceMotion(context);
+    if (!reduce && !_balloonCtl.isAnimating) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _view == _View.playing && _mode == _GameMode.operations && _variant == 1 && !_balloonCtl.isAnimating) {
+          _balloonCtl.repeat();
+        }
+      });
+    }
+    final picked = [for (final i in _balloonPicked) _balloonValues[i]];
+    final sign = _isAddition ? '+' : '−';
+    final eq = '${picked.isNotEmpty ? picked[0] : '?'} $sign ${picked.length > 1 ? picked[1] : '?'} = $_balloonTarget';
+    const colors = [Color(0xFFEF4444), Color(0xFFF59E0B), Color(0xFF10B981), Color(0xFF3B82F6), Color(0xFF8B5CF6), Color(0xFFEC4899)];
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+          child: Text(
+            (_isAddition ? 'number_extra.balloons_sum' : 'number_extra.balloons_diff').tr(args: [_balloonTarget.toString()]),
+            textAlign: TextAlign.center,
+            style: Playful.title(17 * _kNumText, color: fg),
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: LayoutBuilder(
+              builder: (context, c) {
+                final w = c.maxWidth, h = c.maxHeight;
+                final n = max(1, _balloonValues.length);
+                final colW = w / n;
+                final bw = min(104.0, colW * 0.92);
+                final bh = bw * 1.32;
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: hc ? Colors.black : null,
+                    gradient: hc ? null : const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF7DD3FC), Color(0xFFBAE6FD), Color(0xFFFDE68A)],
+                    ),
+                    border: Border.all(color: hc ? Colors.white : Colors.white.withValues(alpha: 0.8), width: 3),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(21),
+                    child: AnimatedBuilder(
+                      animation: _balloonCtl,
+                      builder: (context, _) => Stack(
+                        children: [
+                          for (var i = 0; i < _balloonValues.length; i++)
+                            if (!_balloonPicked.contains(i))
+                              () {
+                                // Балоните полека паѓаат од горе и пак се враќаат горе.
+                                final p = reduce
+                                    ? 0.15 + _balloonPhase[i] * 0.6
+                                    : (_balloonPhase[i] + _balloonCtl.value * _balloonSpeed[i]) % 1.0;
+                                final y = -bh + p * (h + bh);
+                                return Positioned(
+                                  left: colW * _balloonCol[i] + (colW - bw) / 2,
+                                  top: y,
+                                  width: bw,
+                                  height: bh,
+                                  child: Semantics(
+                                    button: true,
+                                    label: 'number_extra.balloon_label'.tr(args: [_balloonValues[i].toString()]),
+                                    onTap: () => _popBalloon(i),
+                                    child: ExcludeSemantics(
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTapDown: (_) => _popBalloon(i),
+                                        child: CustomPaint(
+                                          painter: _BalloonPainter(
+                                            value: _balloonValues[i],
+                                            color: colors[i % colors.length],
+                                            hc: hc,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }(),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+        // Целта долу: равенката се пополнува со пукнатите балони.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+            decoration: BoxDecoration(
+              color: hc ? Colors.black : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: hc ? Colors.white : Playful.sun, width: 4),
+            ),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text('🎯  $eq', style: Playful.display(30 * 1.4, color: hc ? contrast : Playful.ink)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ---------------------------------------------------------------------
+  // Множење/делење - ласерско сечење.
+  // ---------------------------------------------------------------------
+
+  void _genLaser() {
+    _isMultiply = false;
+    final hi = _d == 0 ? 4 : 6;
+    do {
+      _mulB = 2 + _random.nextInt(hi - 1);
+      _mulA = 2 + _random.nextInt(hi - 1);
+    } while (_mulA * _mulB > 24);
+    _laserCuts.clear();
+  }
+
+  /// Должините на парчињата според сечењата.
+  List<int> _laserPieces() {
+    final n = _mulA * _mulB;
+    final res = <int>[];
+    var len = 0;
+    for (var i = 0; i < n; i++) {
+      len++;
+      if (_laserCuts.contains(i) || i == n - 1) {
+        res.add(len);
+        len = 0;
+      }
+    }
+    return res;
+  }
+
+  void _laserToggle(int i) {
+    if (_inputLocked || i >= _mulA * _mulB - 1) return;
+    final cut = !_laserCuts.contains(i);
+    setState(() => cut ? _laserCuts.add(i) : _laserCuts.remove(i));
+    unawaited(_fx('laser_cut', rate: cut ? 1.0 : 0.75, volume: cut ? 1.0 : 0.6));
+    unawaited(_vib(duration: cut ? 60 : 25));
+  }
+
+  Future<void> _laserConfirm() async {
+    if (_inputLocked) return;
+    final pieces = _laserPieces();
+    final ok = pieces.every((p) => p == _mulB);
+    final n = _mulA * _mulB;
+    await _finishExtraRound(
+      correct: ok,
+      detail: ok ? '$n ÷ $_mulB = $_mulA' : 'number_extra.laser_wrong'.tr(args: [_mulB.toString(), '$n ÷ $_mulB = $_mulA']),
+      correctValue: _mulA,
+      extraSpeech: ['answer_is', ..._numKeys(_mulA)],
+    );
+  }
+
+  Widget _buildLaserView(BuildContext context, Color contrast) {
+    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fgOn(hc);
+    final n = _mulA * _mulB;
+    final pieces = _laserPieces();
+    final perRow = n <= 12 ? n : (n / 2).ceil();
+    final rows = (n / perRow).ceil();
+    // Индекс на парчето за секој блок (за боите).
+    final pieceOf = <int>[];
+    var pIdx = 0;
+    for (var i = 0; i < n; i++) {
+      pieceOf.add(pIdx);
+      if (_laserCuts.contains(i)) pIdx++;
+    }
+    final solved = _inputLocked && _lastAnswerCorrect != null;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text('$n ÷ $_mulB = ${solved ? _mulA : '?'}', style: Playful.display(30 * _kNumText, color: fg)),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+          child: Text(
+            'number_extra.laser_prompt'.tr(args: [n.toString(), _mulB.toString()]),
+            textAlign: TextAlign.center,
+            style: Playful.body(15 * _kNumText, color: fg),
+          ),
+        ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Container(
+              decoration: _boardDecoration(hc),
+              padding: const EdgeInsets.all(12),
+              child: LayoutBuilder(
+                builder: (context, c) {
+                  const gap = 8.0;
+                  final size = max(24.0, min(72.0, min((c.maxWidth - gap * (perRow - 1)) / perRow, (c.maxHeight - 24) / rows - gap)));
+                  return Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        for (var r = 0; r < rows; r++)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: gap / 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                for (var j = 0; j < perRow && r * perRow + j < n; j++) ...[
+                                  if (j > 0) const SizedBox(width: gap),
+                                  _laserBlock(r * perRow + j, size, pieceOf[r * perRow + j], hc),
+                                ],
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 4),
+          child: Text(
+            'number_extra.laser_pieces'.tr(args: [pieces.length.toString()]),
+            style: Playful.title(16 * _kNumText, color: fg),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+          child: _extraConfirmButton(_laserConfirm, hc),
+        ),
+      ],
+    );
+  }
+
+  /// Еден блок: допир = ласерски рез веднаш десно од него (пак = залепи).
+  Widget _laserBlock(int i, double size, int piece, bool hc) {
+    final n = _mulA * _mulB;
+    final cut = _laserCuts.contains(i);
+    final last = i == n - 1;
+    final base = piece.isEven ? const Color(0xFF7C3AED) : const Color(0xFF0E7490);
+    return Semantics(
+      button: !last,
+      label: 'number_extra.laser_block'.tr(args: [(i + 1).toString()]) + (cut ? ' ✂' : ''),
+      onTap: last ? null : () => _laserToggle(i),
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: last ? null : () => _laserToggle(i),
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(size * 0.18),
+                      color: hc ? (piece.isEven ? Colors.black : Colors.white24) : null,
+                      gradient: hc ? null : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color.lerp(base, Colors.white, 0.25)!, base, Color.lerp(base, Colors.black, 0.35)!],
+                      ),
+                      border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: hc ? null : const [BoxShadow(color: Color(0x55000000), offset: Offset(2, 4), blurRadius: 4)],
+                    ),
+                  ),
+                ),
+                // Ласерскиот рез.
+                if (cut)
+                  Positioned(
+                    right: -6,
+                    top: -8,
+                    bottom: -8,
+                    width: 4,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: hc ? const Color(0xFFFFFF00) : const Color(0xFFFF1744),
+                        borderRadius: BorderRadius.circular(2),
+                        boxShadow: hc ? null : const [BoxShadow(color: Color(0xFFFF1744), blurRadius: 10, spreadRadius: 2)],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -4130,4 +5323,205 @@ class _MathBoardPainter extends CustomPainter {
   }
   @override
   bool shouldRepaint(covariant _MathBoardPainter oldDelegate) => false;
+}
+
+/// „Магла“ преку бројот (Кој е бројот - визуелно): неколку меки бели
+/// облаци што покриваат делови од бројот.
+class _FogPainter extends CustomPainter {
+  _FogPainter({required this.seed, required this.strength, required this.hc});
+
+  final int seed;
+  final double strength;
+  final bool hc;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rnd = Random(seed);
+    final n = 3 + (strength * 4).round();
+    for (var i = 0; i < n; i++) {
+      final c = Offset(size.width * (0.1 + rnd.nextDouble() * 0.8), size.height * (0.15 + rnd.nextDouble() * 0.7));
+      final r = size.shortestSide * (0.18 + rnd.nextDouble() * 0.2);
+      canvas.drawCircle(
+        c,
+        r,
+        Paint()
+          ..color = (hc ? Colors.black : const Color(0xFFF8FAFC)).withValues(alpha: 0.55 + 0.35 * strength)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r * 0.45),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _FogPainter old) => old.seed != seed || old.strength != strength || old.hc != hc;
+}
+
+/// Кула од коцки со бројот горе. [collapse] 0..1 - рушење како домино:
+/// горните коцки паѓаат први, се вртат и се тркалаат нанадвор.
+class _TowerPainter extends CustomPainter {
+  _TowerPainter({required this.blocks, required this.value, required this.color, required this.collapse, required this.outward, required this.hc});
+
+  final int blocks;
+  final int value;
+  final Color color;
+  final double collapse;
+  final int outward;
+  final bool hc;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bh = min((size.height - 30) / 10.5, 40.0);
+    final bw = min(size.width * 0.72, 130.0);
+    final depth = bh * 0.35;
+    final cx = size.width / 2;
+    final ground = size.height - 4;
+    // Тло.
+    canvas.drawLine(Offset(0, ground), Offset(size.width, ground), Paint()
+      ..color = hc ? Colors.white : Colors.white.withValues(alpha: 0.5)
+      ..strokeWidth = 3);
+    for (var i = 0; i < blocks; i++) {
+      final k = blocks - 1 - i; // 0 = најгорната
+      final baseY = ground - (i + 1) * bh;
+      final delay = k * 0.045;
+      final local = ((collapse - delay) / 0.6).clamp(0.0, 1.0);
+      final e = local * local; // гравитација: забрзување
+      final restY = ground - bh / 2 - (k % 2) * bh * 0.4;
+      final centerY = baseY + bh / 2 + e * (restY - (baseY + bh / 2));
+      final centerX = cx + outward * e * (size.width * 0.25 + k * 7);
+      final angle = outward * e * (1.25 + (k % 3) * 0.2);
+      canvas.save();
+      canvas.translate(centerX, centerY);
+      canvas.rotate(angle);
+      final front = Rect.fromCenter(center: Offset.zero, width: bw, height: bh - 2);
+      final c = i.isEven ? color : Color.lerp(color, Colors.white, 0.18)!;
+      if (hc) {
+        canvas.drawRect(front, Paint()..color = Colors.black);
+        canvas.drawRect(front, Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+      } else {
+        // Горна и десна страна - 3D коцка.
+        final top = Path()
+          ..moveTo(front.left, front.top)
+          ..lineTo(front.left + depth, front.top - depth * 0.6)
+          ..lineTo(front.right + depth, front.top - depth * 0.6)
+          ..lineTo(front.right, front.top)
+          ..close();
+        final side = Path()
+          ..moveTo(front.right, front.top)
+          ..lineTo(front.right + depth, front.top - depth * 0.6)
+          ..lineTo(front.right + depth, front.bottom - depth * 0.6)
+          ..lineTo(front.right, front.bottom)
+          ..close();
+        canvas.drawPath(top, Paint()..color = Color.lerp(c, Colors.white, 0.35)!);
+        canvas.drawPath(side, Paint()..color = Color.lerp(c, Colors.black, 0.35)!);
+        canvas.drawRect(front, Paint()..color = c);
+        canvas.drawRect(front, Paint()
+          ..color = Colors.white.withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
+      }
+      if (i == blocks - 1) {
+        // Табличката со бројот на врвот.
+        final tp = TextPainter(
+          text: TextSpan(
+            text: '$value',
+            style: TextStyle(fontSize: bh * 0.78, fontWeight: FontWeight.w900, height: 1.0, color: hc ? const Color(0xFFFFFF00) : Colors.white),
+          ),
+          textDirection: ui.TextDirection.ltr,
+        )..layout();
+        tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+        tp.dispose();
+      }
+      canvas.restore();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TowerPainter old) =>
+      old.collapse != collapse || old.blocks != blocks || old.value != value || old.hc != hc || old.color != color;
+}
+
+/// Балон на топол воздух со бројот на средина.
+class _BalloonPainter extends CustomPainter {
+  _BalloonPainter({required this.value, required this.color, required this.hc});
+
+  final int value;
+  final Color color;
+  final bool hc;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width, h = size.height;
+    final envH = h * 0.76;
+    final cx = w / 2;
+    final env = Path()
+      ..moveTo(cx, envH)
+      ..cubicTo(cx - w * 0.2, envH * 0.86, 0, envH * 0.62, 0, envH * 0.4)
+      ..cubicTo(0, envH * 0.12, w * 0.24, 0, cx, 0)
+      ..cubicTo(w * 0.76, 0, w, envH * 0.12, w, envH * 0.4)
+      ..cubicTo(w, envH * 0.62, cx + w * 0.2, envH * 0.86, cx, envH)
+      ..close();
+    if (hc) {
+      canvas.drawPath(env, Paint()..color = Colors.black);
+      canvas.drawPath(env, Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3);
+    } else {
+      canvas.save();
+      canvas.clipPath(env);
+      // Пруги.
+      for (var k = 0; k < 6; k++) {
+        canvas.drawRect(Rect.fromLTWH(k * w / 6, 0, w / 6, envH), Paint()..color = k.isEven ? color : Color.lerp(color, Colors.white, 0.35)!);
+      }
+      // Сјај и сенка за обем.
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, w, envH),
+        Paint()
+          ..shader = RadialGradient(
+            center: const Alignment(-0.4, -0.5),
+            radius: 1.0,
+            colors: [Colors.white.withValues(alpha: 0.35), Colors.transparent, Colors.black.withValues(alpha: 0.3)],
+            stops: const [0.0, 0.5, 1.0],
+          ).createShader(Rect.fromLTWH(0, 0, w, envH)),
+      );
+      canvas.restore();
+      canvas.drawPath(env, Paint()
+        ..color = Colors.white.withValues(alpha: 0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2);
+    }
+    // Јажиња и кошничка.
+    final rope = Paint()
+      ..color = hc ? Colors.white : const Color(0xFF6B4423)
+      ..strokeWidth = 1.6;
+    final bTop = h * 0.86;
+    canvas.drawLine(Offset(cx - w * 0.1, envH * 0.97), Offset(cx - w * 0.11, bTop), rope);
+    canvas.drawLine(Offset(cx + w * 0.1, envH * 0.97), Offset(cx + w * 0.11, bTop), rope);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(Rect.fromLTWH(cx - w * 0.13, bTop, w * 0.26, h * 0.13), const Radius.circular(4)),
+      Paint()..color = hc ? Colors.white : const Color(0xFF8B5A2B),
+    );
+    // Бројот во бел круг.
+    final r = w * 0.27;
+    final nc = Offset(cx, envH * 0.42);
+    canvas.drawCircle(nc, r, Paint()..color = hc ? Colors.black : Colors.white);
+    canvas.drawCircle(nc, r, Paint()
+      ..color = hc ? const Color(0xFFFFFF00) : color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3);
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '$value',
+        style: TextStyle(fontSize: r * (value >= 10 ? 1.0 : 1.3), fontWeight: FontWeight.w900, height: 1.0, color: hc ? const Color(0xFFFFFF00) : const Color(0xFF14134A)),
+      ),
+      textDirection: ui.TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, nc - Offset(tp.width / 2, tp.height / 2));
+    tp.dispose();
+  }
+
+  @override
+  bool shouldRepaint(covariant _BalloonPainter old) => old.value != value || old.color != color || old.hc != hc;
 }

@@ -20,7 +20,10 @@ class VibrationUtils {
   /// Пробува прво со прилагодена шема (pattern) ако е дадена, инаку со
   /// едноставно траење (duration). Тивко не прави ништо ако вибрацијата
   /// не е достапна.
-  static Future<void> vibrate({int? duration, List<int>? pattern}) async {
+  ///
+  /// [amplitude] 1-255 (јачина) - на уредите што го поддржуваат; другите
+  /// го игнорираат и вибрираат со стандардната јачина.
+  static Future<void> vibrate({int? duration, List<int>? pattern, int? amplitude}) async {
     if (PlatformUtils.isWeb || kIsWeb) return;
     try {
       if (pattern != null && pattern.isNotEmpty) {
@@ -34,6 +37,13 @@ class VibrationUtils {
         final fallbackDuration = pattern.length > 1 ? pattern[1] : (duration ?? 100);
         await Vibration.vibrate(duration: fallbackDuration);
         return;
+      }
+      if (amplitude != null) {
+        final canAmp = await Vibration.hasAmplitudeControl();
+        if (canAmp == true) {
+          await Vibration.vibrate(duration: duration ?? 100, amplitude: amplitude.clamp(1, 255).toInt());
+          return;
+        }
       }
       await Vibration.vibrate(duration: duration ?? 100);
     } catch (_) {

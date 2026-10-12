@@ -78,6 +78,7 @@ flutter:
     - assets/sounds/melody_memory/
     - assets/sounds/sound_identification/
     - assets/sounds/picture_book/
+    - assets/sounds/number_games/
     - assets/audio/sound_memory/mk/
     - assets/audio/sound_memory/en/
     - assets/audio/sound_memory/sq/

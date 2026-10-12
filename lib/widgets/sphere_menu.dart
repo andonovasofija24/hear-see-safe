@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -17,11 +18,24 @@ const double _kSphereNodeLabelH = 27;
 
 /// Една категорија на [SphereMenu].
 class SphereItem {
-  const SphereItem({required this.label, required this.icon, required this.color});
+  const SphereItem({required this.label, required this.icon, required this.color, this.art});
 
   final String label;
   final IconData icon;
   final Color color;
+
+  /// По избор: жива слика наместо иконата во топчето - добива големина,
+  /// тековното вртење на сферата (yaw) и дали е најнапред.
+  final Widget Function(double size, double yaw, bool front)? art;
+}
+
+/// Прстен околу сферата: [labels] кружат по елипсата; предната половина
+/// се црта над топката, задната зад неа (вистинска длабочина).
+class SphereRing {
+  const SphereRing({required this.labels, this.colors});
+
+  final List<String> labels;
+  final List<Color>? colors;
 }
 
 /// За управување однадвор (гласовно „следна“ / „претходна“).
@@ -50,7 +64,17 @@ class SphereMenu extends StatefulWidget {
     this.controller,
     this.openLabel,
     this.onHoldChanged,
+    this.ring,
+    this.numberLine = false,
   });
+
+  /// По избор: прстен околу топката (како кај Сатурн) со ознаки што
+  /// кружат заедно со вртењето - пр. бројките 0-9 кај „Игри со броеви“.
+  final SphereRing? ring;
+
+  /// По избор: бројна права (линијар) под топката - секоја категорија е
+  /// број на правата; предната е означена, допир на број ја носи напред.
+  final bool numberLine;
 
   /// true додека прстот е на топката - родителот може да го исклучи
   /// лизгањето на страницата за да може топката да се врти и нагоре/надолу.
@@ -329,15 +353,29 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
+                    if (widget.ring != null)
+                      Positioned.fill(
+                        child: CustomPaint(painter: _RingPainter(ring: widget.ring!, yaw: _yaw, pitch: _pitch, radius: radius, front: false, hc: hc)),
+                      ),
                     Positioned.fill(
                       child: CustomPaint(painter: _GlobePainter(yaw: _yaw, pitch: _pitch, highContrast: hc, radius: radius)),
                     ),
                     for (final (i, p) in projected) _node(i, p, size, radius, base, hc),
+                    if (widget.ring != null)
+                      Positioned.fill(
+                        child: IgnorePointer(
+                          child: CustomPaint(painter: _RingPainter(ring: widget.ring!, yaw: _yaw, pitch: _pitch, radius: radius, front: true, hc: hc)),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
             ),
+            if (widget.numberLine) ...[
+              const SizedBox(height: 6),
+              _numberLine(size, hc),
+            ],
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -442,6 +480,9 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
     final it = widget.items[i];
     final showLabel = depth > 0.62;
     return Positioned(
+      // Клуч по категорија: при пререденување (по длабочина) живите
+      // икони ја задржуваат својата состојба.
+      key: ValueKey('sphere-node-$i'),
       left: cx - w / 2,
       top: cy - w / 2,
       width: w,
@@ -494,7 +535,11 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        Center(child: Icon(it.icon, size: w * 0.5, color: hc ? const Color(0xFFFFFF00) : Colors.white)),
+                        Center(
+                          child: it.art != null
+                              ? it.art!(w * 0.78, _yaw, isFront)
+                              : Icon(it.icon, size: w * 0.5, color: hc ? const Color(0xFFFFFF00) : Colors.white),
+                        ),
                         Positioned(
                           top: -2,
                           right: -2,
@@ -534,6 +579,38 @@ class _SphereMenuState extends State<SphereMenu> with TickerProviderStateMixin {
                       ),
                     ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Бројна права под топката (дрвен линијар). Само визуелна помош за
+  /// гледачите - читачот на екран ги има топчињата.
+  Widget _numberLine(double width, bool hc) {
+    final n = widget.items.length;
+    return ExcludeSemantics(
+      child: SizedBox(
+        width: width,
+        height: 74,
+        child: LayoutBuilder(
+          builder: (context, cons) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (d) {
+              final step = (cons.maxWidth - 32) / n;
+              final i = ((d.localPosition.dx - 16) / step).floor().clamp(0, n - 1).toInt();
+              _userTouched = true;
+              _wake();
+              _bringToFront(i);
+            },
+            child: CustomPaint(
+              painter: _RulerPainter(
+                count: n,
+                front: _front,
+                hc: hc,
+                colors: [for (final it in widget.items) it.color],
               ),
             ),
           ),
@@ -644,4 +721,190 @@ class _GlobePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _GlobePainter old) =>
       old.yaw != yaw || old.pitch != pitch || old.highContrast != highContrast || old.radius != radius;
+}
+
+/// Прстенот околу топката со ознаки (бројки) како мониста.
+class _RingPainter extends CustomPainter {
+  _RingPainter({required this.ring, required this.yaw, required this.pitch, required this.radius, required this.front, required this.hc});
+
+  final SphereRing ring;
+  final double yaw;
+  final double pitch;
+  final double radius;
+  final bool front;
+  final bool hc;
+
+  static const double _tilt = -0.28;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = ring.labels.length;
+    if (n == 0) return;
+    final c = Offset(size.width / 2, size.height / 2);
+    final rx = radius * 1.36;
+    final ry = rx * (0.22 + 0.16 * math.sin(pitch).abs());
+    canvas.save();
+    canvas.translate(c.dx, c.dy);
+    canvas.rotate(_tilt);
+    final rect = Rect.fromCenter(center: Offset.zero, width: rx * 2, height: ry * 2);
+    // Лентата на прстенот: предната половина е долу (y > 0).
+    final band = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 12
+      ..color = hc ? Colors.white.withValues(alpha: front ? 0.9 : 0.5) : const Color(0xFFFFC93C).withValues(alpha: front ? 0.32 : 0.18);
+    canvas.drawArc(rect, front ? 0 : math.pi, math.pi, false, band);
+    canvas.drawArc(rect.inflate(9), front ? 0 : math.pi, math.pi, false, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..color = Colors.white.withValues(alpha: front ? 0.5 : 0.25));
+
+    for (var k = 0; k < n; k++) {
+      final a = yaw * 0.9 + k * 2 * math.pi / n;
+      final sa = math.sin(a);
+      if ((sa >= 0) != front) continue;
+      final depth = (sa + 1) / 2; // 1 = најнапред
+      final pos = Offset(rx * math.cos(a), ry * sa);
+      final r = 9 + 8 * depth;
+      final color = ring.colors == null ? const Color(0xFFFFC93C) : ring.colors![k % ring.colors!.length];
+      canvas.save();
+      canvas.translate(pos.dx, pos.dy);
+      canvas.rotate(-_tilt);
+      final alpha = front ? 0.95 : 0.45 + 0.3 * depth;
+      if (hc) {
+        canvas.drawCircle(Offset.zero, r, Paint()..color = Colors.black);
+        canvas.drawCircle(Offset.zero, r, Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+      } else {
+        canvas.drawCircle(
+          Offset.zero,
+          r,
+          Paint()
+            ..shader = RadialGradient(
+              center: const Alignment(-0.4, -0.5),
+              colors: [
+                Color.lerp(color, Colors.white, 0.45)!.withValues(alpha: alpha),
+                color.withValues(alpha: alpha),
+                Color.lerp(color, Colors.black, 0.4)!.withValues(alpha: alpha),
+              ],
+            ).createShader(Rect.fromCircle(center: Offset.zero, radius: r)),
+        );
+        canvas.drawCircle(Offset.zero, r, Paint()
+          ..color = Colors.white.withValues(alpha: 0.7 * alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5);
+      }
+      final tp = TextPainter(
+        text: TextSpan(
+          text: ring.labels[k],
+          style: TextStyle(fontSize: r * 1.15, fontWeight: FontWeight.w900, height: 1.0,
+              color: (hc ? const Color(0xFFFFFF00) : Colors.white).withValues(alpha: alpha)),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(-tp.width / 2, -tp.height / 2));
+      tp.dispose();
+      canvas.restore();
+    }
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _RingPainter old) =>
+      old.yaw != yaw || old.pitch != pitch || old.radius != radius || old.front != front || old.hc != hc || old.ring != ring;
+}
+
+/// Дрвен линијар (бројна права) со бројките на категориите.
+class _RulerPainter extends CustomPainter {
+  _RulerPainter({required this.count, required this.front, required this.hc, required this.colors});
+
+  final int count;
+  final int front;
+  final bool hc;
+  final List<Color> colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const pad = 16.0;
+    final top = 18.0;
+    final board = RRect.fromRectAndRadius(Rect.fromLTWH(4, top, size.width - 8, size.height - top - 4), const Radius.circular(12));
+    if (hc) {
+      canvas.drawRRect(board, Paint()..color = Colors.black);
+      canvas.drawRRect(board, Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2);
+    } else {
+      canvas.drawRRect(board.shift(const Offset(0, 4)), Paint()..color = const Color(0x55000000));
+      canvas.drawRRect(
+        board,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFF6D99A), Color(0xFFE2B66A), Color(0xFFC9964B)],
+          ).createShader(board.outerRect),
+      );
+    }
+    final ink = hc ? Colors.white : const Color(0xFF5A3A12);
+    final step = (size.width - pad * 2) / count;
+    final tick = Paint()
+      ..color = ink
+      ..strokeWidth = 2;
+    // Главна линија + стрелка (бројната права продолжува).
+    final ly = top + 10;
+    canvas.drawLine(Offset(pad - 6, ly), Offset(size.width - pad + 2, ly), tick);
+    canvas.drawPath(
+      Path()
+        ..moveTo(size.width - pad + 8, ly)
+        ..lineTo(size.width - pad, ly - 5)
+        ..lineTo(size.width - pad, ly + 5)
+        ..close(),
+      Paint()..color = ink,
+    );
+    for (var i = 0; i < count; i++) {
+      final x = pad + step * (i + 0.5);
+      canvas.drawLine(Offset(x, ly - 1), Offset(x, ly + 12), tick);
+      if (i < count - 1) {
+        canvas.drawLine(Offset(x + step / 2, ly), Offset(x + step / 2, ly + 6), tick..strokeWidth = 1.2);
+        tick.strokeWidth = 2;
+      }
+      final isFront = i == front;
+      final labelC = Offset(x, ly + 27);
+      if (isFront) {
+        canvas.drawCircle(labelC, 15, Paint()..color = hc ? const Color(0xFFFFFF00) : colors[i % colors.length]);
+        canvas.drawCircle(labelC, 15, Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+        // Стрелка-показалец над правата.
+        canvas.drawPath(
+          Path()
+            ..moveTo(x, ly - 3)
+            ..lineTo(x - 9, ly - 16)
+            ..lineTo(x + 9, ly - 16)
+            ..close(),
+          Paint()..color = hc ? const Color(0xFFFFFF00) : const Color(0xFFFFC93C),
+        );
+      }
+      final tp = TextPainter(
+        text: TextSpan(
+          text: '${i + 1}',
+          style: TextStyle(
+            fontSize: isFront ? 19 : 16,
+            fontWeight: FontWeight.w900,
+            height: 1.0,
+            color: isFront ? (hc ? Colors.black : Colors.white) : ink,
+          ),
+        ),
+        textDirection: ui.TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, labelC - Offset(tp.width / 2, tp.height / 2));
+      tp.dispose();
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _RulerPainter old) => old.front != front || old.count != count || old.hc != hc;
 }
