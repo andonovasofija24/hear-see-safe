@@ -88,10 +88,22 @@ class _WorldCulturesSceneState extends State<WorldCulturesScene> {
                 child: Row(children: [
                   Icon(Icons.flight_takeoff_rounded, color: ink, size: 23),
                   const SizedBox(width: 7),
-                  Expanded(child: Text('DEPARTURES · ОДЛЕТУВАЊА',
-                    maxLines: 2, softWrap: true,
-                    style: TextStyle(color: ink, fontWeight: FontWeight.w900,
-                      fontSize: narrow ? 21 : 27, letterSpacing: 0.4))),
+                  // Секој збор во свој ред и никогаш не се кине: ако не
+                  // собира, се смалува (FittedBox), наместо „DEPARTURE / S“.
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      for (final word in const ['DEPARTURES', 'ОДЛЕТУВАЊА'])
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(word, maxLines: 1, softWrap: false,
+                            style: TextStyle(color: ink, fontWeight: FontWeight.w900,
+                              fontSize: narrow ? 21 : 27, letterSpacing: 0.4)),
+                        ),
+                    ],
+                  )),
                   Flexible(child: FittedBox(fit: BoxFit.scaleDown, child: Text('${active + 1}/${widget.items.length}', style: TextStyle(color: ink, fontWeight: FontWeight.bold)))),
                 ]),
               ),
