@@ -4,6 +4,12 @@ Hear & See Safe is a Flutter app with learning games for children who are blind,
 
 The guiding rule for every screen was that no game should depend on a single sense. If something is shown, it is also heard or felt; if something is heard, there is also a visual or haptic cue.
 
+## Download
+
+The latest Android build (APK) is available here: **[Hear & See Safe – APK](https://drive.google.com/drive/folders/133weGLo2C4HSMEQzvDUC9Dkf1VMjvRn-?usp=sharing)**
+
+Download the `.apk` file on an Android phone (Android 8.0 or newer), allow installing from unknown sources when the phone asks, and open the file to install. Step-by-step instructions in Macedonian are in `README_KORISNIK_MK.md`.
+
 ## What's inside
 
 | Module | What the child does |
@@ -72,7 +78,7 @@ See `docs/cloud_vision_setup.md` for details.
 
 ## Audio content
 
-All recordings live in `assets/audio/<module>/<language>/` and sound effects in `assets/sounds/<module>/`. Each clip has a short name (for example `what_number.mp3`) and the app picks the right one for the current language. If a clip is missing, the game simply stays silent at that point instead of failing. Recordings were generated with Eleven Labs.
+All recordings live in `assets/audio/<module>/<language>/` and sound effects in `assets/sounds/<module>/`. Each clip has a short name (for example `what_number.mp3`) and the app picks the right one for the current language. If a clip is missing, the game simply stays silent at that point instead of failing. The list of clips needed for each module is in `docs/*_snimki.md`.
 
 ## Project layout
 
