@@ -629,9 +629,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> with TickerProvid
     () async {
       try {
         await _beatPlayer.stop();
+      } catch (_) {}
+      try {
         await _beatPlayer.setBalance(_beatPan.clamp(-1.0, 1.0));
+      } catch (_) {}
+      try {
         await _beatPlayer.setVolume((1.0 - d * 0.05).clamp(0.5, 1.0));
+      } catch (_) {}
+      try {
         await _beatPlayer.play(AssetSource('sounds/number_games/heartbeat.mp3'));
+      } catch (_) {}
+      try {
         await _beatPlayer.setPlaybackRate((1.25 - d * 0.055).clamp(0.7, 1.3));
       } catch (_) {}
     }();
@@ -1483,9 +1491,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> with TickerProvid
     () async {
       try {
         await _beatPlayer.stop();
+      } catch (_) {}
+      try {
         await _beatPlayer.setBalance(_gridPan);
+      } catch (_) {}
+      try {
         await _beatPlayer.setVolume(1.0 - 0.4 * h);
+      } catch (_) {}
+      try {
         await _beatPlayer.play(AssetSource('sounds/number_games/heartbeat.mp3'));
+      } catch (_) {}
+      try {
         await _beatPlayer.setPlaybackRate(1.3 - 0.55 * h);
       } catch (_) {}
     }();
@@ -4490,9 +4506,17 @@ class _NumberGamesScreenState extends State<NumberGamesScreen> with TickerProvid
   Future<void> _fx(String name, {double balance = 0, double rate = 1, double volume = 1}) async {
     try {
       await _fxPlayer.stop();
+    } catch (_) {}
+    try {
       await _fxPlayer.setBalance(balance.clamp(-1.0, 1.0));
+    } catch (_) {}
+    try {
       await _fxPlayer.setVolume(volume);
+    } catch (_) {}
+    try {
       await _fxPlayer.play(AssetSource('sounds/number_games/$name.mp3'));
+    } catch (_) {}
+    try {
       await _fxPlayer.setPlaybackRate(rate);
     } catch (_) {}
   }

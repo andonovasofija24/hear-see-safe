@@ -1223,8 +1223,13 @@
     "repeat_question": "Dëgjo pyetjen përsëri"
   },
   "sound_memory": {
+  "pairs_hint": "Hap dy copa – nëse bëjnë të njëjtin tingull, puthiten dhe diçka zgjohet në kopsht.",
+  "living_hint": "Kujdes: pas çdo çifti, copat lëvizin! Dëgjo jehonën.",
+  "echo_hint": "Hap një copë – çifti i saj përgjigjet me një jehonë të butë dhe dridhet. Rrëshqit gishtin mbi tabelë – zemra rreh më shpejt pranë çiftit.",
+  "garden_done": "Kopshti u zgjua! 🌞",
+  "garden_awake": "Kopshti zgjohet: {} / {}",
     "explanation_title": "Si luhet",
-    "explanation_text": "Loja ka dhjetë raunde me numër të ndryshëm kartash: 6, 12 ose 18, pra 3, 6 ose 9 çifte. Pasi të shtypësh Fillo, kartat hapen njëra pas tjetrës që t’i mbash mend tingujt. Në fund duhet t’i hapësh kartat në mënyrë që t’i gjesh të gjitha çiftet.",
+    "explanation_text": "Loja ka dhjetë raunde me 6, 12 ose 18 copa enigme - 3, 6 ose 9 çifte me të njëjtin tingull. Prek Start: copat hapen një nga një që t'i mbash mend tingujt. Pastaj hap nga dy copa. Kur gjen dy copat që bëjnë të njëjtin tingull, ato puthiten dhe ajo gjë merr jetë në kopshtin e fjetur. Të gjitha copat kanë të njëjtën formë - çiftet i gjen vetëm me tingull dhe kujtesë. Në dy raundet e fundit copat lëvizin pas çdo çifti.",
     "explanation_toggle_open": "Shfaq shpjegimin",
     "explanation_toggle_close": "Fshih shpjegimin",
     "start_button": "Fillo",

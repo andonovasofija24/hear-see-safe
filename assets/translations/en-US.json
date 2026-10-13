@@ -1223,8 +1223,13 @@
     "repeat_question": "Hear the question again"
   },
   "sound_memory": {
+  "pairs_hint": "Open two pieces – if they make the same sound, they fit together and something wakes up in the garden.",
+  "living_hint": "Careful: after each pair, the pieces move around! Listen to the echo.",
+  "echo_hint": "Open a piece – its pair answers with a soft echo and shimmers. Slide your finger over the board – the heartbeat gets faster near the pair.",
+  "garden_done": "The garden is awake! 🌞",
+  "garden_awake": "The garden wakes up: {} / {}",
     "explanation_title": "How to play",
-    "explanation_text": "The game has ten rounds with a different number of cards: 6, 12 or 18, which means 3, 6 or 9 pairs. After you press Start, the cards open one by one so you can remember the sounds. Then open the cards so that you find all the pairs.",
+    "explanation_text": "The game has ten rounds with 6, 12 or 18 puzzle pieces - 3, 6 or 9 pairs of the same sounds. Tap Start: the pieces open one by one so you can remember the sounds. Then open two pieces at a time. When you find the two that make the same sound, they fit together and that thing comes to life in the sleeping garden. All pieces have the same shape - you find the pairs only by sound and memory. In the last two rounds the pieces move after every pair you find.",
     "explanation_toggle_open": "Show explanation",
     "explanation_toggle_close": "Hide explanation",
     "start_button": "Start",
