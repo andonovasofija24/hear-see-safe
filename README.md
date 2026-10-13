@@ -4,6 +4,12 @@ Hear & See Safe is a Flutter app with learning games for children who are blind,
 
 The guiding rule for every screen was that no game should depend on a single sense. If something is shown, it is also heard or felt; if something is heard, there is also a visual or haptic cue.
 
+## Try it online
+
+The web version runs in the browser, with nothing to install: **[hear-see-safe.netlify.app](https://hear-see-safe.netlify.app/)**
+
+Use Chrome or Edge for voice commands. Camera recognition, vibration and the compass need the Android app; everything else works on the web. Sound starts after the first tap or click, and the first load can take a few seconds.
+
 ## Download
 
 The latest Android build (APK) is available here: **[Hear & See Safe – APK](https://drive.google.com/drive/folders/133weGLo2C4HSMEQzvDUC9Dkf1VMjvRn-?usp=sharing)**
