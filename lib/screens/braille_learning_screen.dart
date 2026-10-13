@@ -3366,34 +3366,107 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
   );
 
   /// Точка 1 - Вовед: текстот и кои точки на кои копчиња се.
+  /// Точка 1 - Вовед: ист изглед како „Тајните“ (темна работна маса,
+  /// хартиени листови, втиснати точки, Луј Брај).
   Widget _buildIntroPage(BuildContext context) {
-    final contrast = _fg(context);
-    final hc = AccessibilityUtils.isHighContrast(context);
+    final fg = _fg(context);
+    final hc = _labHc;
+    final showKeys = InputMode.showKeys(context);
     return Column(children: [
-      _buildBackRow(contrast, onBack: _backToSixMenu),
-      Expanded(child: LayoutBuilder(builder: (context, viewport) => ListView(
-        padding: _brailleSidePad(viewport.maxWidth, top: 8, bottom: 28),
-        children: [
-          Text('braille.intro_title'.tr(), textAlign: TextAlign.center, style: GameTypography.heading(context, contrast, 26 * _kBrailleText)),
-          const SizedBox(height: 12),
-          _buildIntroArea(contrast, hc),
-          const SizedBox(height: 16),
-          Wrap(alignment: WrapAlignment.center, spacing: 14, runSpacing: 10, children: [
-            OutlinedButton.icon(
-              onPressed: () => _playClip('game_name'),
-              icon: const Icon(Icons.volume_up_rounded, size: 32),
-              label: Text('braille.repeat'.tr()),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => _voicePlayer.stop(),
-              icon: const Icon(Icons.stop_rounded, size: 32),
-              label: Text('braille.intro_stop'.tr()),
-            ),
-          ]),
-        ],
-      ))),
+      _buildBackRow(fg, onBack: _backToSixMenu),
+      Expanded(child: LabDeskBackdrop(hc: hc,
+        child: LayoutBuilder(builder: (context, size) {
+          final narrow = size.maxWidth < 640;
+          final introText = Text(
+            (showKeys ? 'braille.intro_text' : 'braille.intro_touch_text').tr(),
+            textAlign: narrow ? TextAlign.center : TextAlign.start,
+            style: TextStyle(color: _ink, fontSize: 24, height: 1.4, fontWeight: FontWeight.w600),
+          );
+          return ListView(
+            padding: _brailleSidePad(size.maxWidth, top: 18, bottom: 44),
+            children: [
+              _labDeskTitle('braille.intro_title'.tr()),
+              // Листот со воведот: Луј Брај + текстот.
+              PaperPanel(
+                hc: hc,
+                margin: const EdgeInsets.only(bottom: 22),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+                child: _paperTheme(Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  if (narrow) ...[
+                    Center(child: ExcludeSemantics(child: LouisBraillePortrait(size: 150, hc: hc))),
+                    const SizedBox(height: 14),
+                    introText,
+                  ] else Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    ExcludeSemantics(child: LouisBraillePortrait(size: 170, hc: hc)),
+                    const SizedBox(width: 22),
+                    Expanded(child: introText),
+                  ]),
+                  const SizedBox(height: 18),
+                  Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 10, children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _playClip('game_name'),
+                      icon: const Icon(Icons.volume_up_rounded, size: 30),
+                      label: Text('braille.repeat'.tr()),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _voicePlayer.stop(),
+                      icon: const Icon(Icons.stop_rounded, size: 30),
+                      label: Text('braille.intro_stop'.tr()),
+                    ),
+                  ]),
+                ])),
+              ),
+              _labDeskTitle(_secretText('Шесте точки', 'Gjashtë pikat', 'The six dots')),
+              // Втисната шесточка: допир на точка - се кажува кој број е; до
+              // неа - копчињата на тастатурата (на компјутер).
+              PaperPanel(
+                hc: hc,
+                margin: const EdgeInsets.only(bottom: 22),
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+                child: _paperTheme(Column(children: [
+                  Text(
+                    _secretText('Допри точка за да го чуеш нејзиниот број.', 'Prek një pikë për të dëgjuar numrin e saj.', 'Touch a dot to hear its number.'),
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: _inkSoft, fontSize: 22, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 18),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (showKeys) ...[_labKeyColumn(const [1, 2, 3]), const SizedBox(width: 18)],
+                      EmbossedCell(
+                        dots: const [1, 2, 3, 4, 5, 6],
+                        hc: hc,
+                        dotSize: 62,
+                        strong: true,
+                        showNumbers: true,
+                        dotLabel: (d) => _secretText('Точка $d', 'Pika $d', 'Dot $d'),
+                        onTapDot: (d) => _playClip('dot_$d'),
+                      ),
+                      if (showKeys) ...[const SizedBox(width: 18), _labKeyColumn(const [4, 5, 6])],
+                    ]),
+                  ),
+                ])),
+              ),
+            ],
+          );
+        }),
+      )),
     ]);
   }
+
+  /// Колона копчиња на тастатура до втиснатата клетка (F D S / J K L).
+  Widget _labKeyColumn(List<int> dots) => Column(mainAxisSize: MainAxisSize.min, children: [
+    for (final d in dots)
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Text('$d', style: TextStyle(color: _inkAccent, fontSize: 22, fontWeight: FontWeight.w900)),
+          const SizedBox(width: 8),
+          KeyCap(_keyLetters[d - 1], size: 0.9),
+        ]),
+      ),
+  ]);
 
   /// Точка 3 / 4 - групите (букви и броеви, или знаци).
   Widget _buildGroupMenu(BuildContext context, {required bool signs}) {
@@ -3440,100 +3513,6 @@ class _BrailleLearningScreenState extends State<BrailleLearningScreen> {
         ],
       ))),
     ]);
-  }
-
-  /// Воведот е СЕКОГАШ целосно видлив (текст + асоцијации точки↔тастатура).
-  /// Копчето „стоп" се прикажува само додека трае заклучувањето и е на
-  /// средина на дното.
-  Widget _buildIntroArea(Color contrast, bool hc) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-      decoration: BoxDecoration(
-        color: hc ? Colors.black : Playful.nightRaised.withValues(alpha: 0.92),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: hc ? Colors.white : _gold.withValues(alpha: 0.7), width: 2),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text((InputMode.showKeys(context) ? 'braille.intro_text' : 'braille.intro_touch_text').tr(), style: GameTypography.body(context, contrast, 20 * _kBrailleText)),
-          const SizedBox(height: 20),
-          // На тесен екран редот се смалува наместо да излезе надвор.
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: SizedBox(
-            width: 520,
-            child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _dotKeyColumn(const [1, 2, 3], contrast),
-              if (_introLocked)
-                Semantics(
-                  label: 'braille.intro_stop'.tr(),
-                  button: true,
-                  child: RippleRings(
-                    color: hc ? Colors.white : _gold,
-                    active: true,
-                    spread: 14,
-                    child: Material(
-                      color: hc ? Colors.black : _gold,
-                      shape: CircleBorder(side: hc ? const BorderSide(color: Colors.white, width: 2) : BorderSide.none),
-                      elevation: 3,
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: _stopIntroNow,
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Icon(Icons.stop_rounded, size: 32, color: hc ? Colors.white : Playful.ink),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              _dotKeyColumn(const [4, 5, 6], contrast),
-            ],
-          ),
-          ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Три точки (една колона) со соодветните копчиња на тастатура: точката
-  /// е испакната златна, копчето е жолт тастер.
-  Widget _dotKeyColumn(List<int> dotNumbers, Color contrast) {
-    final hc = AccessibilityUtils.isHighContrast(context);
-    // На допир (без тастатура) - само бројовите на точките, без копчињата.
-    final showKeys = InputMode.showKeys(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        for (final d in dotNumbers) ...[
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  alignment: Alignment.center,
-                  decoration: _studDecoration(on: true, hc: hc),
-                  child: Text('$d', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: hc ? Colors.black : Playful.ink)),
-                ),
-                if (showKeys) ...[
-                  const SizedBox(width: 8),
-                  KeyCap(_keyLetters[d - 1], size: 0.8),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ],
-    );
   }
 
   /// Боите на групите - секоја група своја боја (сите со бел текст).
