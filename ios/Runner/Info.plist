@@ -45,11 +45,13 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>This app needs camera access to recognize objects, colors, and currency.</string>
+	<string>The camera is used to recognize objects, colors and clothing and to search for an object nearby.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs microphone access for voice recognition and sound identification games.</string>
+	<string>The microphone is used for voice commands in every game.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>This app needs speech recognition to help children interact with the app using their voice.</string>
+	<string>Speech recognition turns voice commands into actions, so the app can be used without touching the screen.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>The compass game uses the phone's heading to check which way you are facing. Your location is not stored or shared.</string>
 </dict>
 </plist>
 
